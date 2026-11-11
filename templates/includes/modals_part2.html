@@ -1,0 +1,738 @@
+<div id="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6) !important; z-index:10000; justify-content:center; align-items:center; backdrop-filter: blur(5px);">
+    <div class="auth-page-wrapper" style="display:flex; width:100%; max-width:1200px; height:85vh; max-height:850px; min-height:600px; background:white; border-radius:15px; overflow:hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.3);">
+        
+        <div class="auth-left-pane" id="auth-left-panel" style="flex:1.2; background: linear-gradient(135deg, #0056b3 0%, #007bff 100%); color:white; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; padding:60px; position:relative;">
+            <div style="position:absolute; top:0; left:0; right:0; bottom:0; opacity:0.1; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px; pointer-events:none;"></div>
+            
+            <img id="app-brand-logo" style="display:none; margin-bottom: 30px; max-width: 250px; z-index:2;" alt="Logo">
+            
+            <div id="auth-left-content" style="width:100%; text-align:left; z-index:2;">
+                <h1 id="dynamic-login-title" style="color:white; font-size: 3.2em; margin-bottom: 25px; font-weight:800; line-height:1.2; letter-spacing:-1px;">Welcome to EWebGen</h1>
+                
+                <div id="dynamic-login-content" style="color:#f0f0f0; font-size: 1.15em; line-height:1.8; font-weight:300;"></div>
+            </div>
+        </div>
+
+        <div class="auth-right-pane" style="flex:1; display:flex; flex-direction:column; justify-content:flex-start; align-items:center; padding:40px 40px; background:white; position:relative; overflow-y:auto; overflow-x:hidden;">
+            
+            <div class="auth-box" style="width:100%; max-width:420px; box-shadow:none; padding:0; background:transparent !important; text-align:left; margin:auto 0;">
+                
+                <div id="login-form">
+                    <h2 style="font-size:2em; color:#333; margin-bottom:5px; font-weight:700;">👋 Welcome Back</h2>
+                    <p style="color:#666; font-size:1.1em; margin-bottom:25px;">Login to your account to continue</p>
+                    
+                    <input type="text" id="login-id" class="auth-input" placeholder="Email or Username" style="font-size:1.1em; padding:12px 15px;">
+                    <input type="password" id="login-pass" class="auth-input" placeholder="Password" style="font-size:1.1em; padding:12px 15px;">
+                    
+                    <p id="auth-msg" style="color:#dc3545; font-size:0.95em; margin-top:10px; margin-bottom:0; font-weight:bold; min-height: 20px;"></p>
+
+                    <button class="auth-btn" onclick="handleLogin()" style="font-size:1.1em; padding:12px; margin-top:10px;">Login</button>
+                    
+                    <div style="display:flex; justify-content:space-between; margin-top:20px; margin-bottom:20px; font-size:1em;">
+                        <span class="auth-link" onclick="showRegister()" style="font-weight:600;">Create Account</span>
+                        <span class="auth-link" onclick="showForgot()">Forgot Password?</span>
+                    </div>
+
+                    <div style="display:flex; align-items:center; margin-bottom:20px;">
+                        <hr style="flex:1; border:none; border-top:1px solid #e0e0e0;">
+                        <span style="padding:0 15px; color:#888; font-size:0.9em; text-transform:uppercase; letter-spacing:1px;">or</span>
+                        <hr style="flex:1; border:none; border-top:1px solid #e0e0e0;">
+                    </div>
+
+                    <div id="google-btn-container" style="margin-bottom:20px; width:100%; min-height:40px; display:flex; justify-content:center;"></div>
+                </div>
+
+                <div id="register-form" style="display:none;">
+                    <h2 style="font-size:2em; color:#333; margin-bottom:5px; font-weight:700;">🚀 Create Account</h2>
+                    <p style="color:#666; font-size:1.1em; margin-bottom:10px;">Join us and start building today</p>
+                    
+                    <p id="reg-msg" class="auth-msg" style="color:#dc3545; font-size:0.95em; margin-bottom:15px; font-weight:bold; min-height:20px;"></p>
+                    
+                    <input type="text" id="reg-fullname" class="auth-input" placeholder="Full Name" style="font-size:1.1em; padding:10px 15px;">
+                    <input type="email" id="reg-email" class="auth-input" placeholder="Email Address" style="font-size:1.1em; padding:10px 15px;">
+                    <input type="text" id="reg-phone" class="auth-input" placeholder="Phone Number" style="font-size:1.1em; padding:10px 15px;">
+                    <input type="password" id="reg-pass" class="auth-input" placeholder="Password" style="font-size:1.1em; padding:10px 15px;">
+                    <input type="password" id="reg-confirm-pass" class="auth-input" placeholder="Confirm Password" style="font-size:1.1em; padding:10px 15px;">
+                    
+                    <button class="auth-btn" onclick="handleRegister()" style="font-size:1.1em; padding:12px; margin-top:5px;">Sign Up</button>
+                    <div style="margin-top:15px; text-align:center; font-size:1em;">
+                        <span class="auth-link" onclick="showLogin()" style="font-weight:600;">Already have an account? Login</span>
+                    </div>
+                </div>
+
+                <div id="verify-form" style="display:none;" data-email="">
+                    <h2 style="font-size:2em; color:#333;">✅ Verify Email</h2>
+                    <p style="font-size:1.1em; color:#666; margin-bottom:20px;">Enter the 6-digit code sent to your email.</p>
+                    <input type="text" id="ver-code" class="auth-input" placeholder="Verification Code" style="font-size:1.2em; padding:15px; text-align:center; letter-spacing:3px; font-weight:bold;">
+                    <button class="auth-btn" onclick="handleVerify()" style="font-size:1.1em; padding:12px;">Verify Account</button>
+                    <div style="margin-top:20px; text-align:center;">
+                        <span class="auth-link" onclick="showLogin()">Back to Login</span>
+                    </div>
+                    <p id="ver-msg" class="auth-msg" style="color:#dc3545; font-size:0.95em; margin-top:10px;"></p>
+                </div>
+
+                <div id="forgot-form" style="display:none;">
+                    <h2 style="font-size:2em; color:#333;">🔐 Reset Password</h2>
+                    <p style="font-size:1.1em; color:#666; margin-bottom:20px;">We'll send you a temporary password.</p>
+                    <input type="email" id="forgot-email" class="auth-input" placeholder="Enter your email" style="font-size:1.1em; padding:12px 15px;">
+                    <button class="auth-btn" onclick="handleForgot()" style="font-size:1.1em; padding:12px;">Send New Password</button>
+                    <div style="margin-top:20px; text-align:center;">
+                        <span class="auth-link" onclick="showLogin()">Back to Login</span>
+                    </div>
+                    <p id="forgot-msg" class="auth-msg" style="font-size:0.95em; margin-top:10px;"></p>
+                </div>
+
+                <div id="change-pass-form" style="display:none;">
+                    <h2 style="font-size:2em; color:#333;">🛡️ Update Password</h2>
+                    <p id="cp-msg" style="font-size:1em; margin-bottom:20px;"></p>
+                    <input type="password" id="cp-old" class="auth-input" placeholder="Current Password" style="font-size:1.1em; padding:12px 15px;">
+                    <input type="password" id="cp-new" class="auth-input" placeholder="New Password" style="font-size:1.1em; padding:12px 15px;">
+                    <button class="auth-btn" onclick="handleChangePass()" style="font-size:1.1em; padding:12px;">Update Password</button>
+                    <div style="margin-top:15px; text-align:center;">
+                        <span class="auth-link" id="cp-cancel-btn" onclick="safeCloseModal('auth-modal')">Cancel</span>
+                    </div>
+                </div>
+
+                <div id="profile-form" style="display:none; text-align:left; position:relative; width:100%; box-sizing:border-box; overflow-x:hidden;">
+                    
+                    <button onclick="safeCloseModal('auth-modal')" style="position:absolute; top:0; right:0; background:none; border:none; font-size:1.6em; cursor:pointer; color:#777; line-height:1; z-index:10;">&times;</button>
+                    
+                    <h2 style="text-align:center; font-size:1.8em; color:#333; margin-top:0;">👤 My Profile</h2>
+                    
+                    <label style="font-size:0.85em; font-weight:bold; color:#555; margin-bottom:2px; display:block;">Username</label>
+                    <input type="text" id="prof-username" class="auth-input" disabled style="background:#eee; font-size:1em; padding:8px 10px; margin-bottom:10px;">
+                    
+                    <label style="font-size:0.85em; font-weight:bold; color:#555; margin-bottom:2px; display:block;">Full Name</label>
+                    <input type="text" id="prof-name" class="auth-input" style="font-size:1em; padding:8px 10px; margin-bottom:10px;">
+                    
+                    <label style="font-size:0.85em; font-weight:bold; color:#555; margin-bottom:2px; display:block;">Email</label>
+                    <input type="email" id="prof-email" class="auth-input" style="font-size:1em; padding:8px 10px; margin-bottom:10px;">
+                    
+                    <label style="font-size:0.85em; font-weight:bold; color:#555; margin-bottom:2px; display:block;">Phone</label>
+                    <input type="text" id="prof-phone" class="auth-input" style="font-size:1em; padding:8px 10px; margin-bottom:15px;">
+
+                    <button class="auth-btn" onclick="handleUpdateProfile()" style="font-size:1.05em; padding:10px; margin-top:5px;">Save Changes</button>
+                    
+                    <div style="text-align:center; margin-top:15px;">
+                        <span id="btn-delete-account" onclick="handleDeleteAccount()" style="color:#dc3545; font-size:0.85em; cursor:pointer; text-decoration:underline;">Delete Account</span>
+                    </div>
+                    
+                    <p id="prof-msg" class="auth-msg" style="font-size:0.9em; margin-top:10px; min-height:20px; text-align:center;"></p>
+                </div>
+            </div>
+            
+            <div style="margin-top:auto; font-size:0.9em; color:#888; text-align:center; padding-top:30px; width:100%;">
+                By continuing, you agree to our <a href="#" onclick="showTerms()" style="color:#007bff; text-decoration:none; font-weight:bold;">Terms & Conditions</a> and <a href="#" onclick="showPrivacy()" style="color:#007bff; text-decoration:none; font-weight:bold;">Privacy Policy</a>.
+            </div>
+            
+            <div id="login-powered-by" style="display:none; margin-top:15px; font-size:0.85em; color:#888; text-align:center; width:100%;">
+                Powered by <a href="https://ewebgen.com" target="_blank" style="color:#007bff; text-decoration:none; font-weight:bold;">EWebGen</a>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<div id="add-page-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.35); backdrop-filter:blur(2px); z-index:10020; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:450px; max-width:92vw; background:#ffffff; color:#222; border-radius:10px; box-shadow:0 20px 50px rgba(0,0,0,0.25);">
+        <h2>➕ Add New Page</h2>
+        <label style="display:block; text-align:left;">Base Page</label>
+        <select id="new-page-base" class="auth-input"></select>
+        <label style="display:block; text-align:left;">New Name</label>
+        <input type="text" id="new-page-name" class="auth-input" placeholder="e.g. Services" oninput="updateNewPagePreview()">
+        <div id="new-page-file-preview" style="text-align:left; color:#666; margin-bottom:10px;">URL: ...</div>
+        <button class="auth-btn" onclick="createNewPage()">Create</button>
+        <button class="auth-btn btn-cancel" onclick="closeAddPageModal()">Cancel</button>
+        <p id="add-page-msg" style="color:red;"></p>
+    </div>
+</div>
+
+<div id="admin-user-edit-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10010; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:left;">
+        <h2 style="margin-top:0;">Edit User</h2>
+        <input type="hidden" id="admin-edit-id">
+        <label>Username</label><input type="text" id="admin-edit-username" class="auth-input">
+        <label>Name</label><input type="text" id="admin-edit-fullname" class="auth-input">
+        <label>Email</label><input type="email" id="admin-edit-email" class="auth-input">
+        <label>Phone</label><input type="text" id="admin-edit-phone" class="auth-input">
+        
+        <label>Country</label>
+        <input list="country-list-edit" id="admin-edit-country" class="auth-input" placeholder="Select or type Country...">
+        <datalist id="country-list-edit">
+            <option value="Afghanistan"><option value="Albania"><option value="Algeria"><option value="Andorra">
+            <option value="Angola"><option value="Antigua and Barbuda"><option value="Argentina"><option value="Armenia">
+            <option value="Australia"><option value="Austria"><option value="Azerbaijan"><option value="Bahamas">
+            <option value="Bahrain"><option value="Bangladesh"><option value="Barbados"><option value="Belarus">
+            <option value="Belgium"><option value="Belize"><option value="Benin"><option value="Bhutan">
+            <option value="Bolivia"><option value="Bosnia and Herzegovina"><option value="Botswana"><option value="Brazil">
+            <option value="Brunei"><option value="Bulgaria"><option value="Burkina Faso"><option value="Burundi">
+            <option value="Cabo Verde"><option value="Cambodia"><option value="Cameroon"><option value="Canada">
+            <option value="Central African Republic"><option value="Chad"><option value="Chile"><option value="China">
+            <option value="Colombia"><option value="Comoros"><option value="Congo"><option value="Costa Rica">
+            <option value="Croatia"><option value="Cuba"><option value="Cyprus"><option value="Czech Republic">
+            <option value="Denmark"><option value="Djibouti"><option value="Dominica"><option value="Dominican Republic">
+            <option value="Ecuador"><option value="Egypt"><option value="El Salvador"><option value="Equatorial Guinea">
+            <option value="Eritrea"><option value="Estonia"><option value="Eswatini"><option value="Ethiopia">
+            <option value="Fiji"><option value="Finland"><option value="France"><option value="Gabon">
+            <option value="Gambia"><option value="Georgia"><option value="Germany"><option value="Ghana">
+            <option value="Greece"><option value="Grenada"><option value="Guatemala"><option value="Guinea">
+            <option value="Guinea-Bissau"><option value="Guyana"><option value="Haiti"><option value="Honduras">
+            <option value="Hungary"><option value="Iceland"><option value="India"><option value="Indonesia">
+            <option value="Iran"><option value="Iraq"><option value="Ireland"><option value="Israel">
+            <option value="Italy"><option value="Jamaica"><option value="Japan"><option value="Jordan">
+            <option value="Kazakhstan"><option value="Kenya"><option value="Kiribati"><option value="Kuwait">
+            <option value="Kyrgyzstan"><option value="Laos"><option value="Latvia"><option value="Lebanon">
+            <option value="Lesotho"><option value="Liberia"><option value="Libya"><option value="Liechtenstein">
+            <option value="Lithuania"><option value="Luxembourg"><option value="Madagascar"><option value="Malawi">
+            <option value="Malaysia"><option value="Maldives"><option value="Mali"><option value="Malta">
+            <option value="Marshall Islands"><option value="Mauritania"><option value="Mauritius"><option value="Mexico">
+            <option value="Micronesia"><option value="Moldova"><option value="Monaco"><option value="Mongolia">
+            <option value="Montenegro"><option value="Morocco"><option value="Mozambique"><option value="Myanmar">
+            <option value="Namibia"><option value="Nauru"><option value="Nepal"><option value="Netherlands">
+            <option value="New Zealand"><option value="Nicaragua"><option value="Niger"><option value="Nigeria">
+            <option value="North Korea"><option value="North Macedonia"><option value="Norway"><option value="Oman">
+            <option value="Pakistan"><option value="Palau"><option value="Palestine"><option value="Panama">
+            <option value="Papua New Guinea"><option value="Paraguay"><option value="Peru"><option value="Philippines">
+            <option value="Poland"><option value="Portugal"><option value="Qatar"><option value="Romania">
+            <option value="Russia"><option value="Rwanda"><option value="Saint Kitts and Nevis"><option value="Saint Lucia">
+            <option value="Saint Vincent and the Grenadines"><option value="Samoa"><option value="San Marino">
+            <option value="Sao Tome and Principe"><option value="Saudi Arabia"><option value="Senegal"><option value="Serbia">
+            <option value="Seychelles"><option value="Sierra Leone"><option value="Singapore"><option value="Slovakia">
+            <option value="Slovenia"><option value="Solomon Islands"><option value="Somalia"><option value="South Africa">
+            <option value="South Korea"><option value="South Sudan"><option value="Spain"><option value="Sri Lanka">
+            <option value="Sudan"><option value="Suriname"><option value="Sweden"><option value="Switzerland">
+            <option value="Syria"><option value="Taiwan"><option value="Tajikistan"><option value="Tanzania">
+            <option value="Thailand"><option value="Timor-Leste"><option value="Togo"><option value="Tonga">
+            <option value="Trinidad and Tobago"><option value="Tunisia"><option value="Turkey"><option value="Turkmenistan">
+            <option value="Tuvalu"><option value="Uganda"><option value="Ukraine"><option value="United Arab Emirates">
+            <option value="United Kingdom"><option value="United States"><option value="Uruguay"><option value="Uzbekistan">
+            <option value="Vanuatu"><option value="Vatican City"><option value="Venezuela"><option value="Vietnam">
+            <option value="Yemen"><option value="Zambia"><option value="Zimbabwe">
+        </datalist>
+
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>Role</label><select id="admin-edit-role" class="auth-input"><option value="client">Client</option><option value="admin">Admin</option></select></div>
+            <div style="flex:1;"><label>Type</label><select id="admin-edit-usertype" class="auth-input"><option value="">Default</option></select></div>
+        </div>
+        <label><input type="checkbox" id="admin-edit-verified"> Verified</label>
+        <div style="margin-top:10px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" onclick="safeCloseModal('admin-user-edit-modal')">Cancel</button>
+            <button class="auth-btn" onclick="saveAdminUserChanges()">Save</button>
+        </div>
+        <p id="admin-edit-msg" style="color:red;"></p>
+    </div>
+</div>
+
+<div id="admin-usertype-edit-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10010; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:left;">
+        <h2 style="margin-top:0;">🏅 Edit User Type</h2>
+        <input type="hidden" id="admin-ut-edit-id">
+        
+        <label style="font-weight:bold; font-size:0.9em;">Type Name</label>
+        <input type="text" id="admin-ut-edit-name" class="auth-input">
+        
+        <div style="display:flex; gap:15px; margin-bottom:10px;">
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:0.9em;">Project Limit</label>
+                <input type="number" id="admin-ut-edit-limit" class="auth-input" style="margin-bottom:5px;">
+                <label style="font-size:0.8em; display:flex; align-items:center; gap:5px;"><input type="checkbox" id="admin-ut-edit-unlimited"> Unlimited</label>
+            </div>
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:0.9em;">Image Limit</label>
+                <input type="number" id="admin-ut-edit-img-limit" class="auth-input" style="margin-bottom:5px;">
+                <label style="font-size:0.8em; display:flex; align-items:center; gap:5px;"><input type="checkbox" id="admin-ut-edit-img-unlimited"> Unlimited</label>
+            </div>
+        </div>
+        
+        <label style="font-weight:bold; font-size:0.9em;">Storage Limit (MB)</label>
+        <input type="number" id="admin-ut-edit-storage" class="auth-input">
+
+        <div style="margin-top:15px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" onclick="safeCloseModal('admin-usertype-edit-modal')">Cancel</button>
+            <button class="auth-btn" onclick="saveUserTypeChanges()">Update</button>
+        </div>
+    </div>
+</div>
+
+<div id="admin-plan-edit-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10011; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:left;">
+        <h2 style="margin-top:0;">📝 Edit Plan</h2>
+        <input type="hidden" id="edit-plan-id">
+        <label>Plan Name</label>
+        <input type="text" id="edit-plan-name" class="auth-input">
+        <label>Price</label>
+        <div style="display:flex; gap:5px;">
+            <input type="number" id="edit-plan-price" class="auth-input" step="0.01">
+            <select id="edit-plan-currency" class="auth-input" style="width:80px;">
+                 <option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="INR">INR</option>
+            </select>
+        </div>
+        <label>Billing Cycle</label>
+        <select id="edit-plan-billing-cycle" class="auth-input">
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
+            <option value="lifetime">Lifetime</option>
+        </select>
+        <label>Linked User Type</label>
+        <select id="edit-plan-usertype" class="auth-input"></select>
+        <label>Features</label>
+        <textarea id="edit-plan-features" class="auth-input" style="height:80px;"></textarea>
+        <div style="margin-top:15px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" onclick="safeCloseModal('admin-plan-edit-modal')">Cancel</button>
+            <button class="auth-btn" onclick="updateSubscriptionPlan()">Save Changes</button>
+        </div>
+    </div>
+</div>
+
+<div id="deploy-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10020; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width: 500px; text-align:left;">
+        <h2 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">🚀 Deploy Website</h2>
+        <p style="color:#666; font-size:0.95em; margin-bottom:15px;">Enter your FTP details to push the current project live.</p>
+        
+        <input type="text" id="ftp-host" class="auth-input" placeholder="FTP Host (e.g., ftp.example.com)">
+        <div style="display:flex; gap:10px;">
+            <input type="text" id="ftp-user" class="auth-input" placeholder="Username" style="flex:1;">
+            <input type="password" id="ftp-pass" class="auth-input" placeholder="Password" style="flex:1;">
+        </div>
+        <input type="text" id="ftp-dir" class="auth-input" value="/public_html" placeholder="Directory Path">
+        
+        <div style="background:#fff3cd; color:#856404; padding:12px 15px; border-radius:6px; margin-bottom:15px; font-size:0.9em; border:1px solid #ffeeba;">
+            <strong>⚠️ Warning:</strong> This action will override existing files on the remote server. Please ensure you have taken a backup before deploying.
+        </div>
+        
+        <label style="display:flex; align-items:flex-start; font-size:0.9em; margin-bottom:20px; cursor:pointer; color:#333; font-weight:bold;">
+            <input type="checkbox" id="deploy-accept" style="margin-top:3px; margin-right:10px; transform:scale(1.2);" onchange="document.getElementById('btn-deploy-start').disabled = !this.checked">
+            <span>I accept that this will override existing files and I have taken a backup.</span>
+        </label>
+
+        <div id="deploy-logs" style="text-align:left; background:#1e1e1e; color:#0f0; padding:10px; height:100px; overflow-y:auto; display:none; margin-bottom:15px; font-family:monospace; font-size:0.85em; border-radius:4px;"></div>
+        
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="safeCloseModal('deploy-modal')">Cancel</button>
+            <button class="auth-btn" id="btn-deploy-start" disabled style="width:auto; margin:0; background:#28a745;" onclick="deployWebsite()">Start Deployment</button>
+        </div>
+    </div>
+</div>
+
+<div id="payment-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:11000; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:10px; margin-bottom:15px;">
+            <h2 style="margin:0;">💳 Checkout</h2>
+            <button onclick="safeCloseModal('payment-modal')" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
+        </div>
+        <div style="background:#f8f9fa; padding:15px; border-radius:5px; margin-bottom:20px; text-align:center;">
+            <div id="pay-amount-display" style="font-size:2em; font-weight:bold;">$0.00</div>
+            <div id="pay-item-name" style="color:#555;">Product</div>
+        </div>
+        <label style="font-weight:bold;">Select Payment Method:</label>
+        <div id="payment-methods-list" style="margin-top:10px;"></div>
+    </div>
+</div>
+
+<div id="plan-selection-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:800px; max-width:95%; max-height:90vh; overflow-y:auto; padding:40px; border-radius:15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+            <h2 style="margin:0; color:#333; font-size:2.5em;">💎 Upgrade Your Plan</h2>
+            <button onclick="safeCloseModal('plan-selection-modal')" style="background:none; border:none; font-size:2em; cursor:pointer; color:#777;">✕</button>
+        </div>
+        <p style="color:#666; text-align:center; margin-bottom:40px; font-size:1.2em;">Choose a plan that fits your needs.</p>
+        <div id="plan-selection-list" class="plans-grid" style="display:flex; gap:30px; flex-wrap:wrap; justify-content:center;">
+            <div style="text-align:center; color:#999; font-size:1.2em;">Loading Plans...</div>
+        </div>
+    </div>
+</div>
+
+<div id="system-update-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:20000; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:500px; text-align:left; overflow:hidden;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <h2 style="margin:0; color:#2c3e50;">🚀 System Update</h2>
+            <button onclick="safeCloseModal('system-update-modal')" style="background:none; border:none; font-size:1.5em; cursor:pointer;">&times;</button>
+        </div>
+
+        <div id="update-status-section" style="text-align:center; padding:20px; background:#f8f9fa; border-radius:5px; margin-bottom:20px;">
+            <div id="update-icon" style="font-size:3em; margin-bottom:10px;">🔄</div>
+            <h3 id="update-msg" style="margin:5px 0;">Checking for updates...</h3>
+            <p id="update-submsg" style="color:#666; font-size:0.9em; margin:0;">Current Version: <span id="current-version-display">Loading...</span></p>
+        </div>
+
+        <div id="update-actions" style="display:none;">
+            <div style="background:#e8f5e9; color:#2e7d32; padding:10px; border-radius:5px; margin-bottom:15px; font-size:0.9em;">
+                <strong>New Version Available:</strong> <span id="new-version-display"></span>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold; font-size:0.9em;">Release Notes:</label>
+                <div id="release-notes-display" style="background:#fff; border:1px solid #ddd; padding:10px; font-size:0.85em; height:80px; overflow-y:auto; color:#555;"></div>
+            </div>
+            <button class="auth-btn" onclick="performUpdate()" style="background:#27ae60;">⬇️ Update Now</button>
+        </div>
+
+        <div style="margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleRestoreSection()">
+                <h4 style="margin:0; color:#7f8c8d;">⏪ Restore Previous Version</h4>
+                <span id="restore-arrow">▼</span>
+            </div>
+            <div id="restore-section" style="display:none; margin-top:10px;">
+                <p style="font-size:0.8em; color:#666;">Select a version to rollback/restore to:</p>
+                <select id="restore-version-select" class="auth-input" style="margin-bottom:10px;">
+                    <option value="" disabled selected>Loading versions...</option>
+                </select>
+                <button class="auth-btn" onclick="performRestore()" style="background:#95a5a6; font-size:0.9em; padding:8px;">Restore Selected Version</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="admin-template-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10020; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:650px; text-align:left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <h2 style="margin:0;">🧩 Manage Templates & Elements</h2>
+            <button onclick="safeCloseModal('admin-template-modal')" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#777;">&times;</button>
+        </div>
+        
+        <div class="sub-img-tabs" style="margin-bottom:20px;">
+            <div class="sub-img-tab active" id="tab-add-category" onclick="switchTemplateTab('category')">📂 Add Category</div>
+            <div class="sub-img-tab" id="tab-add-item" onclick="switchTemplateTab('item')">📄 Add Template</div>
+        </div>
+
+        <div id="form-add-category" style="display:block;">
+            <h4 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:5px;">Create Category</h4>
+            <p style="color:#666; font-size:0.9em;">Create a new group to organize your design elements and full website templates.</p>
+            <label style="font-weight:bold; font-size:0.9em;">Category Name</label>
+            <input type="text" id="new-category-name" class="auth-input" placeholder="e.g. Hero Sections, Full Templates">
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="safeCloseModal('admin-template-modal')">Cancel</button>
+                <button class="auth-btn" style="width:auto; margin:0; background:#28a745;" onclick="saveNewCategory()">Create Category</button>
+            </div>
+            
+            <div style="margin-top:30px;">
+                <h4 style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:5px;">Manage Categories</h4>
+                <p style="color:#666; font-size:0.9em;">Rename or delete existing categories.</p>
+                <div style="display:flex; gap:10px;">
+                    <select id="manage-category-select" class="auth-input" style="flex:1; margin-bottom:0;">
+                        <option value="" disabled selected>Select category...</option>
+                    </select>
+                    <button class="auth-btn" style="width:auto; margin:0; background:#17a2b8; padding: 0 15px;" onclick="promptRenameCategory()">Rename</button>
+                    <button class="auth-btn" style="width:auto; margin:0; background:#dc3545; padding: 0 15px;" onclick="deleteCategory()">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="form-add-item" style="display:none;">
+            <div style="display:flex; gap:15px; margin-bottom:10px;">
+                <div style="flex:1;">
+                    <label style="font-weight:bold; font-size:0.9em;">Template Name</label>
+                    <input type="text" id="new-template-name" class="auth-input" placeholder="e.g. Dark Hero / Startup Site">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-weight:bold; font-size:0.9em;">Select Category</label>
+                    <select id="new-template-category" class="auth-input">
+                        <option value="" disabled selected>Loading categories...</option>
+                    </select>
+                </div>
+            </div>
+
+            <label style="font-weight:bold; font-size:0.9em;">Thumbnail Image</label>
+            <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center;">
+                <input type="file" id="new-template-image" class="auth-input" accept="image/*" style="margin:0; flex-grow:1;" onchange="window.activeProjectThumbnailBlob = null; document.getElementById('template-thumb-preview').innerHTML = '<span style=\'color:#aaa; font-size:10px;\'>File</span>';">
+                <button class="auth-btn" id="btn-thumb-use-active" type="button" style="width:auto; margin:0; background:#6f42c1; padding:8px 12px; font-size:0.85em; display:flex; align-items:center; gap:5px;" onclick="window.captureActiveProjectThumbnail()" title="Capture screenshot of active website">📸 Use Active</button>
+                <div id="template-thumb-preview" style="width:40px; height:40px; background:#f4f4f9; border:1px solid #ddd; border-radius:4px; overflow:hidden; display:flex; justify-content:center; align-items:center; flex-shrink:0;">
+                    <span style="color:#aaa; font-size:10px;">None</span>
+                </div>
+            </div>
+            
+            <div style="background:#f8f9fa; padding:15px; border-radius:6px; border:1px solid #eee; margin-bottom:15px;">
+                <h4 style="margin:0 0 10px 0; color:#333; font-size:0.95em;">Template Content (Provide ONE of the below)</h4>
+                
+                <label style="font-weight:bold; font-size:0.85em; color:#555;">Option 1: Single Element HTML (Optional)</label>
+                <textarea id="new-template-html" class="auth-input" style="height:80px; resize:vertical; font-family:monospace; font-size:12px; margin-bottom:15px;" placeholder="<section class='hero'>...</section>"></textarea>
+
+                <label style="font-weight:bold; font-size:0.85em; color:#555;">Option 2: Full Project Upload (Optional)</label>
+                <p style="font-size:0.8em; color:#777; margin:0 0 5px 0;">Select a folder containing multiple HTML/CSS/JS files.</p>
+                <div style="display:flex; gap: 10px; align-items: center;">
+                    <input type="file" id="new-template-project-folder" webkitdirectory directory multiple class="auth-input" style="font-size:0.9em; flex-grow:1;">
+                    <button class="auth-btn" id="btn-use-active-project" style="width:auto; margin:0; background:#17a2b8; padding:10px;" onclick="importActiveProjectForTemplate()" title="Import the website currently open in the editor">📥 Use Active</button>
+                </div>
+                <div id="folder-upload-summary" style="font-size:0.8em; color:#28a745; display:none; margin-top:5px;"></div>
+            </div>
+
+            <div id="template-save-progress-container" style="display:none; margin-top:15px;">
+                <div style="display:flex; justify-content:space-between; font-size:0.85em; margin-bottom:5px;">
+                    <span id="template-save-status" style="font-weight:bold; color:#007bff;">Processing files...</span>
+                    <span id="template-save-percent" style="font-weight:bold; color:#333;">0%</span>
+                </div>
+                <div style="width:100%; background:#e9ecef; height:8px; border-radius:4px; overflow:hidden;">
+                    <div id="template-save-bar" style="width:0%; height:100%; background:#28a745; transition:width 0.2s;"></div>
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                <button class="auth-btn btn-cancel" id="btn-cancel-template" style="width:auto; margin:0;" onclick="safeCloseModal('admin-template-modal')">Cancel</button>
+                <button class="auth-btn" id="btn-save-template" style="width:auto; margin:0; background:#007bff;" onclick="saveNewTemplate()">Save Template</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="user-settings-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:650px; max-height: 90vh; overflow-y: auto; text-align:left;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <h2 style="margin:0;">⚙️ Personal Settings</h2>
+            <button onclick="closeUserSettingsModal()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#777;">&times;</button>
+        </div>
+
+        <div style="display:flex; gap:10px; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:0;">
+            <button class="user-settings-tab active" style="background:none; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; border-bottom:2px solid #007bff; color:#007bff;" onclick="switchUserSettingsTab('us-tab-general', this)">General</button>
+            <button class="user-settings-tab" style="background:none; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; border-bottom:2px solid transparent; color:#333;" onclick="switchUserSettingsTab('us-tab-ai', this)">AI Generation</button>
+        </div>
+
+        <div id="us-tab-general" class="user-settings-content" style="display:block;">
+            <label style="font-weight:bold;">Google Analytics ID (Optional)</label>
+            <input type="text" id="us-ga-code" class="auth-input" placeholder="G-XXXXXXXXXX">
+            <button class="auth-btn" style="width:auto; margin-bottom: 20px;" onclick="saveUserSettings('analytics')">Save Analytics</button>
+
+            <h4 style="margin-top:0; border-top: 1px solid #eee; padding-top: 15px;">📧 Contact Form / SMTP</h4>
+            <label>Receiving Email Address</label>
+            <input type="email" id="us-contact-email" class="auth-input" placeholder="Where should form submissions go?">
+            
+            <div style="margin-top:10px; padding:10px; background:#f8f9fa; border-radius:5px;">
+                <label style="font-size:0.9em; font-weight:bold;">Custom SMTP Credentials (Overrides System Default)</label>
+                <input type="text" id="us-smtp-host" class="auth-input" style="margin-top:5px;" placeholder="SMTP Host (e.g., smtp.gmail.com)">
+                <input type="text" id="us-smtp-port" class="auth-input" placeholder="SMTP Port (e.g., 587)">
+                <input type="text" id="us-smtp-user" class="auth-input" placeholder="SMTP Username">
+                <input type="password" id="us-smtp-pass" class="auth-input" placeholder="SMTP Password">
+            </div>
+            <button class="auth-btn" style="width:auto; margin-top: 10px;" onclick="saveUserSettings('contact')">Save Contact & SMTP</button>
+        </div>
+
+        <div id="us-tab-ai" class="user-settings-content" style="display:none;">
+            <div id="us-ai-locked" style="display:none; text-align:center; padding: 30px; background:#fff3cd; color:#856404; border-radius: 5px; border: 1px solid #ffeeba;">
+                <span style="font-size: 2em; display:block; margin-bottom: 10px;">🔒</span>
+                <strong style="font-size: 1.1em;">Feature Locked</strong>
+                <p style="margin-top: 5px;">Your current plan does not allow using personal AI API Keys or Custom Models.</p>
+                <button class="auth-btn" style="width:auto; margin:10px auto 0; padding:8px 15px; font-size:0.9em; background:#007bff;" onclick="closeUserSettingsModal(); openPlanSelectionModal();">View Upgrade Plans</button>
+            </div>
+
+            <div id="us-ai-unlocked" style="display:block;">
+                <div style="display:flex; gap:10px; margin-bottom:15px; border-bottom:1px solid #ccc; padding-bottom:0;">
+                    <button class="us-ai-sub-tab active" style="background:none; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; border-bottom:2px solid #007bff; color:#007bff;" onclick="switchUserAiSubTab('us-ai-sub-keys', this)">AI API Keys</button>
+                    <button class="us-ai-sub-tab" style="background:none; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; border-bottom:2px solid transparent; color:#333;" onclick="switchUserAiSubTab('us-ai-sub-models', this)">Models</button>
+                    <button class="us-ai-sub-tab" style="background:none; border:none; padding:8px 15px; cursor:pointer; font-weight:bold; border-bottom:2px solid transparent; color:#333;" onclick="switchUserAiSubTab('us-ai-sub-pages', this)">Default Pages</button>
+                </div>
+
+                <label style="font-weight:bold;">Active AI Provider</label>
+                <select id="us-ai-provider" class="auth-input" onchange="togglePersonalAIPanels()">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI</option>
+                    <option value="claude">Anthropic Claude</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="grok">xAI Grok</option>
+                    <option value="meta">Meta (Groq)</option>
+                    <option value="perplexity">Perplexity</option>
+                </select>
+
+                <div id="us-ai-sub-keys" class="us-ai-sub-content" style="display:block;">
+                    <div id="us-ai-panel-gemini" class="us-ai-panel" style="display:none;"><label>Gemini API Key</label><input type="password" id="us-gemini-key" class="auth-input"></div>
+                    <div id="us-ai-panel-openai" class="us-ai-panel" style="display:none;"><label>OpenAI API Key</label><input type="password" id="us-openai-key" class="auth-input"></div>
+                    <div id="us-ai-panel-claude" class="us-ai-panel" style="display:none;"><label>Claude API Key</label><input type="password" id="us-claude-key" class="auth-input"></div>
+                    <div id="us-ai-panel-deepseek" class="us-ai-panel" style="display:none;"><label>DeepSeek API Key</label><input type="password" id="us-deepseek-key" class="auth-input"></div>
+                    <div id="us-ai-panel-grok" class="us-ai-panel" style="display:none;"><label>Grok API Key</label><input type="password" id="us-xai-key" class="auth-input"></div>
+                    <div id="us-ai-panel-meta" class="us-ai-panel" style="display:none;"><label>Meta API Key</label><input type="password" id="us-meta-key" class="auth-input"></div>
+                    <div id="us-ai-panel-perplexity" class="us-ai-panel" style="display:none;"><label>Perplexity API Key</label><input type="password" id="us-perplexity-key" class="auth-input"></div>
+                </div>
+
+                <div id="us-ai-sub-models" class="us-ai-sub-content" style="display:none;">
+                    <div id="us-model-panel-gemini" class="us-model-panel" style="display:none;">
+                        <label>Gemini Model</label>
+                        <select id="us-model-gemini" class="auth-input" onchange="toggleUserModelInput('gemini')">
+                            <option value="default">Default Admin Model</option>
+                            <option value="other">Other (Manual Entry)</option>
+                        </select>
+                        <input type="text" id="us-custom-model-gemini" class="auth-input" style="display:none; margin-top:5px;" placeholder="Exact model name (e.g. gemini-1.5-pro)">
+                    </div>
+                    <div id="us-model-panel-openai" class="us-model-panel" style="display:none;">
+                        <label>OpenAI Model</label>
+                        <select id="us-model-openai" class="auth-input" onchange="toggleUserModelInput('openai')"><option value="default">Default Admin Model</option><option value="other">Other (Manual Entry)</option></select>
+                        <input type="text" id="us-custom-model-openai" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. gpt-4o">
+                    </div>
+                    <div id="us-model-panel-claude" class="us-model-panel" style="display:none;">
+                        <label>Claude Model</label>
+                        <select id="us-model-claude" class="auth-input" onchange="toggleUserModelInput('claude')"><option value="default">Default Admin Model</option><option value="other">Other (Manual Entry)</option></select>
+                        <input type="text" id="us-custom-model-claude" class="auth-input" style="display:none; margin-top:5px;">
+                    </div>
+                    <div id="us-model-panel-deepseek" class="us-model-panel" style="display:none;">
+                        <label>DeepSeek Model</label>
+                        <select id="us-model-deepseek" class="auth-input" onchange="toggleUserModelInput('deepseek')"><option value="default">Default Admin Model</option><option value="other">Other (Manual Entry)</option></select>
+                        <input type="text" id="us-custom-model-deepseek" class="auth-input" style="display:none; margin-top:5px;">
+                    </div>
+                    <div id="us-model-panel-grok" class="us-model-panel" style="display:none;">
+                        <label>Grok Model</label>
+                        <select id="us-model-grok" class="auth-input" onchange="toggleUserModelInput('grok')"><option value="default">Default Admin Model</option><option value="other">Other (Manual Entry)</option></select>
+                        <input type="text" id="us-custom-model-grok" class="auth-input" style="display:none; margin-top:5px;">
+                    </div>
+                    <div id="us-model-panel-meta" class="us-model-panel" style="display:none;">
+                        <label>Meta Model</label>
+                        <select id="us-model-meta" class="auth-input" onchange="toggleUserModelInput('meta')"><option value="default">Default Admin Model</option><option value="other">Other (Manual Entry)</option></select>
+                        <input type="text" id="us-custom-model-meta" class="auth-input" style="display:none; margin-top:5px;">
+                    </div>
+                    <div id="us-model-panel-perplexity" class="us-model-panel" style="display:none;">
+                        <label>Perplexity Model</label>
+                        <select id="us-model-perplexity" class="auth-input" onchange="toggleUserModelInput('perplexity')"><option value="default">Default Admin Model</option><option value="other">Other (Manual Entry)</option></select>
+                        <input type="text" id="us-custom-model-perplexity" class="auth-input" style="display:none; margin-top:5px;">
+                    </div>
+                </div>
+
+                <div id="us-ai-sub-pages" class="us-ai-sub-content" style="display:none;">
+                    <label style="font-weight:bold;">Website Structure Mode</label>
+                    <select id="us-pages-mode" class="auth-input" onchange="toggleUserPagesInput()">
+                        <option value="default">Default as Admin (Recommended)</option>
+                        <option value="manual">Manual (Custom Pages)</option>
+                    </select>
+                    <div id="us-pages-custom-wrapper" style="display:none; margin-top:10px;">
+                        <label style="font-size:0.9em;">Custom Pages JSON</label>
+                        <p style="font-size:0.75em; color:#888; margin-top:0;">Format: [{"name": "index.html", "description": "Home", "location": "menu"}, ...]</p>
+                        <textarea id="us-pages-json" class="auth-input" style="height:150px; font-family:monospace; font-size:12px;"></textarea>
+                    </div>
+                </div>
+
+                <button class="auth-btn" style="width:auto; margin-top: 15px; background:#007bff;" onclick="saveUserSettings('ai')">Save AI Settings</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="edit-video-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:500px; max-width:90%; background:#fff; padding:25px; border-radius:12px; text-align:left; box-shadow:0 15px 35px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <h3 style="margin:0; color:#333; font-size:1.4em;">🎥 Edit Video Settings</h3>
+            <button onclick="document.getElementById('edit-video-modal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#999; line-height:1;">&times;</button>
+        </div>
+        
+        <div style="margin-bottom:20px;">
+            <label style="font-weight:bold; color:#444; font-size:14px; margin-bottom:8px; display:block;">Select Video Format / Source</label>
+            <select id="edit-video-type-select" class="auth-input" onchange="toggleVideoInputType()" style="width:100%; padding:12px; font-size:14px; background:#f8f9fa; border-radius:6px; cursor:pointer;">
+                <option value="youtube">YouTube / Vimeo (External Link)</option>
+                <option value="file">Direct Video File (.mp4, .webm, etc.)</option>
+            </select>
+        </div>
+        
+        <div id="video-url-input-group" style="margin-bottom:20px; background:#fdfdfd; padding:15px; border-radius:8px; border:1px solid #eee;">
+            <label style="font-weight:bold; color:#444; font-size:13px; margin-bottom:8px; display:block;">Paste YouTube or Vimeo URL</label>
+            <input type="text" id="edit-video-url-input" class="auth-input" placeholder="e.g., https://www.youtube.com/watch?v=..." style="width:100%; padding:12px; font-size:14px; border-radius:6px;">
+        </div>
+        
+        <div id="video-file-input-group" style="margin-bottom:20px; display:none; background:#fdfdfd; padding:15px; border-radius:8px; border:1px solid #eee;">
+            <label style="font-weight:bold; color:#444; font-size:13px; margin-bottom:12px; display:block;">Upload or Select Video File</label>
+            
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <button class="auth-btn" style="flex:1; background:#17a2b8; margin:0; display:flex; align-items:center; justify-content:center; gap:5px; box-shadow:0 2px 5px rgba(23,162,184,0.2);" onclick="document.getElementById('video-upload-input').click()">
+                    <span>📁</span> Browse System
+                </button>
+                <button class="auth-btn" style="flex:1; background:#6f42c1; margin:0; display:flex; align-items:center; justify-content:center; gap:5px; box-shadow:0 2px 5px rgba(111,66,193,0.2);" onclick="document.getElementById('edit-video-modal').style.display='none'; if(typeof openImageManager==='function') openImageManager('video');">
+                    <span>🖼️</span> Media Manager
+                </button>
+            </div>
+            
+            <label style="font-size:11px; color:#888; font-weight:bold; text-transform:uppercase;">Selected Video Path:</label>
+            <input type="text" id="edit-video-file-url" class="auth-input" placeholder="No file selected..." readonly style="width:100%; padding:10px; font-size:13px; margin-top:5px; background:#e9ecef; color:#555; cursor:not-allowed;">
+            
+            <input type="file" id="video-upload-input" accept="video/mp4,video/webm,video/ogg,video/quicktime" style="display: none;" onchange="handleVideoUpload(this)">
+        </div>
+
+        <div style="text-align:right; border-top:1px solid #eee; padding-top:15px;">
+            <button class="auth-btn" style="width:auto; padding:10px 25px; background:#28a745; box-shadow:0 4px 10px rgba(40,167,69,0.2);" onclick="saveVideoChanges()">Apply Video Changes</button>
+        </div>
+    </div>
+</div>
+
+<div id="edit-carousel-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:600px; max-width:95%; max-height:85vh; display:flex; flex-direction:column; background:#fff; padding:0; border-radius:12px; overflow:hidden; text-align:left; box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+        
+        <div style="padding:20px 25px; background:#f8f9fa; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; color:#333; font-size:1.4em;">🎠 Edit Carousel Images</h3>
+            <button onclick="document.getElementById('edit-carousel-modal').style.display='none'" style="background:none; border:none; font-size:26px; cursor:pointer; color:#999; line-height:1;">&times;</button>
+        </div>
+        
+        <div style="padding:25px; overflow-y:auto; flex-grow:1; background:#fff;">
+            <div style="background:#e8f4fd; border:1px solid #b8daff; border-radius:6px; padding:12px; margin-bottom:15px;">
+                <p style="font-size:13px; color:#0056b3; margin:0; line-height:1.5;">
+                    <strong>Instructions:</strong> Manage your carousel slides below. You can paste image URLs directly, use the Upload button to select from your computer, or open the Media Manager to pick existing uploads.
+                </p>
+            </div>
+
+            <div style="margin-bottom:15px; display:flex; align-items:center; gap:10px; background:#fdfdfd; padding:10px; border:1px solid #eee; border-radius:6px;">
+                <label style="font-weight:bold; font-size:13px; color:#444; margin:0;">Auto-Slide Interval (Seconds):</label>
+                <input type="number" id="carousel-interval-input" class="auth-input" style="width:80px; margin:0; padding:6px;" value="3" min="0" step="0.5">
+                <span style="font-size:12px; color:#888;">(Set to 0 to disable auto-sliding)</span>
+            </div>
+            
+            <div id="carousel-images-list" style="display:flex; flex-direction:column; gap:12px; margin-bottom:20px;">
+                </div>
+            
+            <button class="auth-btn" style="width:100%; background:#28a745; padding:10px; font-size:14px; border:1px dashed #218838; color:#218838; background:#e8f5e9; font-weight:bold;" onclick="window.addCarouselImageRow('')">
+                ➕ Add New Slide
+            </button>
+        </div>
+        
+        <div style="padding:20px 25px; border-top:1px solid #ddd; background:#f8f9fa; display:flex; justify-content:space-between; align-items:center; gap: 10px;">
+            <div style="display: flex; gap: 10px;">
+                <button class="auth-btn" style="width:auto; padding:10px 20px; margin:0; background:#17a2b8; box-shadow:0 4px 10px rgba(23,162,184,0.2); display:flex; align-items:center; gap:8px;" onclick="window.triggerCarouselBrowse(this)">
+                    📁 Upload from System
+                </button>
+                <button class="auth-btn" style="width:auto; padding:10px 20px; margin:0; background:#6f42c1; box-shadow:0 4px 10px rgba(111,66,193,0.2); display:flex; align-items:center; gap:8px;" onclick="document.getElementById('edit-carousel-modal').style.display='none'; if(typeof openImageManager==='function') openImageManager('carousel');">
+                    🖼️ Add Media (Manager)
+                </button>
+            </div>
+            <button class="auth-btn" style="width:auto; padding:10px 30px; margin:0; background:#28a745; box-shadow:0 4px 10px rgba(40,167,69,0.3); font-size:1.1em;" onclick="saveCarouselChanges()">
+                💾 Save & Apply
+            </button>
+        </div>
+    </div>
+</div>
+
+<div id="edit-image-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:500px; max-width:90%; background:#fff; padding:25px; border-radius:12px; text-align:left; box-shadow:0 15px 35px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid #eee; padding-bottom:10px;">
+            <h3 style="margin:0; color:#333; font-size:1.4em;">🖼️ Image Settings</h3>
+            <button onclick="document.getElementById('edit-image-modal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#999; line-height:1;">&times;</button>
+        </div>
+        
+        <div style="margin-bottom:20px; background:#fdfdfd; padding:15px; border-radius:8px; border:1px solid #eee;">
+            <label style="font-weight:bold; color:#444; font-size:13px; margin-bottom:12px; display:block;">Select Source</label>
+            
+            <div style="display:flex; gap:10px; margin-bottom:15px;">
+                <button class="auth-btn" style="flex:1; background:#17a2b8; margin:0; display:flex; align-items:center; justify-content:center; gap:5px; box-shadow:0 2px 5px rgba(23,162,184,0.2);" onclick="document.getElementById('edit-image-upload-input').click()">
+                    <span>📁</span> Browse System
+                </button>
+                <button class="auth-btn" style="flex:1; background:#6f42c1; margin:0; display:flex; align-items:center; justify-content:center; gap:5px; box-shadow:0 2px 5px rgba(111,66,193,0.2);" onclick="window.triggerImageMediaManager()">
+                    <span>🖼️</span> Media Manager
+                </button>
+            </div>
+            
+            <label style="font-size:11px; color:#888; font-weight:bold; text-transform:uppercase;">URL:</label>
+            <input type="text" id="edit-image-url-input" class="auth-input" placeholder="Paste URL or select file..." style="width:100%; padding:10px; font-size:13px; margin-top:5px; background:#fff; border:1px solid #ccc; border-radius:4px;">
+            <input type="file" id="edit-image-upload-input" accept="image/*" style="display: none;" onchange="window.handleSingleImageUpload(this)">
+        </div>
+
+        <div style="text-align:right; border-top:1px solid #eee; padding-top:15px;">
+            <button class="auth-btn" style="width:auto; padding:10px 25px; background:#28a745; box-shadow:0 4px 10px rgba(40,167,69,0.2);" onclick="saveImageChanges()">Apply</button>
+        </div>
+    </div>
+    <script>
+        // Clean up the phantom "Media" button added by the external script, 
+        // safely leaving the original "Media Manager" button intact.
+        setInterval(() => {
+            const imgModal = document.getElementById('edit-image-modal');
+            if (imgModal) {
+                imgModal.querySelectorAll('button').forEach(btn => {
+                    const txt = btn.textContent.trim().toLowerCase();
+                    if (txt === 'media' || txt === '🖼️ media') {
+                        btn.remove();
+                    }
+                });
+            }
+        }, 500);
+    </script>
+
+
+</div>
+

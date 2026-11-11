@@ -1,0 +1,473 @@
+<script>
+    // ==========================================
+    // SYSTEM UPDATER CLIENT LOGIC
+    // ==========================================
+    
+    // Configuration
+    const CHECK_INTERVAL_HOURS = 24;
+    
+    document.addEventListener('DOMContentLoaded', () => {
+        // Run auto-check if enough time has passed
+        checkDailyAutoUpdate();
+    });
+
+    // --- 1. MODAL CONTROLS ---
+
+    function openUpdateModal() {
+        document.getElementById('system-update-modal').style.display = 'flex';
+        // Reset UI
+        document.getElementById('update-status-section').style.display = 'block';
+        document.getElementById('update-actions').style.display = 'none';
+        document.getElementById('update-msg').textContent = "Checking for updates...";
+        document.getElementById('update-icon').textContent = "🔄";
+        document.getElementById('update-icon').style.animation = "spin 1s linear infinite";
+        
+        // Trigger Check
+        checkSystemUpdates();
+        
+        // Load Restore History
+        loadRestoreOptions();
+    }
+
+    function closeUpdateModal() {
+        document.getElementById('system-update-modal').style.display = 'none';
+    }
+
+    // --- 2. CHECK FOR UPDATES ---
+
+    function checkDailyAutoUpdate() {
+        const lastCheck = localStorage.getItem('last_update_check');
+        const now = Date.now();
+        
+        // If never checked or > 24 hours ago
+        if (!lastCheck || (now - lastCheck) > (CHECK_INTERVAL_HOURS * 60 * 60 * 1000)) {
+            console.log("🔄 Performing daily system update check...");
+            fetch('/api/system/check_remote_updates')
+                .then(r => r.json())
+                .then(data => {
+                    localStorage.setItem('last_update_check', now);
+                    if (data.success && data.update_available) {
+                        // Show a notification toast or badge
+                        showUpdateNotification(data.latest_version);
+                    }
+                })
+                .catch(e => console.error("Auto-update check failed:", e));
+        }
+    }
+
+    function checkSystemUpdates() {
+        fetch('/api/system/check_remote_updates')
+            .then(r => r.json())
+            .then(data => {
+                const icon = document.getElementById('update-icon');
+                const msg = document.getElementById('update-msg');
+                const submsg = document.getElementById('current-version-display');
+                
+                icon.style.animation = "none";
+                
+                if (data.success) {
+                    submsg.textContent = data.current_version;
+                    
+                    if (data.update_available) {
+                        // Update Found
+                        icon.textContent = "🎉";
+                        msg.textContent = "New Update Available!";
+                        
+                        document.getElementById('update-status-section').style.display = 'none';
+                        document.getElementById('update-actions').style.display = 'block';
+                        
+                        document.getElementById('new-version-display').textContent = data.latest_version;
+                        document.getElementById('release-notes-display').textContent = data.release_notes || "No release notes provided.";
+                        
+                        // Store version for the perform button
+                        document.getElementById('system-update-modal').dataset.targetVersion = data.latest_version;
+                    } else {
+                        // Up to date
+                        icon.textContent = "✅";
+                        msg.textContent = "System is Up to Date";
+                        document.getElementById('update-submsg').innerHTML = `Current Version: <b>${data.current_version}</b> (Latest)`;
+                    }
+                } else {
+                    icon.textContent = "⚠️";
+                    msg.textContent = "Check Failed";
+                    alert("Error: " + data.error);
+                }
+            })
+            .catch(e => {
+                document.getElementById('update-icon').textContent = "❌";
+                document.getElementById('update-msg').textContent = "Connection Error";
+            });
+    }
+
+    // --- 3. PERFORM UPDATE (WITH PROGRESS BAR) ---
+
+    function performUpdate() {
+        const version = document.getElementById('system-update-modal').dataset.targetVersion;
+        if (!version) return;
+
+        if (!confirm(`Are you sure you want to update to version ${version}? The system will restart.`)) return;
+
+        // UI Loading State
+        const btn = document.querySelector('#update-actions button');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = "⏳ Initializing Update...";
+
+        // --- INJECT DYNAMIC PROGRESS BAR ---
+        let progressContainer = document.getElementById('update-progress-container');
+        if (!progressContainer) {
+            progressContainer = document.createElement('div');
+            progressContainer.id = 'update-progress-container';
+            progressContainer.style.cssText = 'width: 100%; background-color: #e9ecef; border-radius: 6px; height: 20px; margin-top: 15px; overflow: hidden; position: relative; border: 1px solid #ced4da; box-shadow: inset 0 1px 2px rgba(0,0,0,.1);';
+            progressContainer.innerHTML = `
+                <div id="update-progress-bar" style="height: 100%; background-color: #28a745; width: 0%; transition: width 0.4s ease; background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem; animation: progress-bar-stripes 1s linear infinite;"></div>
+                <div id="update-progress-text" style="position: absolute; top:0; left:0; width: 100%; text-align: center; color: #fff; font-size: 12px; line-height: 20px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.6);">0%</div>
+                <style>@keyframes progress-bar-stripes { 0% { background-position: 1rem 0; } 100% { background-position: 0 0; } }</style>
+            `;
+            btn.parentNode.insertBefore(progressContainer, btn.nextSibling);
+        }
+        
+        progressContainer.style.display = 'block';
+        const progressBar = document.getElementById('update-progress-bar');
+        const progressText = document.getElementById('update-progress-text');
+        
+        let progress = 0;
+        // Simulated progress mapping to backend stages
+        const progressInterval = setInterval(() => {
+            if (progress < 90) {
+                progress += Math.random() * 3.5; 
+                if (progress > 90) progress = 90;
+                progressBar.style.width = Math.min(progress, 90) + '%';
+                
+                if (progress < 30) {
+                    progressText.textContent = Math.round(progress) + '% - Backing up files...';
+                } else if (progress < 60) {
+                    progressText.textContent = Math.round(progress) + '% - Downloading payload...';
+                } else {
+                    progressText.textContent = Math.round(progress) + '% - Extracting & Syncing...';
+                }
+            }
+        }, 1000);
+        // -----------------------------------
+
+        fetch('/api/system/perform_update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ version: version })
+        })
+        .then(r => r.json())
+        .then(data => {
+            clearInterval(progressInterval);
+            if (data.success) {
+                progressBar.style.width = '100%';
+                progressText.textContent = '100% - Restarting Server...';
+                btn.innerHTML = "✅ Update Complete!";
+                
+                // Wait for the backend PM2 restart to complete before refreshing
+                setTimeout(() => {
+                    window.location.reload();
+                }, 6000);
+            } else {
+                progressContainer.style.display = 'none';
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                alert("❌ Update Failed: " + data.error);
+            }
+        })
+        .catch(e => {
+            // If the server cuts the connection because PM2 restarted it successfully, 
+            // it throws a catch error here. We assume success if it hung for a while.
+            clearInterval(progressInterval);
+            progressBar.style.width = '100%';
+            progressText.textContent = '100% - Restarting Server...';
+            btn.innerHTML = "✅ Update Complete!";
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 6000);
+        });
+    }
+
+    // --- 4. RESTORE / DOWNGRADE (WITH PROGRESS BAR) ---
+
+    function toggleRestoreSection() {
+        const sec = document.getElementById('restore-section');
+        const arrow = document.getElementById('restore-arrow');
+        if (sec.style.display === 'none') {
+            sec.style.display = 'block';
+            arrow.textContent = "▲";
+        } else {
+            sec.style.display = 'none';
+            arrow.textContent = "▼";
+        }
+    }
+
+    function loadRestoreOptions() {
+        const select = document.getElementById('restore-version-select');
+        select.innerHTML = '<option>Loading...</option>';
+        
+        fetch('/api/system/list_remote_versions')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.updates) {
+                    select.innerHTML = '';
+                    if (data.updates.length === 0) {
+                        select.innerHTML = '<option disabled>No versions found</option>';
+                        return;
+                    }
+                    
+                    data.updates.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u.version;
+                        opt.textContent = `${u.version} (${u.release_date})`;
+                        select.appendChild(opt);
+                    });
+                } else {
+                    select.innerHTML = '<option disabled>Failed to load versions</option>';
+                }
+            });
+    }
+
+    function performRestore() {
+        const select = document.getElementById('restore-version-select');
+        const version = select.value;
+        
+        if (!version) {
+            alert("Please select a version to restore.");
+            return;
+        }
+
+        if (!confirm(`⚠️ WARNING: Downgrading to version ${version} may break newer features. Are you sure?`)) return;
+
+        // Use the same endpoint as update, just specifying an older version
+        const btn = document.querySelector('#restore-section button');
+        const originalText = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = "⏳ Initializing Restore...";
+
+        // --- INJECT DYNAMIC PROGRESS BAR ---
+        let progressContainer = document.getElementById('restore-progress-container');
+        if (!progressContainer) {
+            progressContainer = document.createElement('div');
+            progressContainer.id = 'restore-progress-container';
+            progressContainer.style.cssText = 'width: 100%; background-color: #e9ecef; border-radius: 6px; height: 20px; margin-top: 15px; overflow: hidden; position: relative; border: 1px solid #ced4da; box-shadow: inset 0 1px 2px rgba(0,0,0,.1);';
+            progressContainer.innerHTML = `
+                <div id="restore-progress-bar" style="height: 100%; background-color: #6c757d; width: 0%; transition: width 0.4s ease; background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem; animation: progress-bar-stripes 1s linear infinite;"></div>
+                <div id="restore-progress-text" style="position: absolute; top:0; left:0; width: 100%; text-align: center; color: #fff; font-size: 12px; line-height: 20px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.6);">0%</div>
+            `;
+            btn.parentNode.insertBefore(progressContainer, btn.nextSibling);
+        }
+        
+        progressContainer.style.display = 'block';
+        const progressBar = document.getElementById('restore-progress-bar');
+        const progressText = document.getElementById('restore-progress-text');
+        
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            if (progress < 90) {
+                progress += Math.random() * 3.5; 
+                if (progress > 90) progress = 90;
+                progressBar.style.width = Math.min(progress, 90) + '%';
+                
+                if (progress < 30) {
+                    progressText.textContent = Math.round(progress) + '% - Backing up current state...';
+                } else if (progress < 60) {
+                    progressText.textContent = Math.round(progress) + '% - Downloading old version...';
+                } else {
+                    progressText.textContent = Math.round(progress) + '% - Overwriting files...';
+                }
+            }
+        }, 1000);
+        // -----------------------------------
+
+        fetch('/api/system/perform_update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ version: version })
+        })
+        .then(r => r.json())
+        .then(data => {
+            clearInterval(progressInterval);
+            if (data.success) {
+                progressBar.style.width = '100%';
+                progressText.textContent = '100% - Restarting Server...';
+                btn.innerHTML = "✅ Restored!";
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 6000);
+            } else {
+                progressContainer.style.display = 'none';
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+                alert("❌ Restore Failed: " + data.error);
+            }
+        })
+        .catch(err => {
+            // Catch server disconnect during PM2 reboot
+            clearInterval(progressInterval);
+            progressBar.style.width = '100%';
+            progressText.textContent = '100% - Restarting Server...';
+            btn.innerHTML = "✅ Restored!";
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 6000);
+        });
+    }
+
+    // --- 5. NOTIFICATION HELPER ---
+    function showUpdateNotification(version) {
+        // Create a simple toast notification
+        const toast = document.createElement('div');
+        toast.style.position = 'fixed';
+        toast.style.bottom = '20px';
+        toast.style.right = '20px';
+        toast.style.background = '#28a745';
+        toast.style.color = 'white';
+        toast.style.padding = '15px 20px';
+        toast.style.borderRadius = '5px';
+        toast.style.boxShadow = '0 4px 12px rgba(0,0,0,0.2)';
+        toast.style.zIndex = '99999';
+        toast.style.display = 'flex';
+        toast.style.alignItems = 'center';
+        toast.style.gap = '15px';
+        
+        toast.innerHTML = `
+            <div>
+                <strong style="display:block;">🚀 New Update Available!</strong>
+                <span style="font-size:0.9em;">Version ${version} is ready.</span>
+            </div>
+            <button onclick="openUpdateModal(); this.parentElement.remove();" style="background:white; color:#28a745; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-weight:bold;">View</button>
+            <button onclick="this.parentElement.remove()" style="background:none; border:none; color:white; font-size:1.2em; cursor:pointer;">&times;</button>
+        `;
+        
+        document.body.appendChild(toast);
+    }
+
+    // --- FIX FOR EMPTY RESTORE DROPDOWN ON ADMIN DASHBOARD (LOCAL BACKUPS) ---
+    function loadAdminRestoreOptions() {
+        // Target the specific dropdown inside the System Updates tab of the Admin CMS
+        const adminDropdown = document.getElementById('cms-restore-select'); 
+        
+        if (adminDropdown) {
+            fetch('/api/system/list_local_backups')
+            .then(response => response.json())
+            .then(data => {
+                adminDropdown.innerHTML = '<option value="" disabled selected>Select a backup version...</option>';
+                if (data && data.length > 0) {
+                    data.forEach(backup => {
+                        const opt = document.createElement('option');
+                        opt.value = backup;
+                        opt.textContent = backup;
+                        adminDropdown.appendChild(opt);
+                    });
+                } else {
+                    adminDropdown.innerHTML = '<option value="" disabled>No local backups available</option>';
+                }
+            })
+            .catch(err => console.error("Error loading admin backups:", err));
+        }
+    }
+
+    function performRestoreFromCMS() {
+        const select = document.getElementById('cms-restore-select');
+        const filename = select ? select.value : null;
+        
+        if (!filename) {
+            alert("Please select a local backup file first.");
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to restore the system to ${filename}? Unsaved changes will be lost.`)) return;
+        
+        const btn = document.querySelector('#tab-updates .auth-btn[onclick="performRestoreFromCMS()"]');
+        const originalText = btn ? btn.innerHTML : "Restore";
+        if(btn) {
+            btn.disabled = true;
+            btn.innerHTML = "⏳ Restoring...";
+        }
+
+        // --- INJECT DYNAMIC PROGRESS BAR ---
+        let progressContainer = document.getElementById('cms-restore-progress-container');
+        if (!progressContainer && btn) {
+            progressContainer = document.createElement('div');
+            progressContainer.id = 'cms-restore-progress-container';
+            progressContainer.style.cssText = 'width: 100%; background-color: #e9ecef; border-radius: 6px; height: 20px; margin-top: 15px; overflow: hidden; position: relative; border: 1px solid #ced4da; box-shadow: inset 0 1px 2px rgba(0,0,0,.1);';
+            progressContainer.innerHTML = `
+                <div id="cms-restore-progress-bar" style="height: 100%; background-color: #17a2b8; width: 0%; transition: width 0.4s ease; background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent); background-size: 1rem 1rem; animation: progress-bar-stripes 1s linear infinite;"></div>
+                <div id="cms-restore-progress-text" style="position: absolute; top:0; left:0; width: 100%; text-align: center; color: #fff; font-size: 12px; line-height: 20px; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.6);">0%</div>
+            `;
+            // Insert it under the container holding the select and button
+            btn.parentNode.parentNode.appendChild(progressContainer);
+        }
+        
+        if(progressContainer) progressContainer.style.display = 'block';
+        const progressBar = document.getElementById('cms-restore-progress-bar');
+        const progressText = document.getElementById('cms-restore-progress-text');
+        
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+            if (progress < 90) {
+                progress += Math.random() * 4; 
+                if (progress > 90) progress = 90;
+                if(progressBar) progressBar.style.width = Math.min(progress, 90) + '%';
+                if(progressText) progressText.textContent = Math.round(progress) + '% - Extracting Archive...';
+            }
+        }, 1000);
+
+        fetch('/api/system/restore_backup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ filename: filename }) 
+        })
+        .then(r => r.json())
+        .then(data => {
+            clearInterval(progressInterval);
+            if (data.success) {
+                if(progressBar) progressBar.style.width = '100%';
+                if(progressText) progressText.textContent = '100% - Restarting Server...';
+                if(btn) btn.innerHTML = "✅ Restored!";
+                
+                setTimeout(() => {
+                    window.location.reload();
+                }, 6000);
+            } else {
+                if(progressContainer) progressContainer.style.display = 'none';
+                if(btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+                alert("❌ Restore Failed: " + data.error);
+            }
+        })
+        .catch(err => {
+            clearInterval(progressInterval);
+            if(progressBar) progressBar.style.width = '100%';
+            if(progressText) progressText.textContent = '100% - Restarting Server...';
+            if(btn) btn.innerHTML = "✅ Restored!";
+            
+            setTimeout(() => {
+                window.location.reload();
+            }, 6000);
+        });
+    }
+
+    // Auto-load the backups when the page loads AND when the Admin Tab is clicked
+    document.addEventListener("DOMContentLoaded", function() {
+        // Run once on load
+        loadAdminRestoreOptions();
+        
+        // Hook into the Admin Dashboard tab clicks to ensure it refreshes
+        const tabButtons = document.querySelectorAll('.admin-nav-item');
+        tabButtons.forEach(btn => {
+            btn.addEventListener('click', function() {
+                // If they click the updates tab, fetch the backups
+                if (this.textContent.includes('Updates') || (this.getAttribute('onclick') && this.getAttribute('onclick').includes('tab-updates'))) {
+                    loadAdminRestoreOptions();
+                }
+            });
+        });
+    });
+</script>
+ 

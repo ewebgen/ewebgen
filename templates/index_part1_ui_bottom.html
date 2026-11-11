@@ -1,0 +1,1041 @@
+    <script>
+        window.switchUiElementsTab = function(tabId, btn) {
+            document.querySelectorAll('.el-cat-btn').forEach(b => {
+                b.classList.remove('active');
+                b.style.background = 'transparent';
+                b.style.borderLeft = '4px solid transparent';
+                b.style.color = '#555';
+            });
+            btn.classList.add('active');
+            btn.style.background = '#e8f4fd';
+            btn.style.borderLeft = '4px solid #007bff';
+            btn.style.color = '#007bff';
+
+            document.getElementById('drawer-widget-list-container').style.display = 'none';
+            document.getElementById('drawer-colours-container').style.display = 'none';
+            document.getElementById('drawer-fonts-container').style.display = 'none';
+            document.getElementById('drawer-logo-container').style.display = 'none';
+
+            if (tabId === 'widgets') {
+                document.getElementById('drawer-widget-list-container').style.display = 'grid';
+            } else if (tabId === 'colours') {
+                document.getElementById('drawer-colours-container').style.display = 'flex';
+                window.syncGlobalColorsFromPreview();
+            } else if (tabId === 'fonts') {
+                document.getElementById('drawer-fonts-container').style.display = 'flex';
+                window.detectCurrentFont();
+            } else if (tabId === 'logo') {
+                document.getElementById('drawer-logo-container').style.display = 'flex';
+                window.detectCurrentLogo();
+            }
+        };
+
+        function rgb2hexHelper(rgb) {
+            if (!rgb || rgb === 'rgba(0, 0, 0, 0)' || rgb === 'transparent') return '#ffffff';
+            if (/^#[0-9A-F]{6}$/i.test(rgb)) return rgb;
+            let match = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+            if (!match) match = rgb.match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*[\d.]+\)$/);
+            function hex(x) { return ("0" + parseInt(x).toString(16)).slice(-2); }
+            return match ? "#" + hex(match[1]) + hex(match[2]) + hex(match[3]) : "#ffffff";
+        }
+
+        window.syncGlobalColorsFromPreview = function() {
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const win = iframe.contentWindow;
+            
+            if(!doc.body) return;
+
+            const bodyStyle = win.getComputedStyle(doc.body);
+            
+            let bgColor = bodyStyle.backgroundColor;
+            if (bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent') {
+                const header = doc.querySelector('header, .navbar, section');
+                if (header) {
+                    bgColor = win.getComputedStyle(header).backgroundColor;
+                }
+            }
+            document.getElementById('global-color-bg').value = rgb2hexHelper(bgColor);
+            document.getElementById('global-color-bg-txt').value = rgb2hexHelper(bgColor);
+
+            let textColor = bodyStyle.color;
+            document.getElementById('global-color-text').value = rgb2hexHelper(textColor);
+            document.getElementById('global-color-text-txt').value = rgb2hexHelper(textColor);
+
+            // Primary and Headings color detection removed as requested
+        };
+
+        window.applyGlobalColor = function(type, value) {
+            document.getElementById(`global-color-${type}-txt`).value = value;
+            document.getElementById(`global-color-${type}`).value = value;
+
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            let styleTag = doc.getElementById('eweb-global-color-overrides');
+            if (!styleTag) {
+                styleTag = doc.createElement('style');
+                styleTag.id = 'eweb-global-color-overrides';
+                doc.head.appendChild(styleTag);
+            }
+
+            window._rebuildGlobalColors(doc, styleTag);
+        };
+
+        window.applyGlobalGradient = function() {
+            const c1 = document.getElementById('global-color-grad1').value;
+            const c2 = document.getElementById('global-color-grad2').value;
+            const dir = document.getElementById('global-color-grad-dir').value;
+            
+            window._globalGradient = dir === 'circle' ? `radial-gradient(${dir}, ${c1}, ${c2})` : `linear-gradient(${dir}, ${c1}, ${c2})`;
+            
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            let styleTag = doc.getElementById('eweb-global-color-overrides');
+            if (!styleTag) {
+                styleTag = doc.createElement('style');
+                styleTag.id = 'eweb-global-color-overrides';
+                doc.head.appendChild(styleTag);
+            }
+            window._rebuildGlobalColors(doc, styleTag);
+        };
+
+        window.removeGlobalGradient = function() {
+            window._globalGradient = null;
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            let styleTag = doc.getElementById('eweb-global-color-overrides');
+            if (styleTag) window._rebuildGlobalColors(doc, styleTag);
+        };
+
+        window._rebuildGlobalColors = function(doc, styleTag) {
+            if(typeof captureState === 'function') captureState();
+
+            const bg = document.getElementById('global-color-bg').value;
+            const text = document.getElementById('global-color-text').value;
+
+            // Only strip text classes if they explicitly clash, but leave backgrounds alone.
+            doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, a, li').forEach(el => {
+                const classesToRemove = Array.from(el.classList).filter(c => c.startsWith('text-'));
+                if(classesToRemove.length > 0) el.classList.remove(...classesToRemove);
+            });
+
+            // Removed primary and heading variables
+            let css = `
+                :root {
+                    --text-color: ${text} !important;
+                    --bg-color: ${bg} !important;
+                }
+                body {
+                    color: ${text} !important;
+                    background-color: ${bg} !important;
+                    ${window._globalGradient ? `background-image: ${window._globalGradient} !important; background-attachment: fixed;` : 'background-image: none !important;'}
+                }
+                h1, h2, h3, h4, h5, h6, .hero-title {
+                    color: ${text} !important;
+                }
+            `;
+            
+            styleTag.innerHTML = css;
+            
+            if (window._globalGradient) {
+                doc.body.style.setProperty('background-image', window._globalGradient, 'important');
+            } else {
+                doc.body.style.setProperty('background-image', 'none', 'important');
+            }
+
+            if(typeof enableSaveButton === 'function') enableSaveButton();
+            if(typeof captureState === 'function') captureState();
+            if(typeof updateStatus === 'function') updateStatus("✅ Global colors updated.");
+        };
+
+        // --- NEW: FONTS LOGIC ---
+        window.detectCurrentFont = function() {
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const win = iframe.contentWindow;
+            if(!doc.body) return;
+            const bodyStyle = win.getComputedStyle(doc.body);
+            let currentFont = bodyStyle.fontFamily;
+            
+            const select = document.getElementById('global-font-family');
+            if (select) {
+                let matched = false;
+                for (let i = 0; i < select.options.length; i++) {
+                    const optFont = select.options[i].value.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+                    const curFontClean = currentFont.split(',')[0].replace(/['"]/g, '').trim().toLowerCase();
+                    if (optFont === curFontClean) {
+                        select.selectedIndex = i;
+                        matched = true;
+                        break;
+                    }
+                }
+                if (!matched) {
+                    select.selectedIndex = 0;
+                }
+            }
+        };
+
+        window.applyGlobalFont = function(fontFamily) {
+            if (!generatedFiles || Object.keys(generatedFiles).length === 0) {
+                alert("No template loaded.");
+                return;
+            }
+
+            const cleanFontName = fontFamily.split(',')[0].replace(/['"]/g, '').trim();
+            const googleFontFormatted = cleanFontName.replace(/\s+/g, '+');
+            const googleFontUrl = `[https://fonts.googleapis.com/css2?family=$](https://fonts.googleapis.com/css2?family=$){googleFontFormatted}:wght@300;400;500;600;700;800&display=swap`;
+
+            const pages = Object.keys(generatedFiles).filter(f => f.endsWith('.html') || f.endsWith('.php'));
+            let updatedCount = 0;
+            
+            pages.forEach(page => {
+                let html = generatedFiles[page];
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                let styleTag = doc.getElementById('eweb-global-font-overrides');
+                if (!styleTag) {
+                    styleTag = doc.createElement('style');
+                    styleTag.id = 'eweb-global-font-overrides';
+                    doc.head.appendChild(styleTag);
+                }
+                
+                let gFonts = doc.getElementById('eweb-google-fonts');
+                if (!gFonts) {
+                    gFonts = doc.createElement('link');
+                    gFonts.id = 'eweb-google-fonts';
+                    gFonts.rel = 'stylesheet';
+                    doc.head.appendChild(gFonts);
+                }
+                gFonts.href = googleFontUrl; // Dynamically inject the correct Google Font URL
+
+                styleTag.innerHTML = `
+                    :root {
+                        --font-primary: ${fontFamily} !important;
+                        --font-heading: ${fontFamily} !important;
+                    }
+                    body, p, span, div, li, a, button, input, textarea, select {
+                        font-family: ${fontFamily} !important;
+                    }
+                    h1, h2, h3, h4, h5, h6, .hero-title, .navbar-brand {
+                        font-family: ${fontFamily} !important;
+                    }
+                `;
+                
+                doc.querySelectorAll('[style*="font-family"]').forEach(el => {
+                    el.style.removeProperty('font-family');
+                });
+                
+                let newHtml = doc.documentElement.outerHTML;
+                if (html.toLowerCase().includes('<!doctype')) {
+                    const doctypeMatch = html.match(/<!doctype[^>]*>/i);
+                    if (doctypeMatch) {
+                        newHtml = doctypeMatch[0] + '\n' + newHtml;
+                    } else {
+                        newHtml = "<!DOCTYPE html>\n" + newHtml;
+                    }
+                } else if (!newHtml.trim().toLowerCase().startsWith('<!doctype')) {
+                    newHtml = "<!DOCTYPE html>\n" + newHtml;
+                }
+                
+                generatedFiles[page] = newHtml;
+                updatedCount++;
+            });
+            
+            if (updatedCount > 0) {
+                const iframe = document.getElementById('preview-frame');
+                if (iframe && window.currentPreviewFile && generatedFiles[window.currentPreviewFile]) {
+                    if (typeof window.restoreHTML === 'function') {
+                        window.restoreHTML(generatedFiles[window.currentPreviewFile]);
+                    }
+                }
+                if(typeof enableSaveButton === 'function') enableSaveButton();
+                if(typeof captureState === 'function') captureState(true);
+                if(typeof updateStatus === 'function') updateStatus("✅ Font updated on " + updatedCount + " pages.");
+            }
+        };
+
+        window.addAndApplyCustomFont = function() {
+            const input = document.getElementById('custom-google-font-input');
+            const fontName = input ? input.value.trim() : '';
+            if (!fontName) { alert("Please enter a font name."); return; }
+
+            // Add to dropdown if not exists
+            const select = document.getElementById('global-font-family');
+            let exists = Array.from(select.options).some(opt => opt.value.toLowerCase().includes(fontName.toLowerCase()));
+            
+            const fontCssValue = `'${fontName}', sans-serif`;
+            
+            if (!exists) {
+                const opt = document.createElement('option');
+                opt.value = fontCssValue;
+                opt.textContent = fontName;
+                select.appendChild(opt);
+            }
+            select.value = fontCssValue;
+
+            window.applyGlobalFont(fontCssValue);
+            input.value = ''; // clear input
+        };
+
+        // --- LOGO TAB FUNCTIONS ---
+        
+        window.recentLogos = [];
+
+        window.addRecentLogo = function(value, type) {
+            window.recentLogos = window.recentLogos.filter(l => !(l.type === type && l.value === value));
+            window.recentLogos.unshift({type: type, value: value});
+            if (window.recentLogos.length > 2) {
+                window.recentLogos.pop();
+            }
+            window.renderRecentLogos();
+        };
+
+        window.renderRecentLogos = function() {
+            const container = document.getElementById('recent-logos-container');
+            const grid = document.getElementById('recent-logos-grid');
+            if (!container || !grid) return;
+
+            if (window.recentLogos.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'block';
+            grid.innerHTML = '';
+
+            window.recentLogos.forEach(logo => {
+                const btn = document.createElement('button');
+                btn.style.cssText = 'flex:1; background:#f8f9fa; border:1px solid #ccc; border-radius:4px; padding:5px; cursor:pointer; height:45px; display:flex; justify-content:center; align-items:center; overflow:hidden; transition:border 0.2s;';
+                btn.onmouseover = () => btn.style.borderColor = '#007bff';
+                btn.onmouseout = () => btn.style.borderColor = '#ccc';
+                btn.onclick = () => window.applyGlobalLogo(logo.value, logo.type);
+
+                if (logo.type === 'image') {
+                    btn.innerHTML = `<img src="${logo.value}" style="max-width:100%; max-height:100%; object-fit:contain;">`;
+                } else {
+                    btn.innerHTML = `<span style="font-weight:bold; font-size:14px; color:var(--primary-color, #007bff); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${logo.value}</span>`;
+                }
+                grid.appendChild(btn);
+            });
+        };
+
+        window.detectCurrentLogo = function() {
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            let brandContainer = doc.querySelector('.navbar-brand, .logo, .site-logo, .brand, .site-title, .header-logo, header a img, nav a img');
+            if (!brandContainer) {
+                const header = doc.querySelector('header, nav, .navbar');
+                if (header) {
+                    brandContainer = header.querySelector('.navbar-brand, .logo, .site-logo, .brand, .site-title, .header-logo');
+                    if (!brandContainer) {
+                        const firstLink = header.querySelector('a:not(.nav-link)');
+                        if (firstLink) {
+                            brandContainer = firstLink;
+                        } else {
+                            const img = header.querySelector('img');
+                            if(img && img.parentElement) brandContainer = img.parentElement;
+                        }
+                    }
+                }
+            }
+            
+            const previewImg = document.getElementById('global-logo-preview');
+            const textInput = document.getElementById('global-logo-text-input');
+            if (brandContainer) {
+                const existingImg = brandContainer.tagName === 'IMG' ? brandContainer : brandContainer.querySelector('img');
+                if (existingImg && existingImg.src) {
+                    previewImg.src = existingImg.src;
+                    if(textInput) textInput.value = '';
+                } else {
+                    const txt = brandContainer.textContent.trim();
+                    previewImg.src = `[https://placehold.co/200x70?text=$](https://placehold.co/200x70?text=$){encodeURIComponent(txt.substring(0,10) || 'Logo')}`;
+                    if(textInput) textInput.value = txt;
+                }
+                previewImg.style.display = 'block';
+            } else {
+                previewImg.src = `[https://placehold.co/200x70?text=No+Logo+Found](https://placehold.co/200x70?text=No+Logo+Found)`;
+            }
+        };
+
+        window.applyGlobalTextLogo = function() {
+            const textInput = document.getElementById('global-logo-text-input');
+            const textValue = textInput ? textInput.value.trim() : '';
+            if (!textValue) {
+                alert("Please enter text for your logo.");
+                return;
+            }
+            window.applyGlobalLogo(textValue, 'text');
+        };
+
+        window.applyGlobalLogo = function(value, type = 'image') {
+            if (!generatedFiles || Object.keys(generatedFiles).length === 0) {
+                alert("No template loaded.");
+                return;
+            }
+
+            if (typeof window.addRecentLogo === 'function') {
+                window.addRecentLogo(value, type);
+            }
+
+            const pages = Object.keys(generatedFiles).filter(f => f.endsWith('.html') || f.endsWith('.php'));
+            let updatedCount = 0;
+            
+            pages.forEach(page => {
+                let html = generatedFiles[page];
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                
+                let brandContainer = doc.querySelector('.navbar-brand, .logo, .site-logo, .brand, .site-title, .header-logo, header a img, nav a img');
+                if (!brandContainer) {
+                    const header = doc.querySelector('header, nav, .navbar');
+                    if (header) {
+                        brandContainer = header.querySelector('.navbar-brand, .logo, .site-logo, .brand, .site-title, .header-logo');
+                        if (!brandContainer) {
+                            const firstLink = header.querySelector('a:not(.nav-link)');
+                            if (firstLink) {
+                                brandContainer = firstLink;
+                            } else {
+                                const img = header.querySelector('img');
+                                if(img && img.parentElement) brandContainer = img.parentElement;
+                            }
+                        }
+                    }
+                }
+                
+                if (brandContainer) {
+                    if (brandContainer.tagName === 'IMG' && brandContainer.parentElement) {
+                         brandContainer = brandContainer.parentElement;
+                    }
+
+                    if (type === 'image') {
+                        const existingImg = brandContainer.tagName === 'IMG' ? brandContainer : brandContainer.querySelector('img');
+                        if (existingImg) {
+                            existingImg.src = value;
+                            existingImg.style.maxWidth = '100%';
+                            existingImg.style.maxHeight = '80px';
+                            existingImg.style.objectFit = 'contain';
+                            
+                            existingImg.removeAttribute('srcset');
+                            existingImg.removeAttribute('sizes');
+                        } else {
+                            brandContainer.innerHTML = '';
+                            const img = doc.createElement('img');
+                            img.src = value;
+                            img.alt = 'Logo';
+                            img.style.maxWidth = '100%';
+                            img.style.maxHeight = '80px';
+                            img.style.objectFit = 'contain';
+                            
+                            brandContainer.style.display = 'inline-flex';
+                            brandContainer.style.alignItems = 'center';
+                            brandContainer.appendChild(img);
+                        }
+                    } else if (type === 'text') {
+                        if (brandContainer.tagName === 'IMG') {
+                            const span = doc.createElement('span');
+                            span.style.fontWeight = 'bold';
+                            span.style.fontSize = '1.5em';
+                            span.style.color = 'var(--primary-color, #007bff)';
+                            span.className = brandContainer.className;
+                            span.textContent = value;
+                            brandContainer.parentNode.replaceChild(span, brandContainer);
+                        } else {
+                            brandContainer.innerHTML = '';
+                            const span = doc.createElement('span');
+                            span.style.fontWeight = 'bold';
+                            span.style.fontSize = '1.2em';
+                            span.style.color = 'var(--primary-color, #007bff)';
+                            span.textContent = value;
+                            brandContainer.style.display = 'inline-flex';
+                            brandContainer.style.alignItems = 'center';
+                            brandContainer.appendChild(span);
+                        }
+                    }
+                    
+                    let newHtml = doc.documentElement.outerHTML;
+                    if (html.toLowerCase().includes('<!doctype')) {
+                        const doctypeMatch = html.match(/<!doctype[^>]*>/i);
+                        if (doctypeMatch) {
+                            newHtml = doctypeMatch[0] + '\n' + newHtml;
+                        } else {
+                            newHtml = "<!DOCTYPE html>\n" + newHtml;
+                        }
+                    } else if (!newHtml.trim().toLowerCase().startsWith('<!doctype')) {
+                        newHtml = "<!DOCTYPE html>\n" + newHtml;
+                    }
+                    
+                    generatedFiles[page] = newHtml;
+                    updatedCount++;
+                }
+            });
+            
+            if (updatedCount > 0) {
+                const previewImg = document.getElementById('global-logo-preview');
+                if (type === 'image') {
+                    previewImg.src = value;
+                } else {
+                    previewImg.src = `[https://placehold.co/200x70?text=$](https://placehold.co/200x70?text=$){encodeURIComponent(value.substring(0, 15))}`;
+                }
+                
+                const iframe = document.getElementById('preview-frame');
+                if (iframe && window.currentPreviewFile && generatedFiles[window.currentPreviewFile]) {
+                    if (typeof window.restoreHTML === 'function') {
+                        window.restoreHTML(generatedFiles[window.currentPreviewFile]);
+                    }
+                }
+                
+                if(typeof enableSaveButton === 'function') enableSaveButton();
+                if(typeof captureState === 'function') captureState(true);
+                if(typeof updateStatus === 'function') updateStatus("✅ Logo updated on " + updatedCount + " pages.");
+            } else {
+                alert("Could not find a logo area in the current template.");
+            }
+        };
+
+        window.triggerGlobalLogoManager = function() {
+            if(typeof openImageManager === 'function') {
+                window.currentMediaContext = 'global_logo';
+                openImageManager('global_logo');
+            } else {
+                alert("Media Manager not available.");
+            }
+        };
+
+        window.uploadBase64AndApplyLogo = function(base64Data, context) {
+            const oldStatus = document.getElementById('global-logo-status');
+            if(oldStatus) oldStatus.textContent = "Uploading logo...";
+            
+            fetch(base64Data)
+                .then(res => res.blob())
+                .then(blob => {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'logo.png');
+                    
+                    fetch('/api/upload_image', { method: 'POST', body: formData })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (context === 'global_logo') {
+                                window.applyGlobalLogo(data.url, 'image');
+                            } else {
+                                if(typeof window.insertLogoToCanvas === 'function') window.insertLogoToCanvas(data.url);
+                            }
+                            if(oldStatus) oldStatus.textContent = "Logo Applied!";
+                        } else {
+                            alert("Upload failed: " + data.error);
+                            if(oldStatus) oldStatus.textContent = "";
+                        }
+                    }).catch(err => {
+                        alert("Network error");
+                        if(oldStatus) oldStatus.textContent = "";
+                    });
+                });
+        };
+
+        window.handleGlobalLogoUpload = function(input) {
+            if (!input.files || input.files.length === 0) return;
+            const file = input.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const rawImgSrc = e.target.result;
+                if (typeof window.openImageEditorModal === 'function') {
+                    window.openImageEditorModal(rawImgSrc, function(editedSrc) {
+                        window.uploadBase64AndApplyLogo(editedSrc, 'global_logo');
+                    });
+                } else {
+                    window.uploadBase64AndApplyLogo(rawImgSrc, 'global_logo');
+                }
+            };
+            reader.readAsDataURL(file);
+            input.value = '';
+        };
+
+        // --- NEW: SETTINGS SLIDER LOGIC (GOAL 2) ---
+        window.toggleSettingsSlider = window.openEwebgenSettings = function(e) {
+            if(e) e.stopPropagation();
+            
+            if(typeof closeElementsSlider === 'function') closeElementsSlider();
+            if(typeof closeUiElementsSlider === 'function') closeUiElementsSlider();
+            if(typeof closeHelpSlider === 'function') closeHelpSlider();
+            if(typeof closeStoreSlider === 'function') closeStoreSlider();
+
+            const slider = document.getElementById('settings-slider');
+            const overlay = document.getElementById('slider-overlay');
+
+            if (slider) {
+                if (slider.classList.contains('active')) {
+                    if(typeof closeSettingsSlider === 'function') closeSettingsSlider();
+                } else {
+                    slider.style.display = 'flex';
+                    setTimeout(() => { 
+                        slider.style.left = window.innerWidth <= 950 ? '0' : '70px'; 
+                        slider.classList.add('active'); 
+                    }, 10);
+                    if (overlay) overlay.style.display = 'block';
+
+                    // Use existing logic to fetch/populate fields
+                    fetch('/api/user/settings').then(r => r.json()).then(data => {
+                        if (data.success) {
+                            const s = data.settings || {};
+                            const am = data.admin_models || {};
+                            const providers = ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'];
+                            
+                            providers.forEach(p => {
+                                const select = document.getElementById(`eweb-model-${p}`);
+                                if (select && select.options[0] && am[p]) {
+                                    select.options[0].textContent = `Default Admin Model (${am[p]})`;
+                                }
+                            });
+
+                            if (!data.allow_own_api_keys) {
+                                document.getElementById('eweb-ai-locked').style.display = 'block';
+                                document.getElementById('eweb-ai-unlocked').style.display = 'none';
+                            } else {
+                                document.getElementById('eweb-ai-locked').style.display = 'none';
+                                document.getElementById('eweb-ai-unlocked').style.display = 'block';
+                            }
+
+                            if (document.getElementById('eweb-ga-code')) document.getElementById('eweb-ga-code').value = s.google_analytics || '';
+                            if (document.getElementById('eweb-ai-provider')) document.getElementById('eweb-ai-provider').value = s.ai_provider || 'default';
+                            
+                            if (document.getElementById('eweb-gemini-key')) document.getElementById('eweb-gemini-key').value = s.gemini_api_key || '';
+                            if (document.getElementById('eweb-openai-key')) document.getElementById('eweb-openai-key').value = s.openai_api_key || '';
+                            if (document.getElementById('eweb-claude-key')) document.getElementById('eweb-claude-key').value = s.claude_api_key || '';
+                            if (document.getElementById('eweb-deepseek-key')) document.getElementById('eweb-deepseek-key').value = s.deepseek_api_key || '';
+                            if (document.getElementById('eweb-xai-key')) document.getElementById('eweb-xai-key').value = s.xai_api_key || '';
+                            if (document.getElementById('eweb-meta-key')) document.getElementById('eweb-meta-key').value = s.meta_api_key || '';
+                            if (document.getElementById('eweb-perplexity-key')) document.getElementById('eweb-perplexity-key').value = s.perplexity_api_key || '';
+
+                            providers.forEach(p => {
+                                const modelVal = s[`user_model_${p}`] || 'default';
+                                const modelSelect = document.getElementById(`eweb-model-${p}`);
+                                const customModelInput = document.getElementById(`eweb-custom-model-${p}`);
+                                
+                                if (modelSelect) {
+                                    let exists = Array.from(modelSelect.options).some(opt => opt.value === modelVal);
+                                    if (exists) {
+                                        modelSelect.value = modelVal;
+                                        if (customModelInput) customModelInput.style.display = 'none';
+                                    } else {
+                                        modelSelect.value = 'other';
+                                        if (customModelInput) {
+                                            customModelInput.style.display = 'block';
+                                            customModelInput.value = modelVal;
+                                        }
+                                    }
+                                }
+
+                                const tokenVal = s[`user_token_${p}`] || 'default';
+                                const tokenSelect = document.getElementById(`eweb-token-${p}`);
+                                const customTokenInput = document.getElementById(`eweb-custom-token-${p}`);
+                                if (tokenSelect) {
+                                    if (tokenVal === 'default' || tokenVal === 'maximum') {
+                                        tokenSelect.value = tokenVal;
+                                        if (customTokenInput) customTokenInput.style.display = 'none';
+                                    } else {
+                                        tokenSelect.value = 'other';
+                                        if (customTokenInput) {
+                                            customTokenInput.style.display = 'block';
+                                            customTokenInput.value = tokenVal;
+                                        }
+                                    }
+                                }
+                            });
+
+                            if (document.getElementById('eweb-contact-email')) document.getElementById('eweb-contact-email').value = s.contact_email || '';
+                            if (document.getElementById('eweb-smtp-host')) document.getElementById('eweb-smtp-host').value = s.smtp_host || '';
+                            if (document.getElementById('eweb-smtp-port')) document.getElementById('eweb-smtp-port').value = s.smtp_port || '';
+                            if (document.getElementById('eweb-smtp-user')) document.getElementById('eweb-smtp-user').value = s.smtp_user || '';
+                            if (document.getElementById('eweb-smtp-pass')) document.getElementById('eweb-smtp-pass').value = s.smtp_pass || '';
+
+                            if (document.getElementById('eweb-pages-mode')) {
+                                document.getElementById('eweb-pages-mode').value = s.default_pages_mode || 'default';
+                                if(typeof window.toggleEwebPagesInput === 'function') window.toggleEwebPagesInput();
+                            }
+                            if (document.getElementById('eweb-pages-json')) {
+                                document.getElementById('eweb-pages-json').value = s.default_pages_json || '[]';
+                                if(typeof window.renderEwebPagesList === 'function') window.renderEwebPagesList();
+                            }
+
+                            if(typeof window.toggleEwebAIPanels === 'function') window.toggleEwebAIPanels();
+                        }
+                    });
+                }
+            }
+        };
+
+        window.closeSettingsSlider = window.closeEwebgenSettings = function() {
+            const slider = document.getElementById('settings-slider');
+            const overlay = document.getElementById('slider-overlay');
+            if(slider) {
+                slider.style.left = window.innerWidth <= 950 ? '-100vw' : '-800px';
+                slider.classList.remove('active');
+                setTimeout(() => { slider.style.display = 'none'; }, 300);
+            }
+            if (overlay) {
+                const anyActive = document.querySelector('.slider-drawer.active, #elements-slider.open, #ui-elements-slider.active, #store-slider.active, #help-slider.active');
+                if (!anyActive) overlay.style.display = 'none';
+            }
+        };
+
+        window.switchSettingsTab = window.switchEwebVertTab = function(tabId, btn) {
+            document.querySelectorAll('.settings-tab-btn, .eweb-vert-tab').forEach(b => {
+                b.classList.remove('active');
+            });
+            if(btn) btn.classList.add('active');
+            
+            document.querySelectorAll('.eweb-tab-content').forEach(el => {
+                el.style.display = 'none';
+                el.style.setProperty('display', 'none', 'important');
+            });
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) { 
+                activeTab.style.display = 'block'; 
+                activeTab.style.setProperty('display', 'block', 'important'); 
+            }
+        };
+
+        // Override existing click listener to include settings slider
+        const oldSliderOverlayClick = document.getElementById('slider-overlay').onclick;
+        document.getElementById('slider-overlay').onclick = function() {
+            if(oldSliderOverlayClick) oldSliderOverlayClick();
+            if(typeof closeSettingsSlider === 'function') closeSettingsSlider();
+        };
+
+    </script>
+    
+    <script>
+        // --- CHATBOX MINIMIZE & WINDOW CONTROL LOGIC ---
+        window.iconifyChat = function() {
+            const leftPanel = document.getElementById('left-panel');
+            if (leftPanel) {
+                leftPanel.dataset.originalDisplay = leftPanel.style.display || '';
+                leftPanel.style.display = 'none';
+                leftPanel.style.setProperty('display', 'none', 'important');
+            }
+            document.getElementById('desktop-chat-fab').style.display = 'flex';
+        };
+        
+        window.restoreDesktopChat = function() {
+            const leftPanel = document.getElementById('left-panel');
+            if (leftPanel) {
+                leftPanel.style.display = leftPanel.dataset.originalDisplay || 'flex';
+                leftPanel.style.removeProperty('display'); 
+            }
+            document.getElementById('desktop-chat-fab').style.display = 'none';
+            if (typeof setChatMode === 'function') {
+                if (document.body.classList.contains('view-maximized')) {
+                    setChatMode('maximized');
+                } else {
+                    setChatMode('default');
+                }
+            }
+        };
+
+        window.startNewGenerationSession = function() {
+            window._workspaceClosed = true;   // next prompt = brand-new website
+            if (typeof generatedFiles !== 'undefined') generatedFiles = {};
+            if (typeof currentChatHistory !== 'undefined') currentChatHistory = [];
+            if (typeof currentPreviewFile !== 'undefined') currentPreviewFile = 'index.html';
+            if (typeof localHistory !== 'undefined') {
+                localHistory = [];
+                localHistoryIndex = -1;
+            }
+
+            const iframe = document.getElementById('preview-frame');
+            if (iframe) {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                doc.open();
+                doc.write('<!DOCTYPE html>\n<html>\n<head></head>\n<body></body>\n</html>');
+                doc.close();
+                if (typeof initEditor === 'function') initEditor(iframe);
+            }
+            
+            const chatDisplay = document.getElementById('chat-display');
+            if (chatDisplay) {
+                chatDisplay.innerHTML = '<div class="ai-message" style="color: #28a745; font-weight: bold;">✨ Memory cleared! Entering a new prompt will generate a completely fresh design from scratch.</div>';
+            }
+
+            const codeEditor = document.getElementById('code-editor-area');
+            if (codeEditor) codeEditor.value = '';
+
+            const pageDropdown = document.getElementById('page-dropdown');
+            if (pageDropdown) {
+                pageDropdown.innerHTML = '<option value="" disabled selected data-i18n="menu_pages">Pages...</option>';
+                pageDropdown.disabled = true;
+            }
+
+            const promptInput = document.getElementById('prompt-input');
+            if (promptInput) {
+                promptInput.value = '';
+                promptInput.focus();
+            }
+
+            if (typeof isEditing !== 'undefined') isEditing = false;
+            
+            if (typeof updateStatus === 'function') {
+                updateStatus("✨ Ready for fresh generation.");
+            }
+        };
+
+        window.handleSeedImport = function(file) {
+            if (!file.name.endsWith('.json')) {
+                alert("Please upload a valid update_seed.json file.");
+                return;
+            }
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            if(typeof updateStatus === 'function') updateStatus("Importing templates...", false);
+            
+            fetch('/api/system/upload_seed', {
+                method: 'POST',
+                body: formData
+            })
+            .then(r => r.json())
+            .then(data => {
+                if(data.success) {
+                    alert("✅ " + data.message);
+                    if(typeof updateStatus === 'function') updateStatus("Templates imported successfully.");
+                    if(typeof window.loadSidebarCategories === 'function') window.loadSidebarCategories();
+                } else {
+                    alert("❌ Error: " + data.error);
+                    if(typeof updateStatus === 'function') updateStatus("Import failed.", true);
+                }
+                document.getElementById('seed-import-input').value = ''; 
+            })
+            .catch(err => {
+                alert("Network error during import.");
+                console.error(err);
+                document.getElementById('seed-import-input').value = ''; 
+            });
+        };
+        
+        setInterval(() => {
+            const addBtn = document.getElementById('admin-add-category-btn');
+            const importBtn = document.getElementById('admin-import-seed-btn');
+            if(addBtn && importBtn) {
+                importBtn.style.display = addBtn.style.display;
+            }
+        }, 1000);
+
+        window.enterMobileWorkspace = function() {
+            let docEl = document.documentElement;
+            if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e=>console.log(e));
+            if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(e=>console.log(e));
+            document.getElementById('mobile-start-overlay').style.display = 'none';
+            window.fullscreenPromptShown = true;
+        };
+
+        window.openChatMobile = function() {
+            if(typeof setChatMode === 'function') setChatMode('default');
+            else { document.body.classList.remove('view-minimized'); }
+        };
+
+        window.setViewportView = function(mode) {
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            
+            const btns = {
+                desktop: document.getElementById('btn-view-desktop'),
+                tablet: document.getElementById('btn-view-tablet'),
+                mobile: document.getElementById('btn-view-mobile')
+            };
+            
+            Object.values(btns).forEach(b => { 
+                if(b) { b.style.background = 'transparent'; b.style.color = '#ccc'; }
+            });
+            
+            if (mode === 'desktop') {
+                iframe.style.setProperty('min-width', '100%', 'important'); 
+                iframe.style.setProperty('width', '100%', 'important'); 
+                iframe.style.setProperty('max-width', 'none', 'important'); 
+                if(btns.desktop) { btns.desktop.style.background = '#007bff'; btns.desktop.style.color = 'white'; }
+            } else if (mode === 'tablet') {
+                iframe.style.setProperty('min-width', '768px', 'important');
+                iframe.style.setProperty('width', '768px', 'important');
+                iframe.style.setProperty('max-width', '768px', 'important');
+                if(btns.tablet) { btns.tablet.style.background = '#007bff'; btns.tablet.style.color = 'white'; }
+            } else if (mode === 'mobile') {
+                iframe.style.setProperty('min-width', '375px', 'important');
+                iframe.style.setProperty('width', '375px', 'important');
+                iframe.style.setProperty('max-width', '375px', 'important');
+                if(btns.mobile) { btns.mobile.style.background = '#007bff'; btns.mobile.style.color = 'white'; }
+            }
+            
+            if (iframe.contentDocument && typeof window.enforceResponsive === 'function') {
+                window.enforceResponsive(iframe.contentDocument);
+            }
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            
+            setInterval(() => {
+                const authModal = document.getElementById('auth-modal');
+                if (authModal && authModal.style.display === 'none') {
+                    if (!document.body.classList.contains('is-logged-in')) {
+                        document.body.classList.add('is-logged-in');
+                        if (window.innerWidth < 950) {
+                            const startOverlay = document.getElementById('mobile-start-overlay');
+                            if (startOverlay && !window.fullscreenPromptShown) {
+                                startOverlay.style.display = 'flex';
+                            }
+                        }
+                    }
+                } else {
+                    document.body.classList.remove('is-logged-in');
+                }
+            }, 1000);
+
+            let touchStartY = 0;
+            document.addEventListener('touchstart', e => { 
+                touchStartY = e.touches[0].clientY; 
+            }, {passive: true});
+            
+            document.addEventListener('touchend', e => {
+                if(window.innerWidth > 950) return;
+                let touchEndY = e.changedTouches[0].clientY;
+                const controlBar = document.getElementById('control-bar');
+                if(!controlBar) return;
+                
+                if (touchEndY - touchStartY > 40 && touchStartY < 100) { 
+                    controlBar.classList.remove('autohidden');
+                    document.getElementById('mobile-menu-pull').innerHTML = '▲ Hide Menu';
+                } 
+                else if (touchStartY - touchEndY > 40 && touchStartY < 200) { 
+                    controlBar.classList.add('autohidden');
+                    document.getElementById('mobile-menu-pull').innerHTML = '▼ Show Menu';
+                }
+            }, {passive: true});
+
+            const checkToolbarInterval = setInterval(() => {
+                const toolbarContent = document.getElementById('font-toolbar-content');
+                // FIX: the toolbar markup already has its own close (✕) button - only add one if it is missing
+                if (toolbarContent && toolbarContent.querySelector('.close-font-toolbar-btn')) { clearInterval(checkToolbarInterval); return; }
+                if (toolbarContent && !document.getElementById('close-font-btn-auto')) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.id = 'close-font-btn-auto';
+                    closeBtn.className = 'close-font-toolbar-btn';
+                    closeBtn.innerHTML = '&times;';
+                    closeBtn.title = 'Close Toolbar';
+                    closeBtn.onclick = (e) => {
+                        e.preventDefault();
+                        document.getElementById('font-toolbar').style.display = 'none';
+                        const iframe = document.getElementById('preview-frame');
+                        if (iframe && iframe.contentDocument) {
+                            iframe.contentDocument.getSelection().removeAllRanges();
+                        }
+                    };
+                    toolbarContent.appendChild(closeBtn);
+                    clearInterval(checkToolbarInterval);
+                }
+            }, 500);
+
+            const iframe = document.getElementById('preview-frame');
+            if(iframe) {
+                iframe.addEventListener('load', () => {
+                    if(iframe.contentDocument) {
+                        iframe.contentDocument.addEventListener('selectionchange', () => {
+                            const sel = iframe.contentDocument.getSelection();
+                            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                                window.lastValidRange = sel.getRangeAt(0).cloneRange();
+                            }
+                        });
+
+                        iframe.contentDocument.addEventListener('click', () => {
+                            const parentMenu = document.getElementById('custom-context-menu');
+                            if (parentMenu) parentMenu.style.display = 'none';
+                        });
+                        
+                        if (typeof window.enforceResponsive === 'function') {
+                            window.enforceResponsive(iframe.contentDocument);
+                        }
+                        
+                        if (window.innerWidth <= 950) {
+                            if(typeof setChatMode === 'function') setChatMode('minimized');
+                            const controlBar = document.getElementById('control-bar');
+                            if(controlBar) controlBar.classList.add('autohidden');
+                        }
+
+                        const logoTab = document.getElementById('drawer-logo-container');
+                        if (logoTab && logoTab.style.display !== 'none') {
+                            setTimeout(() => { if(typeof window.detectCurrentLogo === 'function') window.detectCurrentLogo(); }, 100);
+                        }
+                        
+                        const fontsTab = document.getElementById('drawer-fonts-container');
+                        if (fontsTab && fontsTab.style.display !== 'none') {
+                            setTimeout(() => { if(typeof window.detectCurrentFont === 'function') window.detectCurrentFont(); }, 100);
+                        }
+                    }
+                });
+            }
+            
+            let lastCheckedPreviewFile = null;
+            setInterval(() => {
+                if (window.currentPreviewFile !== lastCheckedPreviewFile) {
+                    lastCheckedPreviewFile = window.currentPreviewFile;
+                    
+                    const logoTab = document.getElementById('drawer-logo-container');
+                    if (logoTab && logoTab.style.display !== 'none') {
+                        setTimeout(() => { if(typeof window.detectCurrentLogo === 'function') window.detectCurrentLogo(); }, 500);
+                    }
+
+                    const fontsTab = document.getElementById('drawer-fonts-container');
+                    if (fontsTab && fontsTab.style.display !== 'none') {
+                        setTimeout(() => { if(typeof window.detectCurrentFont === 'function') window.detectCurrentFont(); }, 500);
+                    }
+                }
+            }, 500);
+            
+            const logoCheckInterval = setInterval(() => {
+                if (typeof appConfigData !== 'undefined' && appConfigData.logo_url) {
+                    const mainLogo = document.getElementById('main-app-logo');
+                    const logoContainer = document.getElementById('top-left-logo-area');
+                    if (mainLogo && logoContainer) {
+                        mainLogo.src = appConfigData.logo_url;
+                        logoContainer.style.display = 'flex';
+                    }
+                    clearInterval(logoCheckInterval);
+                }
+                
+                if (typeof appConfigData !== 'undefined' && appConfigData.show_powered_by !== undefined) {
+                    const footer = document.getElementById('powered-by-footer');
+                    if (footer) {
+                        footer.style.display = appConfigData.show_powered_by ? 'block' : 'none';
+                    }
+                }
+            }, 500);
+            
+            setTimeout(() => clearInterval(logoCheckInterval), 10000);
+        });
+
+        // FIX 2: GLOBAL ANTI-AUTOPLAY FOR MODAL VIDEOS
+        setInterval(function() {
+            document.querySelectorAll('.auth-modal video, .modal video').forEach(v => {
+                if (!v.paused && !v.hasAttribute('data-user-played')) {
+                    v.muted = true;
+                    v.pause();
+                }
+            });
+        }, 1000);
+
+        document.addEventListener('play', function(e) {
+            if (e.target.closest('.modal') || e.target.closest('.auth-modal')) {
+                e.target.setAttribute('data-user-played', 'true');
+            }
+        }, true);
+    </script>
+
+
+</body>
+</html>

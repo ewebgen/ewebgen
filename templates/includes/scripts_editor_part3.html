@@ -1,0 +1,421 @@
+<script>
+    // ==========================================================
+    // GOAL 3: ALIGNMENT FUNCTIONALITY IMPLEMENTATION
+    // ==========================================================
+    function applyAlignment(alignType) { 
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.designMode = 'on'; 
+        captureState(); 
+        doc.execCommand(alignType, false, null); 
+        enableSaveButton(); 
+        captureState(); 
+        if(typeof updateStatus === 'function') updateStatus(`Text aligned ${alignType.replace('justify', '').toLowerCase()}.`); 
+    }
+
+    // Existing functions preserved exactly
+    function insertImageAtCursor() { currentContextTarget = null; insertImageInDoc(document.getElementById('preview-frame').contentDocument); }
+    
+    // --- GOAL 7 & GOAL 1 FIX: Reliable Local Copy/Paste with Deep UI Sterilization ---
+    function copySection(el) { 
+        const c = el.cloneNode(true); 
+        c.querySelectorAll('.section-action-bar, .bg-control-container, .image-overlay-controls, .resize-handle, .bg-edit-container, .reformatted, .add-section-btn, .section-resize-handle, .left-add-plus-btn, .inline-add-widget-btn, .eweb-video-overlay, .eweb-plus-btn-top, .eweb-plus-btn-bottom').forEach(t => t.remove()); 
+        c.querySelectorAll('.image-wrapper-editable').forEach(w => { const i = w.querySelector('img'); if(i) w.parentNode.replaceChild(i, w); }); 
+        
+        const contentHTML = c.outerHTML;
+        window._ewebCopiedHTML = contentHTML; // Save locally for instant, reliable paste
+        
+        fetch('/api/clipboard/save', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ content: contentHTML }) })
+        .then(r=>r.json()).then(d => { if(typeof updateStatus === 'function') updateStatus("✅ Copied.") })
+        .catch(e => { if(typeof updateStatus === 'function') updateStatus("✅ Copied locally.") }); 
+    }
+    
+    function pasteSection(target, pos) { 
+        if (window._ewebCopiedHTML) {
+            // Instant local paste (fixes the ewebgen image issue)
+            captureState(); 
+            if(target.tagName==='BODY' || pos==='beforeend') target.insertAdjacentHTML('beforeend', window._ewebCopiedHTML); 
+            else target.insertAdjacentHTML(pos, window._ewebCopiedHTML); 
+            initEditor(document.getElementById('preview-frame')); 
+            enableSaveButton(); 
+            captureState();
+            return;
+        }
+
+        // Fallback to server clipboard
+        fetch('/api/clipboard/read').then(r=>r.json()).then(d => { 
+            if(d.success) { 
+                captureState(); 
+                if(target.tagName==='BODY' || pos==='beforeend') target.insertAdjacentHTML('beforeend', d.content); 
+                else target.insertAdjacentHTML(pos, d.content); 
+                initEditor(document.getElementById('preview-frame')); 
+                enableSaveButton(); 
+                captureState(); 
+            } else { 
+                if(typeof updateStatus === 'function') updateStatus("⚠️ Clipboard empty.", true); 
+            } 
+        }); 
+    }
+    
+    function triggerLocalUpload() {
+        const input = document.getElementById('local-img-upload');
+        if (input) input.click();
+    }
+
+    if(typeof imageUploadInput !== 'undefined' && imageUploadInput) {
+        imageUploadInput.onchange = (e) => { handleLocalUpload(e.target); };
+    }
+    
+    function applyFontCommand(cmd, val = null) { 
+        const doc = document.getElementById('preview-frame').contentDocument; 
+        doc.designMode = 'on'; 
+        captureState(); 
+        doc.execCommand(cmd, false, val); 
+        enableSaveButton(); 
+        captureState(); 
+        if (cmd === 'foreColor' || cmd === 'hiliteColor') {
+            const palette = document.getElementById('color-palette-container');
+            if(palette) palette.style.display = 'none';
+        }
+    }
+    
+    function applyCustomFontSize(val) { 
+        let s = parseInt(val); 
+        if(isNaN(s)) return; 
+        
+        let pxSize = s;
+        if (s === 1) pxSize = 10;
+        else if (s === 2) pxSize = 13;
+        else if (s === 3) pxSize = 16;
+        else if (s === 4) pxSize = 18;
+        else if (s === 5) pxSize = 24;
+        else if (s === 6) pxSize = 32;
+        else if (s === 7) pxSize = 48;
+        
+        captureState(); 
+        
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.designMode = 'on';
+        
+        doc.execCommand('fontSize', false, "7");
+        
+        const fonts = doc.querySelectorAll('font[size="7"]');
+        fonts.forEach(f => {
+            f.removeAttribute('size');
+            f.style.fontSize = pxSize + "px";
+        });
+        
+        enableSaveButton(); 
+        captureState(); 
+    }
+    
+    function toggleVoiceEdit(btn) { if (!isEditing) { if(typeof updateStatus === 'function') updateStatus("Generate site first.", true); return; } if (isVoiceActive) { isVoiceActive = false; if (speechRecognition) speechRecognition.stop(); } else startRecognition(btn); }
+    
+    function startRecognition(btn) { 
+        const SR = window.SpeechRecognition || window.webkitSpeechRecognition; 
+        speechRecognition = new SR(); 
+        speechRecognition.continuous = true; 
+        speechRecognition.lang = 'en-US'; 
+        speechRecognition.onresult = (e) => { 
+            const t = e.results[e.results.length - 1][0].transcript; 
+            lastTranscript = t; 
+            if(typeof updateStatus === 'function') updateStatus(`🎙️ Heard: "${t.substring(0, 50)}..." (Waiting ${currentVoiceDuration}ms)`); 
+            if (voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
+            voiceSilenceTimer = setTimeout(() => {
+                if(isVoiceActive) {
+                    const sel = document.getElementById('preview-frame').contentWindow.getSelection(); 
+                    if(sel) handleVoiceEdit(lastTranscript, sel);
+                    isVoiceActive = false;
+                    speechRecognition.stop();
+                }
+            }, currentVoiceDuration);
+        }; 
+        speechRecognition.onend = () => { 
+            if(!isVoiceActive) {
+                speechRecognition = null; 
+                btn.textContent = '🎙️ Edit'; 
+                btn.classList.remove('active'); 
+                if(typeof updateStatus === 'function') updateStatus('🎙️ Edit stopped.'); 
+                if(voiceSilenceTimer) clearTimeout(voiceSilenceTimer);
+            }
+        }; 
+        isVoiceActive = true; 
+        speechRecognition.start(); 
+        btn.textContent = '... Listening'; 
+        btn.classList.add('active'); 
+        if(typeof updateStatus === 'function') updateStatus(`🎙️ Edit ON. Auto-submit after ${currentVoiceDuration/1000}s silence.`); 
+    }
+    
+    function handleVoiceEdit(cmd, sel) { if (!sel.rangeCount || sel.isCollapsed) return; captureState(); let txt = cmd; const k = "change this to"; if(cmd.toLowerCase().startsWith(k)) txt = cmd.substring(k.length).trim(); try { const r = sel.getRangeAt(0); r.deleteContents(); r.insertNode(sel.anchorNode.ownerDocument.createTextNode(txt)); enableSaveButton(); if(typeof updateStatus === 'function') updateStatus(`✅ Text replaced.`); captureState(); } catch(e){} }
+    function enableSaveButton() { const btn = document.getElementById('save-btn'); if(btn) btn.disabled = false; }
+    
+    function captureState() { 
+        if (window.isSwitchingPage) return; // Prevent capturing during load
+
+        const doc = document.getElementById('preview-frame').contentDocument; 
+        if (!doc || !doc.body) return; 
+        
+        if (typeof window.enforceResponsive === 'function') window.enforceResponsive(doc);
+        
+        let html = "";
+        if (typeof getCleanFullContent === 'function') {
+            html = getCleanFullContent(doc);
+        } else {
+            html = doc.body.innerHTML;
+        }
+
+        // Extremely strict check to prevent grabbing the loading UI
+        if (!html || html.includes("Building your site") || html.includes("Live preview will appear here shortly")) return; 
+
+        if (typeof window.localHistoryIndex === 'undefined') window.localHistoryIndex = -1;
+        if (!window.localHistory) window.localHistory = [];
+
+        if (window.localHistoryIndex >= 0 && window.localHistory[window.localHistoryIndex] === html) return;
+        
+        if (window.localHistoryIndex < window.localHistory.length - 1) {
+            window.localHistory = window.localHistory.slice(0, window.localHistoryIndex + 1); 
+        }
+        
+        window.localHistory.push(html); 
+        if (window.localHistory.length > 50) {
+            window.localHistory.shift();
+        } else {
+            window.localHistoryIndex++; 
+        }
+        
+        if(typeof checkHistoryStatus === 'function') checkHistoryStatus(); 
+        
+        if(currentPreviewFile) generatedFiles[currentPreviewFile] = html;
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+    }
+    
+    function checkHistoryStatus() { 
+        if(document.getElementById('undo-btn')) document.getElementById('undo-btn').disabled = !(window.localHistoryIndex > 0); 
+        if(document.getElementById('redo-btn')) document.getElementById('redo-btn').disabled = !(window.localHistoryIndex < window.localHistory.length - 1); 
+    }
+
+    function undoAction() { 
+        if (window.isSwitchingPage) return; // Protect during load
+
+        if (window.localHistoryIndex > 0) { 
+            window.localHistoryIndex--; 
+            restoreHTML(window.localHistory[window.localHistoryIndex]); 
+            checkHistoryStatus(); 
+            enableSaveButton(); 
+        } 
+    }
+
+    function redoAction() { 
+        if (window.isSwitchingPage) return; // Protect during load
+
+        if (window.localHistoryIndex < window.localHistory.length - 1) { 
+            window.localHistoryIndex++; 
+            restoreHTML(window.localHistory[window.localHistoryIndex]); 
+            checkHistoryStatus(); 
+            enableSaveButton(); 
+        } 
+    }
+    
+    function restoreHTML(html) { 
+        if (!html) return; 
+        
+        const iframe = document.getElementById('preview-frame'); 
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        if (html.trim().toLowerCase().startsWith('<html')) {
+            const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+            if(htmlMatch && htmlMatch[1]) {
+                doc.documentElement.innerHTML = htmlMatch[1];
+            } else {
+                doc.documentElement.innerHTML = html;
+            }
+        } else {
+            doc.body.innerHTML = html;
+        }
+
+        currentBgElementToReplace = null; 
+        currentImageToReplace = null; 
+        initEditor(iframe); 
+        
+        if (typeof window.enforceResponsive === 'function') window.enforceResponsive(doc);
+        
+        if(currentPreviewFile) generatedFiles[currentPreviewFile] = html;
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+    }
+
+    function toggleProjectMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('project-menu');
+        if (menu.style.display === 'block') {
+            menu.style.display = 'none';
+        } else {
+            if (typeof listProjects === 'function') listProjects();
+            menu.style.display = 'block';
+        }
+    }
+
+    function closeProjectMenu() {
+        const menu = document.getElementById('project-menu');
+        if(menu) menu.style.display = 'none';
+    }
+
+    function toggleProfileMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('profile-menu');
+        menu.style.display = (menu.style.display === 'block') ? 'none' : 'block';
+    }
+
+    // --- FIX 1: Overridden close functions to STOP removing user selections ---
+    window.closeFormattingToolbar = function() {
+        const toolbar = document.getElementById('font-toolbar');
+        if (toolbar) {
+            toolbar.style.display = 'none';
+        }
+    };
+
+    function closeFontToolbar() {
+        const toolbar = document.getElementById('font-toolbar');
+        if(toolbar) toolbar.style.display = 'none';
+        
+        const palette = document.getElementById('color-palette-container');
+        if(palette) palette.style.display = 'none';
+
+        // Clear the text selection too, otherwise the toolbar pops straight back up
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            const sel = iframe.contentDocument.getSelection();
+            if (sel) sel.removeAllRanges();
+        }
+    }
+
+    window.addEventListener('click', (e) => {
+        const projMenu = document.getElementById('project-menu');
+        const projBtn = document.getElementById('project-toggle-btn');
+        const profileMenu = document.getElementById('profile-menu');
+        const profileBtn = document.getElementById('profile-icon');
+        const fontToolbar = document.getElementById('font-toolbar');
+        const fontBtn = document.getElementById('font-btn');
+
+        if (projMenu && projMenu.style.display === 'block') {
+            if (!projMenu.contains(e.target) && e.target !== projBtn) {
+                closeProjectMenu();
+            }
+        }
+
+        if (profileMenu && profileMenu.style.display === 'block') {
+            if (!profileMenu.contains(e.target) && e.target !== profileBtn) {
+                profileMenu.style.display = 'none';
+            }
+        }
+        
+        if (fontToolbar && fontToolbar.style.display === 'flex') {
+            if (!fontToolbar.contains(e.target) && !fontBtn.contains(e.target)) {
+                if (!e.target.closest('.color-palette-container')) {
+                   if (typeof closeFontToolbar === 'function') closeFontToolbar();
+                }
+            }
+        }
+    });
+
+    // ==========================================
+    // GOAL 2 FIX: INJECT HORIZONTAL STATUS BAR INTO SLIDER OVERLAYS
+    // ==========================================
+    window.updateGenerationSteps = function(percent, codeStr) {
+        let step = 1; // Connecting
+        let barWidth = 0;
+        
+        if (percent > 5) { step = 2; barWidth = 25; } // Architecture
+        if (codeStr.includes('styles.css') || codeStr.includes('<style') || percent > 35) { step = 3; barWidth = 50; } // Styling
+        if (codeStr.includes('<img') || codeStr.includes('background-image') || percent > 65) { step = 4; barWidth = 75; } // Assets
+        if (percent >= 95) { step = 5; barWidth = 100; } // Finishing
+        
+        const pb = document.getElementById('gen-steps-progress-bar');
+        if (pb) pb.style.width = barWidth + '%';
+
+        for (let i = 1; i <= 5; i++) {
+            let el = document.getElementById('gen-step-' + i);
+            if (el) {
+                if (i < step) {
+                    el.className = 'gen-step completed';
+                } else if (i === step) {
+                    el.className = 'gen-step active';
+                } else {
+                    el.className = 'gen-step pending';
+                }
+            }
+        }
+    };
+
+    function showProgressOverlay(initialText = "Initializing...") {
+        const overlay = document.getElementById('progress-overlay');
+        overlay.style.display = 'flex';
+        generateBtn.disabled = true;
+        document.getElementById('stop-gen-btn').disabled = false;
+        document.getElementById('stop-gen-btn').textContent = "⏹ Stop Generation";
+        
+        const codeView = document.getElementById('code-stream-view');
+        if (codeView) codeView.style.display = 'none'; 
+        
+        // ==========================================
+        // GOAL 2 FIX: INJECT HORIZONTAL STATUS BAR
+        // ==========================================
+        if (!document.getElementById('gen-steps-container')) {
+            const stepsHtml = `
+                <div id="gen-steps-container" style="width: 90%; max-width: 650px; margin: 25px auto 35px auto; display: flex; justify-content: space-between; position: relative; font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="position: absolute; top: 18px; left: 10%; right: 10%; height: 4px; background: rgba(255,255,255,0.2); z-index: 1; border-radius: 2px;">
+                        <div id="gen-steps-progress-bar" style="height: 100%; width: 0%; background: #007bff; transition: width 0.4s ease; border-radius: 2px;"></div>
+                    </div>
+                    
+                    <div id="gen-step-1" class="gen-step active" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #007bff; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">1</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 700; color: #fff; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Connecting</span>
+                    </div>
+                    <div id="gen-step-2" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">2</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Architecture</span>
+                    </div>
+                    <div id="gen-step-3" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">3</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Styling</span>
+                    </div>
+                    <div id="gen-step-4" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">4</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Assets</span>
+                    </div>
+                    <div id="gen-step-5" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">5</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Finishing</span>
+                    </div>
+                </div>
+            `;
+            
+            const stopBtn = document.getElementById('stop-gen-btn');
+            if (stopBtn) {
+                stopBtn.insertAdjacentHTML('beforebegin', stepsHtml);
+                
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    .gen-step.completed .step-icon { background: #28a745 !important; color: white !important; }
+                    .gen-step.completed span { color: #28a745 !important; }
+                    .gen-step.active .step-icon { background: #007bff !important; color: white !important; box-shadow: 0 0 0 4px rgba(0,123,255,0.3); transform: scale(1.1); }
+                    .gen-step.active span { color: #fff !important; font-weight: 800 !important; }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        
+        if (typeof window.updateGenerationSteps === 'function') {
+            window.updateGenerationSteps(0, "");
+        }
+
+        if(typeof updateProgressCircle === 'function') updateProgressCircle(0, initialText);
+        
+        const doc = document.getElementById('preview-frame').contentDocument || document.getElementById('preview-frame').contentWindow.document;
+        doc.open();
+        doc.write('<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style id="live-styles"></style></head><body style="background:transparent;"><div style="font-family:sans-serif;color:#666;padding:20px;text-align:center;margin-top:10vh;"><h2>🏗️ Building your site...</h2><p>Live preview will appear here shortly.</p></div></body></html>');
+        doc.close();
+        if(typeof window.currentCssBuffer !== 'undefined') window.currentCssBuffer = '';
+    }
+
+</script>

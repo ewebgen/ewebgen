@@ -1,0 +1,467 @@
+<div id="find-replace-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:100050; justify-content:center; align-items:center; backdrop-filter:blur(5px);">
+    <div class="auth-box" style="width:560px; max-width:90vw; background:#fff; border-radius:10px; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.4); display:flex; flex-direction:column; font-family:sans-serif;">
+        
+        <div style="background:#f8f9fa; padding:15px 20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:16px; color:#333; display:flex; align-items:center; gap:8px;">
+                <span>🔍</span> Advanced Find & Replace
+            </h3>
+            <button onclick="window.closeFindReplaceModal()" style="background:none; border:none; font-size:18px; cursor:pointer; color:#888;" title="Close">✕</button>
+        </div>
+
+        <div style="padding:20px; display:flex; flex-direction:column; gap:15px; font-size:13px; color:#444;">
+            <div>
+                <label style="font-weight:bold; margin-bottom:5px; display:block;">Find Text / Tag / Code:</label>
+                <input type="text" id="fr-find-input" class="auth-input" placeholder="e.g. Contact, button, or <div class='hero'>" style="width:100%; padding:10px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box; font-size:13px;" oninput="window._frCodeCursor.index = 0;">
+            </div>
+
+            <div>
+                <label style="font-weight:bold; margin-bottom:5px; display:block;">Replace With:</label>
+                <input type="text" id="fr-replace-input" class="auth-input" placeholder="Enter replacement..." style="width:100%; padding:10px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box; font-size:13px;">
+            </div>
+
+            <div style="display:flex; gap:20px; align-items:center; margin-top:2px;">
+                <label style="cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none;">
+                    <input type="checkbox" id="fr-opt-case" style="margin:0;" onchange="window._frCodeCursor.index = 0;"> Case Sensitive
+                </label>
+                <label style="cursor:pointer; display:flex; align-items:center; gap:6px; user-select:none;">
+                    <input type="checkbox" id="fr-opt-word" style="margin:0;" onchange="window._frCodeCursor.index = 0;"> Whole Word Only
+                </label>
+            </div>
+
+            <div style="border-top:1px solid #eee; padding-top:15px; margin-top:5px;">
+                <label style="font-weight:bold; margin-bottom:8px; display:block;">Target Scope:</label>
+                <div style="display:flex; gap:18px; flex-wrap:wrap;">
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+                        <input type="radio" name="fr-target-scope" value="canvas" checked style="margin:0;" onchange="window._frCodeCursor.index = 0;"> Canvas (Visual Preview)
+                    </label>
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:5px; color:#0056b3; font-weight:600;">
+                        <input type="radio" name="fr-target-scope" value="code" style="margin:0;" onchange="window._frCodeCursor.index = 0;"> Code Pane (Raw HTML/CSS)
+                    </label>
+                    <label style="cursor:pointer; display:flex; align-items:center; gap:5px;">
+                        <input type="radio" name="fr-target-scope" value="all" style="margin:0;" onchange="window._frCodeCursor.index = 0;"> All Project Pages
+                    </label>
+                </div>
+            </div>
+
+            <div id="fr-feedback-box" style="display:none; padding:10px 15px; border-radius:6px; font-weight:bold; text-align:center; font-size:12px;"></div>
+        </div>
+
+        <div style="background:#f8f9fa; padding:12px 20px; border-top:1px solid #eee; display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; gap:8px;">
+                <button class="auth-btn" onclick="window.findNextInstance()" style="background:#17a2b8; color:#fff; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold; width:auto; margin:0; display:flex; align-items:center; gap:4px;" title="Jump to next match">
+                    <span>🔎</span> Find Next
+                </button>
+                <button class="auth-btn" onclick="window.replaceCurrentInstance()" style="background:#ffc107; color:#333; border:none; padding:8px 14px; border-radius:5px; cursor:pointer; font-weight:bold; width:auto; margin:0; display:flex; align-items:center; gap:4px;" title="Replace active highlight">
+                    <span>✏️</span> Replace
+                </button>
+            </div>
+            <div style="display:flex; gap:8px;">
+                <button class="auth-btn btn-cancel" onclick="window.closeFindReplaceModal()" style="background:#6c757d; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; width:auto; margin:0;">Cancel</button>
+                <button class="auth-btn" onclick="window.executeFindReplace()" style="background:#007bff; color:#fff; border:none; padding:8px 15px; border-radius:5px; cursor:pointer; font-weight:bold; width:auto; margin:0;" title="Replace all instances in scope">Replace All</button>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // In-memory Virtual Cursor state (Immune to DOM focus traps)
+    window._frCodeCursor = {
+        term: '',
+        index: 0,
+        matchStart: -1,
+        matchEnd: -1
+    };
+
+    window.openFindReplaceModal = function() {
+        const modal = document.getElementById('find-replace-modal');
+        if(!modal) return;
+        modal.style.display = 'flex';
+        document.getElementById('fr-feedback-box').style.display = 'none';
+        
+        const codeArea = document.getElementById('code-editor-area');
+        const codeRadio = document.querySelector('input[name="fr-target-scope"][value="code"]');
+        const canvasRadio = document.querySelector('input[name="fr-target-scope"][value="canvas"]');
+
+        let highlighted = '';
+        if (codeArea && codeArea.offsetParent !== null) {
+            if(codeRadio) codeRadio.checked = true;
+            if (codeArea.selectionStart !== codeArea.selectionEnd) {
+                highlighted = codeArea.value.substring(codeArea.selectionStart, codeArea.selectionEnd);
+            }
+        } else {
+            if(canvasRadio) canvasRadio.checked = true;
+            const sel = window.getSelection() || (document.getElementById('preview-frame')?.contentWindow?.getSelection());
+            highlighted = sel ? sel.toString().trim() : '';
+        }
+
+        if (highlighted && highlighted.length < 120) {
+            document.getElementById('fr-find-input').value = highlighted;
+        }
+        window._frCodeCursor.index = 0;
+        document.getElementById('fr-find-input').focus();
+    };
+
+    window.closeFindReplaceModal = function() {
+        document.getElementById('find-replace-modal').style.display = 'none';
+    };
+
+    // =========================================================================
+    // STEPPING ENGINE
+    // =========================================================================
+
+    window.findNextInstance = function() {
+        const findStr = document.getElementById('fr-find-input').value;
+        const caseSens = document.getElementById('fr-opt-case').checked;
+        const wholeWord = document.getElementById('fr-opt-word').checked;
+        const scope = document.querySelector('input[name="fr-target-scope"]:checked').value;
+        const feedbackEl = document.getElementById('fr-feedback-box');
+
+        if (!findStr) {
+            feedbackEl.style.display = 'block'; feedbackEl.style.background = '#f8d7da'; feedbackEl.style.color = '#721c24';
+            feedbackEl.textContent = '⚠️ Please enter text/code to find.'; return;
+        }
+
+        // --- MODE A: RAW CODE PANE SEARCH (VIRTUAL CURSOR) ---
+        if (scope === 'code') {
+            const codeArea = document.getElementById('code-editor-area');
+            const codeContainer = document.getElementById('code-pane-container');
+            const codeBtn = document.getElementById('code-view-btn');
+
+            if (codeContainer && codeContainer.style.display === 'none') {
+                if(codeBtn) codeBtn.click(); else codeContainer.style.display = 'block';
+            }
+
+            if (!codeArea) { alert("Code view element missing."); return; }
+            const text = codeArea.value;
+            if (!text) return;
+
+            if (window._frCodeCursor.term !== findStr) {
+                window._frCodeCursor.term = findStr;
+                window._frCodeCursor.index = 0;
+            }
+
+            let haystack = caseSens ? text : text.toLowerCase();
+            let needle = caseSens ? findStr : findStr.toLowerCase();
+
+            let pos = haystack.indexOf(needle, window._frCodeCursor.index);
+
+            // Wrap around to top
+            if (pos === -1 && window._frCodeCursor.index > 0) {
+                window._frCodeCursor.index = 0;
+                pos = haystack.indexOf(needle, 0);
+            }
+
+            feedbackEl.style.display = 'block';
+            if (pos !== -1) {
+                window._frCodeCursor.matchStart = pos;
+                window._frCodeCursor.matchEnd = pos + findStr.length;
+                window._frCodeCursor.index = window._frCodeCursor.matchEnd;
+
+                codeArea.focus();
+                codeArea.setSelectionRange(pos, pos + findStr.length);
+
+                const textUpToMatch = text.substring(0, pos);
+                const lineNum = textUpToMatch.split('\n').length;
+                codeArea.scrollTop = Math.max(0, (lineNum - 4) * 18);
+
+                feedbackEl.style.background = '#e8f4fd'; feedbackEl.style.color = '#0056b3';
+                feedbackEl.textContent = `🔍 Match highlighted around line ${lineNum}`;
+            } else {
+                window._frCodeCursor.matchStart = -1;
+                feedbackEl.style.background = '#fff3cd'; feedbackEl.style.color = '#856404';
+                feedbackEl.textContent = `ℹ️ "${findStr}" not found in raw code.`;
+            }
+            return;
+        }
+
+        // --- MODE B: VISUAL CANVAS SEARCH ---
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe || !iframe.contentWindow) return;
+        iframe.contentWindow.focus();
+        const found = iframe.contentWindow.find(findStr, caseSens, false, true, wholeWord);
+
+        feedbackEl.style.display = 'block';
+        if (found) {
+            feedbackEl.style.background = '#e8f4fd'; feedbackEl.style.color = '#0056b3';
+            feedbackEl.textContent = `🔍 Match highlighted in visual canvas!`;
+        } else {
+            feedbackEl.style.background = '#fff3cd'; feedbackEl.style.color = '#856404';
+            feedbackEl.textContent = `ℹ️ No visual occurrences found.`;
+        }
+    };
+
+    window.replaceCurrentInstance = function() {
+        const findStr = document.getElementById('fr-find-input').value;
+        const replaceStr = document.getElementById('fr-replace-input').value;
+        const caseSens = document.getElementById('fr-opt-case').checked;
+        const wholeWord = document.getElementById('fr-opt-word').checked;
+        const scope = document.querySelector('input[name="fr-target-scope"]:checked').value;
+        const feedbackEl = document.getElementById('fr-feedback-box');
+
+        // --- MODE A: RAW CODE PANE REPLACE (VIRTUAL CURSOR SLICE) ---
+        if (scope === 'code') {
+            const codeArea = document.getElementById('code-editor-area');
+            if (!codeArea) return;
+
+            if (window._frCodeCursor.matchStart === -1) {
+                window.findNextInstance();
+                return;
+            }
+
+            const start = window._frCodeCursor.matchStart;
+            const end = window._frCodeCursor.matchEnd;
+            const fullText = codeArea.value;
+
+            const expectedSnippet = window._frCodeCursor.term;
+            const actualSnippet = fullText.substring(start, end);
+            const isSafe = caseSens ? (actualSnippet === expectedSnippet) : (actualSnippet.toLowerCase() === expectedSnippet.toLowerCase());
+
+            if (!isSafe) {
+                window._frCodeCursor.index = 0;
+                window.findNextInstance();
+                return;
+            }
+
+            // Absolute string slice in JS memory
+            const newText = fullText.substring(0, start) + replaceStr + fullText.substring(end);
+            codeArea.value = newText;
+            codeArea.dispatchEvent(new Event('input'));
+
+            const activePageKey = window.currentPreviewFile || 'index.html';
+            if (typeof generatedFiles !== 'undefined') generatedFiles[activePageKey] = newText;
+
+            const sizeDiff = replaceStr.length - expectedSnippet.length;
+            window._frCodeCursor.index = end + sizeDiff;
+            window._frCodeCursor.matchStart = -1;
+
+            if(typeof enableSaveButton === 'function') enableSaveButton();
+
+            feedbackEl.style.background = '#d4edda'; feedbackEl.style.color = '#155724';
+            feedbackEl.textContent = `✅ Code snippet replaced!`;
+
+            setTimeout(() => window.findNextInstance(), 25);
+            return;
+        }
+
+        // --- MODE B: VISUAL CANVAS REPLACE ---
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe || !iframe.contentWindow) return;
+        const win = iframe.contentWindow;
+        const sel = win.getSelection();
+
+        let activeText = sel ? sel.toString() : '';
+        let isAMatch = caseSens ? (activeText === findStr) : (activeText.toLowerCase() === findStr.toLowerCase());
+
+        if (!activeText || !isAMatch) { window.findNextInstance(); return; }
+
+        if (typeof window.captureState === 'function') window.captureState();
+        const range = sel.getRangeAt(0);
+        range.deleteContents();
+        range.insertNode(win.document.createTextNode(replaceStr));
+
+        const activePageKey = window.currentPreviewFile || 'index.html';
+        if (typeof generatedFiles !== 'undefined' && generatedFiles[activePageKey]) {
+            generatedFiles[activePageKey] = "<!DOCTYPE html>\n" + win.document.documentElement.outerHTML;
+            const codeArea = document.getElementById('code-editor-area');
+            if (codeArea && codeArea.offsetParent !== null) codeArea.value = generatedFiles[activePageKey];
+        }
+
+        if (typeof window.enableSaveButton === 'function') window.enableSaveButton();
+
+        feedbackEl.style.background = '#d4edda'; feedbackEl.style.color = '#155724';
+        feedbackEl.textContent = `✅ Replaced in canvas!`;
+        setTimeout(() => win.find(findStr, caseSens, false, true, wholeWord), 25);
+    };
+
+    // =========================================================================
+    // BULK REPLACER (REPLACE ALL)
+    // =========================================================================
+
+    window._walkAndReplaceTextNodes = function(node, findStr, replaceStr, caseSens, wholeWord) {
+        if (!node) return 0;
+        const tag = node.tagName ? node.tagName.toLowerCase() : '';
+        if (['script', 'style', 'noscript', 'iframe', 'object', 'code'].includes(tag)) return 0; 
+
+        let matchCount = 0;
+        const flags = caseSens ? 'g' : 'gi';
+        const escapedFind = findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(wholeWord ? `\\b(${escapedFind})\\b` : escapedFind, flags);
+
+        let child = node.firstChild;
+        while (child) {
+            const next = child.nextSibling;
+            if (child.nodeType === Node.TEXT_NODE) {
+                const oldVal = child.nodeValue;
+                if (oldVal && regex.test(oldVal)) {
+                    const newVal = oldVal.replace(regex, replaceStr);
+                    if (newVal !== oldVal) { child.nodeValue = newVal; matchCount++; }
+                }
+            } else if (child.nodeType === Node.ELEMENT_NODE) {
+                matchCount += window._walkAndReplaceTextNodes(child, findStr, replaceStr, caseSens, wholeWord);
+            }
+            child = next;
+        }
+        if (['input', 'textarea', 'button'].includes(tag)) {
+            ['placeholder', 'value', 'title', 'alt'].forEach(attr => {
+                if (node.hasAttribute(attr)) {
+                    const val = node.getAttribute(attr);
+                    if (val && regex.test(val)) { node.setAttribute(attr, val.replace(regex, replaceStr)); matchCount++; }
+                }
+            });
+        }
+        return matchCount;
+    };
+
+    window.executeFindReplace = function() {
+        const findStr = document.getElementById('fr-find-input').value;
+        const replaceStr = document.getElementById('fr-replace-input').value;
+        const caseSens = document.getElementById('fr-opt-case').checked;
+        const wholeWord = document.getElementById('fr-opt-word').checked;
+        const scope = document.querySelector('input[name="fr-target-scope"]:checked').value;
+        const feedbackEl = document.getElementById('fr-feedback-box');
+
+        if (!findStr) {
+            feedbackEl.style.display = 'block'; feedbackEl.style.background = '#f8d7da'; feedbackEl.style.color = '#721c24';
+            feedbackEl.textContent = '⚠️ Please specify text to find.'; return;
+        }
+
+        if (typeof window.captureState === 'function') window.captureState();
+
+        const activePageKey = window.currentPreviewFile || 'index.html';
+        const iframe = document.getElementById('preview-frame');
+        const codeArea = document.getElementById('code-editor-area');
+
+        // --- MODE A: BULK RAW CODE REPLACE ---
+        if (scope === 'code') {
+            if (!codeArea) return;
+            const flags = caseSens ? 'g' : 'gi';
+            const escapedFind = findStr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const regex = new RegExp(wholeWord ? `\\b(${escapedFind})\\b` : escapedFind, flags);
+
+            const oldVal = codeArea.value;
+            const matches = oldVal.match(regex);
+            const count = matches ? matches.length : 0;
+
+            if (count > 0) {
+                const newVal = oldVal.replace(regex, replaceStr);
+                codeArea.value = newVal;
+                codeArea.dispatchEvent(new Event('input')); 
+
+                if (typeof generatedFiles !== 'undefined') generatedFiles[activePageKey] = newVal;
+
+                feedbackEl.style.display = 'block'; feedbackEl.style.background = '#d4edda'; feedbackEl.style.color = '#155724';
+                feedbackEl.textContent = `✅ Replaced ${count} instance(s) in HTML code.`;
+                if(typeof enableSaveButton === 'function') enableSaveButton();
+                setTimeout(() => window.closeFindReplaceModal(), 1400);
+            } else {
+                feedbackEl.style.display = 'block'; feedbackEl.style.background = '#e2e3e5'; feedbackEl.style.color = '#383d41';
+                feedbackEl.textContent = `ℹ️ 0 code matches found.`;
+            }
+            return;
+        }
+
+        // --- MODE B & C: VISUAL CANVAS OR ALL PAGES ---
+        const liveDoc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
+        let totalReplacements = 0;
+
+        if (scope === 'canvas') {
+            if (liveDoc && liveDoc.body) {
+                totalReplacements = window._walkAndReplaceTextNodes(liveDoc.body, findStr, replaceStr, caseSens, wholeWord);
+                if (totalReplacements > 0 && typeof generatedFiles !== 'undefined' && generatedFiles[activePageKey]) {
+                    generatedFiles[activePageKey] = "<!DOCTYPE html>\n" + liveDoc.documentElement.outerHTML;
+                    if(codeArea && codeArea.offsetParent !== null) codeArea.value = generatedFiles[activePageKey];
+                }
+            }
+        } else {
+            if (typeof generatedFiles !== 'undefined') {
+                const domParser = new DOMParser();
+                Object.keys(generatedFiles).forEach(fileName => {
+                    if (fileName.endsWith('.html')) {
+                        if (fileName === activePageKey && liveDoc && liveDoc.body) {
+                            const count = window._walkAndReplaceTextNodes(liveDoc.body, findStr, replaceStr, caseSens, wholeWord);
+                            if (count > 0) { 
+                                totalReplacements += count; 
+                                generatedFiles[fileName] = "<!DOCTYPE html>\n" + liveDoc.documentElement.outerHTML; 
+                                if(codeArea && codeArea.offsetParent !== null) codeArea.value = generatedFiles[fileName];
+                            }
+                        } else {
+                            const inactiveDoc = domParser.parseFromString(generatedFiles[fileName], 'text/html');
+                            const count = window._walkAndReplaceTextNodes(inactiveDoc.body, findStr, replaceStr, caseSens, wholeWord);
+                            if (count > 0) { totalReplacements += count; generatedFiles[fileName] = "<!DOCTYPE html>\n" + inactiveDoc.documentElement.outerHTML; }
+                        }
+                    }
+                });
+            }
+        }
+
+        feedbackEl.style.display = 'block';
+        if (totalReplacements > 0) {
+            feedbackEl.style.background = '#d4edda'; feedbackEl.style.color = '#155724';
+            feedbackEl.textContent = `✅ Successfully made ${totalReplacements} replacement(s).`;
+            if (typeof window.initEditor === 'function' && iframe) window.initEditor(iframe);
+            if (typeof window.enableSaveButton === 'function') window.enableSaveButton();
+            setTimeout(() => window.closeFindReplaceModal(), 1400);
+        } else {
+            feedbackEl.style.background = '#e2e3e5'; feedbackEl.style.color = '#383d41';
+            feedbackEl.textContent = `ℹ️ 0 matches found for "${findStr}".`;
+        }
+    };
+
+    // =========================================================================
+    // INFALLIBLE PARASITE UI INJECTOR (HEARTBEAT ANCHOR)
+    // =========================================================================
+
+    function ensureFindButtonExists() {
+        if (document.getElementById('top-bar-find-btn')) return;
+
+        // Anchor 1: Stand directly to the left of the "💻 Code" button
+        const codeBtn = document.getElementById('code-view-btn') || 
+                        Array.from(document.querySelectorAll('button, .win-btn, .action-btn')).find(b => b.textContent && b.textContent.includes('Code'));
+
+        if (codeBtn && codeBtn.parentNode) {
+            const frBtn = document.createElement('button');
+            frBtn.id = 'top-bar-find-btn';
+            frBtn.className = codeBtn.className || 'win-btn'; 
+            frBtn.style.cssText = 'background:#2c3e50; color:#fff; border:1px solid #34495e; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; margin-right:6px; font-weight:bold; display:inline-flex; align-items:center; gap:4px;';
+            frBtn.innerHTML = '🔍 Find';
+            frBtn.title = 'Search and replace text or code';
+            frBtn.onclick = () => window.openFindReplaceModal();
+
+            codeBtn.parentNode.insertBefore(frBtn, codeBtn);
+        } 
+        // Anchor 2: Generic Top Right action bar
+        else {
+            const topBar = document.getElementById('action-buttons-right') || document.querySelector('.action-buttons-right') || document.getElementById('control-bar');
+            if (topBar) {
+                const frBtn = document.createElement('button');
+                frBtn.id = 'top-bar-find-btn';
+                frBtn.className = 'win-btn';
+                frBtn.style.cssText = 'background:#2c3e50; color:#fff; border:1px solid #34495e; padding:6px 12px; border-radius:4px; font-size:12px; cursor:pointer; margin-right:6px; font-weight:bold;';
+                frBtn.innerHTML = '🔍 Find & Replace';
+                frBtn.onclick = () => window.openFindReplaceModal();
+                topBar.insertBefore(frBtn, topBar.firstChild);
+            }
+        }
+
+        // Anchor 3: Always drop a permanent backup inside the "⋮ More" menu
+        const moreMenu = document.getElementById('editor-more-dropdown');
+        if (moreMenu && !document.getElementById('more-menu-find-replace')) {
+            const item = document.createElement('a');
+            item.id = 'more-menu-find-replace';
+            item.className = 'dropdown-item';
+            item.style.cssText = 'padding:10px 15px; cursor:pointer; display:block; color:#333; text-decoration:none; border-bottom:1px solid #eee; font-size:13px; font-weight:500;';
+            item.innerHTML = '🔍 Find & Replace';
+            item.onclick = (e) => { e.preventDefault(); window.openFindReplaceModal(); moreMenu.style.display='none'; };
+            moreMenu.appendChild(item);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => setTimeout(ensureFindButtonExists, 400));
+    } else {
+        setTimeout(ensureFindButtonExists, 400); 
+    }
+
+    setInterval(ensureFindButtonExists, 2000);
+</script>

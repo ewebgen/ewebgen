@@ -1,0 +1,701 @@
+<style>
+    /* =========================================
+       0. APP LOADING STATE (FIX BACKGROUND LEAK)
+       ========================================= */
+    /* This completely hides the inner application sections when the user is not authenticated yet */
+    body.hide-app-while-loading #editor-sidebar,
+    body.hide-app-while-loading #control-bar,
+    body.hide-app-while-loading #left-panel,
+    body.hide-app-while-loading #preview-container,
+    body.hide-app-while-loading #slider-overlay,
+    body.hide-app-while-loading #admin-dashboard {
+        display: none !important;
+        opacity: 0 !important;
+        visibility: hidden !important;
+    }
+
+    body.hide-app-while-loading {
+        background-color: #f4f4f9 !important;
+        background-image: none !important;
+    }
+
+    body.dark-mode.hide-app-while-loading {
+        background-color: #121212 !important;
+    }
+
+    /* =========================================
+       1. BASE LAYOUT & VARIABLES
+       ========================================= */
+    :root {
+        --primary-color: #007bff;
+        --secondary-color: #6c757d;
+        --success-color: #28a745;
+        --danger-color: #dc3545;
+        --warning-color: #ffc107;
+        --dark-bg: #1e1e1e;
+        --dark-panel: #2d2d2d;
+        --light-bg: #f4f4f9;
+        --sidebar-width: 260px;
+    }
+
+    /* Base Layout - FIX: added overflow-x: hidden and max-width */
+    body { margin: 0; display: flex; height: 100vh; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f4f9; overflow: hidden; transition: background-color 0.3s; max-width: 100vw; overflow-x: hidden; }
+    
+    /* --- CHATBOX / LEFT PANEL TRANSFORMATION LOGIC --- */
+    #left-panel {
+        background-color: #ffffff; 
+        border: 1px solid #e0e0e0; 
+        display: flex; flex-direction: column; 
+        box-shadow: 0 5px 25px rgba(0,0,0,0.15); 
+        z-index: 5000;
+        transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1); /* Smooth morphing */
+        padding: 20px;
+        box-sizing: border-box;
+        overflow: hidden;
+    }
+
+    /* 1. Default Mode (Medium Floating) */
+    body.view-default #left-panel {
+        position: fixed;
+        bottom: 20px;
+        left: 90px; /* UPDATED: Shifted to the right to clear the new 70px sidebar */
+        width: 400px;
+        height: 600px;
+        border-radius: 12px;
+    }
+    
+    /* 2. Minimized Mode (Small Bar) */
+    body.view-minimized #left-panel {
+        position: fixed;
+        bottom: 20px;
+        left: 90px; /* UPDATED: Shifted to the right to clear the new 70px sidebar */
+        width: 350px;
+        height: 60px; /* Only header visible */
+        border-radius: 8px;
+        padding: 10px 20px;
+    }
+    
+    /* Hide content in minimized mode */
+    body.view-minimized #left-panel > *:not(.panel-header) {
+        opacity: 0;
+        pointer-events: none;
+        display: none;
+    }
+
+    /* 3. Maximized Mode (Docked Sidebar) - FIXED: Starts below top menu & after sidebar */
+    body.view-maximized #left-panel {
+        position: fixed;
+        top: 54px; /* Below control bar */
+        left: 70px; /* After the new left sidebar */
+        width: 350px;
+        height: calc(100vh - 54px);
+        border-radius: 0;
+        border-right: 1px solid #ccc;
+        border-top: none; border-bottom: none; border-left: none;
+        z-index: 4000; /* Ensure it stays behind sliders if needed */
+    }
+
+    /* --- HEADER & CONTROLS --- */
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 10px;
+        flex-shrink: 0;
+    }
+
+    .window-controls {
+        display: flex;
+        gap: 8px;
+    }
+
+    .win-btn {
+        background: transparent;
+        border: 1px solid transparent;
+        cursor: pointer;
+        font-size: 14px;
+        color: #555;
+        padding: 2px 6px;
+        border-radius: 4px;
+        transition: background 0.2s;
+        line-height: 1;
+    }
+    .win-btn:hover { background-color: #f0f0f0; border-color: #ddd; }
+    .btn-close:hover { color: #dc3545; background-color: #fadbd8; border-color: #f5c6cb; }
+
+    body.view-default .btn-restore { color: #007bff; font-weight: bold; background: #e3f2fd; }
+    body.view-maximized .btn-max { color: #007bff; font-weight: bold; background: #e3f2fd; }
+    body.view-minimized .btn-min { color: #007bff; font-weight: bold; background: #e3f2fd; }
+
+    /* Right Panel Logic - FIX: Added strict bounds to stop spilling out of view */
+    /* FEATURE FIX: Right panel always offset by sidebar width (70px). Removed margin transition here. */
+    #right-panel { 
+        flex-grow: 1; 
+        position: relative; 
+        background-color: #ffffff; 
+        display: flex; 
+        flex-direction: column; 
+        margin-left: 70px; /* Always clear the 70px sidebar */
+        width: calc(100% - 70px); 
+        max-width: calc(100% - 70px); /* Issue 2 Fix */
+        overflow-x: hidden; /* Issue 2 Fix */
+    }
+
+    /* --- CONTROL BAR --- */
+    /* FEATURE FIX: Control bar spans full right-panel width and doesn't shift when chat opens. */
+    #control-bar {
+        flex-shrink: 0; display: flex; justify-content: flex-start; align-items: center;
+        padding: 10px; gap: 10px; background-color: #212529; border-bottom: 1px solid #000; color: #000000;
+        height: 54px !important; 
+        z-index: 6000; 
+        box-sizing: border-box;
+        width: 100%;
+        /* GOAL 2 & 3 FIX: Horizontal Scrollbar without clipping fixed dropdowns */
+        flex-wrap: nowrap !important;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        white-space: nowrap !important;
+        -webkit-overflow-scrolling: touch;
+    }
+    /* Stylish horizontal scrollbar for top menu */
+    #control-bar::-webkit-scrollbar { height: 6px; }
+    #control-bar::-webkit-scrollbar-track { background: transparent; }
+    #control-bar::-webkit-scrollbar-thumb { background-color: rgba(255, 255, 255, 0.3); border-radius: 10px; }
+    #control-bar::-webkit-scrollbar-thumb:hover { background-color: rgba(255, 255, 255, 0.5); }
+    
+    #control-bar > * {
+        flex-shrink: 0 !important; /* Ensure items don't squish into unreadable sizes */
+    }
+    
+    /* NEW: Dedicated Logo Container styling to prevent squishing */
+    #main-app-logo-container {
+        flex-shrink: 0; /* Important: Prevents flexbox from squishing the logo when space is tight */
+        display: none; 
+        align-items: center; 
+        justify-content: center; 
+        margin-right: 15px; 
+        padding: 0 10px 0 0;
+        height: 100%;
+    }
+
+    #main-app-logo {
+        max-height: 34px; 
+        max-width: 160px; 
+        object-fit: contain;
+    }
+
+    #page-dropdown { padding: 8px 10px; border-radius: 4px; border: 1px solid #444; background-color: #343a40; color: white; font-weight: bold; cursor: pointer; margin-right: 15px; }
+
+    #action-buttons-right { margin-left: auto; display: flex; gap: 10px; align-items: center; flex-wrap: nowrap; }
+    
+    .custom-dropdown-container { position: relative; display: inline-block; }
+    #project-toggle-btn { padding: 8px 10px; border-radius: 4px; border: 1px solid #444; background-color: #343a40; color: white; font-weight: bold; cursor: pointer; }
+    
+    /* FIX: Dropdowns changed to fixed so they escape the overflow-x hidden constraint of the top menu */
+    #project-menu,
+    #import-menu-dropdown,
+    #profile-menu,
+    .action-dropdown-menu {
+        position: fixed !important;
+        top: 54px !important;
+        z-index: 99999 !important;
+        margin-top: 0 !important;
+    }
+
+    #project-menu { display: none; background-color: #343a40; min-width: 250px; box-shadow: 0 8px 16px rgba(0,0,0,0.2); border: 1px solid #444; border-radius: 4px; padding: 5px 0; max-height: 300px; overflow-y: auto; }
+    
+    .menu-header { display: flex; justify-content: space-between; align-items: center; padding: 8px 15px 5px 15px; color: white; font-weight: bold; border-bottom: 1px solid #444; }
+    .close-btn { background: transparent; border: none; color: white; font-size: 1.2em; cursor: pointer; line-height: 1; padding: 0 5px; margin: 0; }
+    .close-btn:hover { color: #dc3545; }
+    .project-list-content { padding: 0; }
+    .project-item { display: flex; justify-content: space-between; align-items: center; padding: 8px 15px; color: white; border-bottom: 1px solid #444; }
+    .project-item:last-child { border-bottom: none; }
+    .project-item:hover { background-color: #495057; }
+    .project-name-span { cursor: pointer; flex-grow: 1; }
+    
+    .delete-project-btn { background: #dc3545; border: none; color: white; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; margin-left: 5px; display: flex; align-items: center; justify-content: center; }
+    .delete-project-btn:hover { background: #bd2130; }
+
+    /* Edit Project Button */
+    .edit-project-btn { background: #17a2b8; border: none; color: white; border-radius: 50%; width: 24px; height: 24px; font-size: 12px; cursor: pointer; margin-left: 10px; display: flex; align-items: center; justify-content: center; }
+    .edit-project-btn:hover { background: #138496; }
+
+    #font-btn { background-color: #f8f9fa; color: #333; font-family: serif; font-weight: bold; width: 10px 10px; font-size: 1em; }
+    #add-img-btn { background-color: #f8f9fa; color: #333; font-weight: bold; width: 10px 10px; font-size: 1em; }
+    #font-btn-container { display: flex; align-items: center; height: 100%; gap: 5px; }
+    
+
+    /* =========================================
+       FEATURE 5 FIX: MS WORD-STYLE FLOATING FONT TOOLBAR
+       ========================================= */
+    #font-toolbar { 
+        display: none; position: fixed !important; /* Fixed for better hover positioning */
+        top: 54px !important; /* Anchor it below the menu */
+        background-color: #fcfcfd; border: 1px solid #d2d2d2; padding: 6px 10px; 
+        border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,0.2); 
+        z-index: 100000; /* Ensure it stays on top of everything */
+        flex-direction: column; gap: 6px; width: auto; max-width: 500px;
+        font-family: 'Segoe UI', Tahoma, sans-serif;
+    }
+    #font-toolbar.active { display: flex; animation: toolbarPop 0.15s ease-out; }
+    @keyframes toolbarPop { from { opacity: 0; transform: scale(0.95) translateY(10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+    
+    #font-toolbar .menu-header { display: none; } /* Hide the old header for a cleaner Word-style look */
+    
+    #font-toolbar-content { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+    
+    #font-toolbar select, #font-toolbar input { 
+        padding: 4px 6px; border: 1px solid #ccc; border-radius: 4px; 
+        font-size: 13px; background: white; outline: none; cursor: pointer;
+    }
+    #font-toolbar select:focus, #font-toolbar input:focus { border-color: #007bff; }
+
+    .font-tool-group { 
+        display: flex; gap: 2px; align-items: center;
+        border-right: 1px solid #ddd; padding-right: 8px; margin-right: 2px; 
+    }
+    .font-tool-group:last-child { border-right: none; padding-right: 0; margin-right: 0; }
+    
+    .font-tool-icon { 
+        background: transparent; border: 1px solid transparent; cursor: pointer; 
+        padding: 6px 8px; font-size: 15px; border-radius: 4px; min-width: 30px; 
+        display:flex; justify-content:center; align-items:center; color: #444; transition: all 0.1s;
+    }
+    .font-tool-icon:hover { background: #e2e6ea; border-color: #d0d0d0; }
+    .font-tool-icon.active { background: #cce5ff; border-color: #99caff; color: #004085; }
+    
+    /* Format Painter Specific Styles */
+    #format-painter-btn { color: #d35400; position: relative; }
+    #format-painter-btn:hover { background: #fae5d3; border-color: #f5b041; }
+    #format-painter-btn.active { 
+        background: #ffeb3b; 
+        border-color: #f39c12; 
+        box-shadow: inset 0 0 5px rgba(0,0,0,0.1); 
+        animation: pulseHighlight 1.5s infinite;
+    }
+    @keyframes pulseHighlight { 0% { box-shadow: 0 0 0 0 rgba(243, 156, 18, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(243, 156, 18, 0); } 100% { box-shadow: 0 0 0 0 rgba(243, 156, 18, 0); } }
+
+    #color-palette-container { display: flex; flex-direction: column; gap: 8px; padding: 8px; border-top: 1px solid #ddd; margin-top: 2px; width: 100%; background: #fff; border-radius: 4px; box-shadow: inset 0 2px 5px rgba(0,0,0,0.02); }
+    .palette-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+    .palette-label { font-size: 11px; font-weight: bold; color: #555; width: 100px; }
+    .palette-swatch { width: 18px; height: 18px; border-radius: 3px; cursor: pointer; border: 1px solid #ccc; transition: transform 0.1s; }
+    .palette-swatch:hover { transform: scale(1.2); border-color: #333; }
+    .palette-swatch.selected { outline: 2px solid #007bff; border-color: #fff; transform: scale(1.2); z-index: 5; }
+    
+    .custom-color-input-container { display: flex; gap: 5px; align-items: center; margin-top: 5px; padding-top: 5px; border-top: 1px solid #eee; width: 100%; }
+    .hex-input { width: 80px; padding: 4px; font-size: 12px; border: 1px solid #ccc; border-radius: 3px; font-family: 'Consolas', monospace; }
+    .ok-btn { padding: 4px 10px; font-size: 12px; background: #28a745; color: white; border: none; border-radius: 3px; cursor: pointer; font-weight: bold; }
+    .ok-btn:hover { background: #218838; }
+    .ok-btn:disabled { background: #6c757d; cursor: not-allowed; opacity: 0.7; }
+
+
+    /* =========================================
+       FEATURE 3 & 4 FIX: UNIFIED SECTION MENU 
+       (Visible on all sections, collapsed to single icon)
+       ========================================= */
+    .unified-section-menu {
+        position: absolute;
+        z-index: 99999; /* Fix Feature 3: Ensure visibility over all content */
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        pointer-events: auto;
+    }
+    .unified-section-toggle {
+        width: 36px; height: 36px; border-radius: 50%;
+        background: #007bff; color: white; border: 2px solid white;
+        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        display: flex; justify-content: center; align-items: center;
+        cursor: pointer; font-size: 18px; transition: transform 0.2s, background 0.2s;
+    }
+    .unified-section-toggle:hover { transform: scale(1.1); background: #0056b3; }
+    .unified-section-toggle.active { background: #28a745; transform: rotate(45deg); }
+
+    .unified-section-options {
+        display: none; flex-direction: row; gap: 5px;
+        background: rgba(255, 255, 255, 0.95); padding: 6px; border-radius: 25px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.25); border: 1px solid #ddd;
+        backdrop-filter: blur(4px);
+    }
+    .unified-section-options.show { display: flex; animation: sectionPopOut 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+    @keyframes sectionPopOut { from { opacity: 0; transform: scale(0.5) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+
+    .unified-section-options button {
+        background: transparent; color: #333; border: none;
+        width: 32px; height: 32px; border-radius: 50%;
+        cursor: pointer; font-size: 14px; transition: background 0.2s, color 0.2s;
+        display: flex; justify-content: center; align-items: center;
+        padding: 0; margin: 0;
+    }
+    .unified-section-options button:hover { background: #e9ecef; }
+    .unified-section-options button.delete-btn:hover { background: #ffeeba; color: #dc3545; }
+
+
+    /* =========================================
+       FIX 1: ENFORCED PREVIEW SPLIT LAYOUT
+       ========================================= */
+    #preview-container { 
+        flex-grow: 1; 
+        position: relative; 
+        overflow: hidden; 
+        display: flex; 
+        flex-direction: row !important; /* Force side-by-side Layout */
+        transition: margin-left 0.4s ease, width 0.4s ease;
+        width: 100%;
+        max-width: 100%;
+        box-sizing: border-box; /* Issue 2 Fix */
+    }
+
+    /* Issue 2 Fix: Handle maximized chatbox offset cleanly */
+    body.view-maximized #preview-container {
+        margin-left: 350px; 
+        width: calc(100% - 350px) !important;
+        max-width: calc(100% - 350px) !important;
+    }
+
+    #preview-frame { 
+        width: 100% !important; 
+        height: 100%; 
+        border: none; 
+        background-color: #ffffff; 
+        flex-grow: 1; 
+        z-index: 100; 
+        box-sizing: border-box;
+    }
+
+    #code-pane-container { 
+        display: none; 
+        width: 50% !important; 
+        height: 100%; 
+        border-right: 1px solid #444; 
+        flex-direction: column; 
+        background: #1e1e1e; 
+        flex-shrink: 0;
+    }
+
+    #code-editor-area { width:100%; flex-grow:1; background:#1e1e1e; color:#d4d4d4; font-family:monospace; font-size:13px; border:none; resize:none; padding:10px; outline:none; transition: background-color 0.2s; }
+
+    /* FEATURE 3 FIX: Add visual flash class for code selection */
+    @keyframes highlightFlash {
+        0% { background-color: #2b4532; }
+        100% { background-color: #1e1e1e; }
+    }
+    .highlight-flash {
+        animation: highlightFlash 1s ease-out;
+    }
+
+    #chat-container { flex-grow: 1; display: flex; flex-direction: column; margin-bottom: 20px; overflow: hidden; }
+    #chat-display { flex-grow: 1; padding: 10px; margin-bottom: 10px; border: 1px solid #ccc; border-radius: 4px; overflow-y: auto; background-color: #f9f9f9; display: flex; flex-direction: column; transition: background-color 0.3s, border-color 0.3s; }
+    .user-message { background-color: #e6f3ff; padding: 8px; border-radius: 8px; margin-bottom: 8px; align-self: flex-end; max-width: 90%; font-size: 0.9em; word-wrap: break-word; }
+    .ai-message { background-color: #fff; padding: 8px; border-radius: 8px; margin-bottom: 8px; align-self: flex-start; max-width: 90%; font-size: 0.9em; word-wrap: break-word; border: 1px solid #eee; }
+    #prompt-input-container { flex-shrink: 0; display: flex; gap: 5px; }
+    textarea { flex-grow: 1; height: 80px; padding: 10px; border: 1px solid #ccc; border-radius: 4px; resize: none; box-sizing: border-box; margin: 0; }
+    #voice-btn { display: none; } 
+
+    h1 { color: #333; font-size: 1.5em; margin-top: 0; }
+    p { color: #666; font-size: 0.9em; }
+    button { padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold; transition: background-color 0.3s, transform 0.1s; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    button:active { transform: translateY(1px); }
+    
+    #voice-edit-btn { background-color: #9c27b0; color: white; }
+    #voice-edit-btn:hover:not(:disabled) { background-color: #7b1fa2; }
+    #voice-edit-btn.active { background-color: #e91e63; }
+
+    #save-btn { background-color: #28a745; color: white; }
+    #save-btn:hover:not(:disabled) { background-color: #218838; }
+    #save-btn:disabled { background-color: #6c757d !important; color: #eee !important; cursor: not-allowed; opacity: 0.7; }
+    
+    #undo-btn, #redo-btn { background-color: #ffc107; color: #333; }
+    #undo-btn:hover:not(:disabled), #redo-btn:hover:not(:disabled) { background-color: #e0a800; }
+    
+    #options-btn { background-color: #6c757d; color: white; margin-left: 5px; }
+    #options-btn:hover:not(:disabled) { background-color: #5a6268; }
+
+    #save-as-btn { background-color: #17a2b8; color: white; }
+    #save-as-btn:hover:not(:disabled) { background-color: #138496; }
+    
+    #generate-btn { background-color: #007bff; color: white; margin-top: 10px;}
+    #generate-btn:hover:not(:disabled) { background-color: #0056b3; }
+    
+    #download-zip-btn { background-color: #dc3545; color: white;}
+    #download-zip-btn:hover:not(:disabled) { background-color: #c82333; }
+
+    #open-new-window-btn { background-color: #6c757d; color: white; }
+    #open-new-window-btn:hover:not(:disabled) { background-color: #5a6268; }
+
+    #code-view-btn { background-color: #6610f2; color: white; }
+    #code-view-btn:hover:not(:disabled) { background-color: #520dc2; }
+
+    button:disabled { background-color: #555 !important; color: #ccc !important; cursor: not-allowed; box-shadow: none; }
+    
+    #status-message { margin-top: 15px; padding: 10px; background-color: #e3f2fd; border: 1px solid #bbdefb; border-radius: 4px; color: #1565c0; font-size: 0.85em; }
+
+    #floating-options {
+        position: absolute; top: 100px; right: 50px; width: 250px; background: white; 
+        border: 1px solid #ccc; box-shadow: 0 4px 10px rgba(0,0,0,0.2); z-index: 3000;
+        border-radius: 6px; display: none; flex-direction: column;
+    }
+    #floating-options-header {
+        padding: 10px; background: #343a40; color: white; font-weight: bold; 
+        display: flex; justify-content: space-between; border-radius: 6px 6px 0 0; cursor: move;
+    }
+    #floating-options-content { padding: 15px; font-size: 0.9em; color: #333; }
+
+    /* Legacy image controls */
+    .image-overlay-controls { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); display: flex; justify-content: center; align-items: center; opacity: 0; transition: opacity 0.2s; z-index: 1000; }
+    .image-overlay-controls button { background: rgba(255, 255, 255, 0.9); border: none; color: #212529; width: 40px; height: 40px; border-radius: 50%; font-size: 18px; margin: 0 10px; cursor: pointer; box-shadow: 0 4px 8px rgba(0,0,0,0.3); }
+    .image-overlay-controls button:hover { background: white; transform: scale(1.1); }
+    
+    #progress-overlay {
+        position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+        background-color: transparent; z-index: 1000; display: none; 
+        flex-direction: column; justify-content: flex-start; align-items: center;
+        padding-top: 50px; pointer-events: auto;
+    }
+
+    .overlay-backdrop { display: none; }
+    #code-stream-view { display: none; }
+
+    .progress-circle-container {
+        position: relative; width: 140px; height: 140px; display: flex;
+        justify-content: center; align-items: center; margin-bottom: 20px;
+        background: white; border-radius: 50%; box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        z-index: 1001; 
+    }
+
+    .circular-progress {
+        position: relative; width: 140px; height: 140px; border-radius: 50%;
+        background: conic-gradient(#007bff 3.6deg, #e9ecef 0deg);
+        display: flex; justify-content: center; align-items: center;
+        transition: background 0.1s ease;
+    }
+
+    .circular-progress::before {
+        content: ""; position: absolute; width: 115px; height: 115px;
+        border-radius: 50%; background-color: #fff;
+    }
+
+    .progress-value { position: relative; font-size: 1.2em; font-weight: bold; color: #333; text-align: center; z-index: 2; }
+    .progress-subtext { display: block; font-size: 0.6em; color: #777; font-weight: normal; margin-top: 5px; }
+
+    .close-progress-btn {
+        position: absolute; top: -10px; right: -10px; background: #dc3545; color: white;
+        border: 2px solid white; border-radius: 50%; width: 30px; height: 30px;
+        font-size: 14px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .close-progress-btn:hover { background: #b02a37; }
+
+    #stop-gen-btn {
+        background-color: #dc3545; color: white; border: none; padding: 8px 25px;
+        border-radius: 20px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        transition: background 0.3s; z-index: 1001; margin-top: -15px; position: relative;
+    }
+    #stop-gen-btn:hover { background: #c82333; }
+
+    /* "Please wait" note under the progress circle while a website is generated */
+    #gen-wait-note {
+        margin-top: 14px; max-width: 340px; padding: 12px 18px; text-align: center; z-index: 1001; position: relative;
+        background: rgba(255,255,255,0.96); border-radius: 12px; box-shadow: 0 6px 18px rgba(0,0,0,0.15);
+        color: #334155; font-size: 13.5px; line-height: 1.45;
+    }
+    #gen-wait-note .gen-wait-title { font-weight: 700; font-size: 15.5px; color: #0f172a; margin-bottom: 3px; }
+    #gen-wait-note .gen-wait-small { font-size: 12px; color: #64748b; margin-top: 3px; }
+    .gen-wait-dots i { font-style: normal; animation: genWaitDot 1.4s infinite; opacity: 0; }
+    .gen-wait-dots i:nth-child(2) { animation-delay: .2s; }
+    .gen-wait-dots i:nth-child(3) { animation-delay: .4s; }
+    @keyframes genWaitDot { 0%, 20% { opacity: 0; } 40%, 100% { opacity: 1; } }
+    @media (max-width: 600px) { #gen-wait-note { max-width: 88%; font-size: 12.5px; } }
+
+    /* AUTH & MODAL STYLES */
+    .auth-modal {
+        display: flex; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85) !important; z-index: 9999; justify-content: center; align-items: center;
+        backdrop-filter: blur(5px);
+    }
+    
+    /* FIX: "Add New Page" dialog should not use the heavy black login backdrop */
+    #add-page-modal.auth-modal { background: rgba(15, 23, 42, 0.35) !important; backdrop-filter: blur(2px); }
+
+    .auth-box {
+        background: #ffffff !important; padding: 30px; border-radius: 8px; width: 350px; text-align: center;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.5); max-height: 90vh; overflow-y: auto;
+        opacity: 1 !important; position: relative; z-index: 10001;
+    }
+    
+    .auth-box h2 { margin-top: 0; color: #333; }
+    .auth-input { width: 100%; padding: 10px; margin: 8px 0; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+    .auth-btn { width: 100%; padding: 10px; background: #007bff; color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; margin-top: 10px; }
+    .auth-btn:hover { background: #0056b3; }
+    .auth-link { color: #007bff; cursor: pointer; font-size: 0.9em; margin-top: 10px; display: inline-block; text-decoration: underline; }
+    .username-preview { font-size: 0.85em; color: #666; text-align: left; margin-bottom: 5px; font-style: italic; }
+    
+    /* FEATURE 5 FIX: Login Screen Split Responsiveness */
+    @media (max-width: 900px) {
+        .auth-page-wrapper { flex-direction: column !important; height: auto !important; max-height: 95vh !important; overflow-y: auto !important; }
+        .auth-left-pane { padding: 40px 20px !important; min-height: 250px !important; flex: unset !important; }
+        .auth-right-pane { padding: 40px 20px !important; }
+    }
+
+    
+    /* Issue 3 Fix: Explicit text color for the dynamic left-side content */
+    #dynamic-login-content {
+        color: #ffffff !important;
+    }
+    #dynamic-login-content * {
+        color: inherit; /* Ensure paragraphs, spans inside inherit the white text */
+    }
+
+    .split-modal { display: flex; gap: 20px; text-align: left; }
+    .split-col { flex: 1; }
+    .filename-preview { font-family: monospace; color: #28a745; margin-top: 5px; font-size: 0.9em; }
+
+    #profile-container { margin-left: 10px; position: relative; }
+    #profile-icon {
+        width: 35px; height: 35px; background: #28a745; color: white; border-radius: 50%;
+        display: flex; justify-content: center; align-items: center; font-weight: bold; cursor: pointer; border: 2px solid white;
+    }
+    
+    #profile-menu {
+        display: none; background: #343a40; color: white;
+        min-width: 180px; border-radius: 4px; border: 1px solid #444; box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+    }
+    
+    /* FIX: Enforce white text color for all items and links inside the profile menu */
+    .profile-item { padding: 10px 15px; border-bottom: 1px solid #444; cursor: pointer; color: #ffffff !important; transition: background 0.2s; }
+    .profile-item a, .profile-item span, .profile-item div { color: #ffffff !important; text-decoration: none; }
+    .profile-item:last-child { border-bottom: none; }
+    .profile-item:hover { background-color: #495057 !important; color: #ffffff !important; }
+    
+    #hyperlink-modal {
+        display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        background: rgba(0,0,0,0.85); z-index: 10000; justify-content: center; align-items: center;
+    }
+    .link-modal-box {
+        background: white; padding: 25px; border-radius: 8px; width: 420px;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.3); text-align: left;
+    }
+    .link-option-group { margin-bottom: 20px; padding: 10px; border: 1px solid #eee; border-radius: 6px; transition: all 0.3s; }
+    .link-option-group.disabled { opacity: 0.6; cursor: pointer; background: #f9f9f9; }
+    .link-option-header { display: flex; align-items: center; gap: 10px; font-weight: bold; margin-bottom: 10px; font-size: 0.95em; cursor: pointer; }
+    .link-radio { transform: scale(1.2); cursor: pointer; }
+    .link-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 10px; }
+    .btn-cancel { background: #6c757d; color: white; margin-top: 5px; }
+    .btn-cancel:hover { background: #5a6268; }
+
+    /* =========================================
+       GOALS 2 & 3: NEW VIDEO OVERLAY & CAROUSEL STYLES
+       ========================================= */
+
+    /* STACKING FIX: Ensure Bootstrap CSS works without our flexbox overrides destroying it */
+    .carousel-item {
+        display: none !important;
+        transition: transform .6s ease-in-out !important;
+    }
+    .carousel-item.active {
+        display: block !important;
+    }
+    .carousel-item-next:not(.carousel-item-start),
+    .active.carousel-item-end {
+        transform: translateX(100%);
+    }
+    .carousel-item-prev:not(.carousel-item-end),
+    .active.carousel-item-start {
+        transform: translateX(-100%);
+    }
+
+    /* COLLAPSING FIX: Enforce proper aspect-ratio and minimum height so the video always occupies space */
+    .eweb-video-widget {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16/9; /* Native 16:9 box */
+        min-height: 200px;
+        background: #000;
+        border-radius: 8px;
+        overflow: hidden;
+        display: block; /* Removed flex to stop weird sizing bugs */
+    }
+    
+    .eweb-video-widget iframe,
+    .eweb-video-widget video {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100% !important;
+        height: 100% !important;
+        border: none;
+    }
+
+    /* GOAL 2: Video Widget Edit Overlay */
+    .eweb-video-widget:hover .eweb-video-overlay {
+        display: flex !important;
+    }
+    .eweb-video-overlay {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(0,0,0,0.7);
+        color: white;
+        padding: 5px 10px;
+        border-radius: 4px;
+        cursor: pointer;
+        display: none;
+        z-index: 50;
+        font-size: 12px;
+        align-items: center;
+        gap: 5px;
+    }
+    .eweb-video-overlay:hover {
+        background: #007bff;
+    }
+
+</style>
+
+<script>
+// FIX: Dynamic positioning for fixed dropdowns to track buttons correctly
+document.addEventListener('DOMContentLoaded', () => {
+    function alignFixedMenu(btnSelector, menuId, alignRight = false) {
+        const btn = document.querySelector(btnSelector) || document.getElementById(btnSelector.replace('#', ''));
+        const menu = document.getElementById(menuId);
+        if (btn && menu && menu.style.display !== 'none') {
+            const rect = btn.getBoundingClientRect();
+            menu.style.top = (rect.bottom + 5) + 'px';
+            if (alignRight) {
+                menu.style.left = 'auto';
+                menu.style.right = (window.innerWidth - rect.right) + 'px';
+            } else {
+                menu.style.left = rect.left + 'px';
+                menu.style.right = 'auto';
+            }
+        }
+    }
+    
+    // Listen for clicks to reposition when menus open
+    document.addEventListener('click', (e) => {
+        setTimeout(() => {
+            alignFixedMenu('#project-toggle-btn', 'project-menu');
+            alignFixedMenu('#import-btn', 'import-menu-dropdown');
+            alignFixedMenu('#profile-icon', 'profile-menu', true);
+            alignFixedMenu('#editor-more-btn', 'editor-more-dropdown', true);
+            
+            // Fix: Only realign the font toolbar if the top button itself was clicked.
+            if (e && e.target && e.target.closest('#font-btn')) {
+                alignFixedMenu('#font-btn', 'font-toolbar', false); 
+            }
+        }, 10); // Small delay to let display block apply
+    });
+
+    // Hide menus when the control bar scrolls
+    const cBar = document.getElementById('control-bar');
+    if (cBar) {
+        cBar.addEventListener('scroll', () => {
+            ['project-menu', 'import-menu-dropdown', 'profile-menu', 'editor-more-dropdown'].forEach(id => {
+                const m = document.getElementById(id);
+                if (m) m.style.display = 'none';
+            });
+            // Removed 'font-toolbar' from scroll hide so it stays floating by text
+        });
+    }
+});
+</script>

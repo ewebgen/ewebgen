@@ -1,0 +1,1163 @@
+<script>
+    // ==========================================
+    // FIX: SMART POSITIONING FOR SECTION / SUBSECTION "MORE OPTIONS" DROPDOWN
+    // Uses fixed positioning inside the iframe so it escapes overflow:hidden parents
+    // and never gets clipped at the right/bottom edge (previously only icons showed).
+    // ==========================================
+    window.positionActionDropdown = function(toggleBtn, menu, iframeDoc) {
+        try {
+            const win = iframeDoc.defaultView || window;
+            const vw = iframeDoc.documentElement.clientWidth || win.innerWidth;
+            const vh = win.innerHeight;
+            const gap = 6;
+
+            menu.style.setProperty('position', 'fixed', 'important');
+            menu.style.setProperty('min-width', '170px', 'important');
+            menu.style.setProperty('width', 'max-content', 'important');
+            menu.style.setProperty('max-width', 'calc(100vw - 12px)', 'important');
+            menu.style.setProperty('max-height', (vh - 2 * gap) + 'px', 'important');
+            menu.style.setProperty('overflow-y', 'auto', 'important');
+            menu.style.setProperty('z-index', '2147483646', 'important');
+            menu.style.setProperty('right', 'auto', 'important');
+            menu.style.setProperty('bottom', 'auto', 'important');
+            menu.querySelectorAll('button').forEach(b => {
+                b.style.setProperty('white-space', 'nowrap', 'important');
+                b.style.setProperty('display', 'flex', 'important');
+                b.style.setProperty('align-items', 'center', 'important');
+                b.style.setProperty('gap', '6px', 'important');
+                b.style.setProperty('width', '100%', 'important');
+                b.style.setProperty('font-size', '13px', 'important');
+                b.style.setProperty('font-family', 'sans-serif', 'important');
+                b.style.setProperty('text-indent', '0', 'important');
+                b.style.setProperty('overflow', 'visible', 'important');
+            });
+
+            const anchor = (toggleBtn.closest('.section-action-bar') || toggleBtn).getBoundingClientRect();
+            const mw = menu.offsetWidth;
+            const mh = menu.offsetHeight;
+
+            // Align menu's right edge with the action bar, then clamp into the viewport
+            let left = anchor.right - mw;
+            if (left + mw > vw - gap) left = vw - gap - mw;
+            if (left < gap) left = gap;
+
+            // Open downward; flip upward if there is no room below
+            let top = anchor.bottom;
+            if (top + mh > vh - gap) {
+                top = (anchor.top - mh >= gap) ? anchor.top - mh : Math.max(gap, vh - gap - mh);
+            }
+
+            menu.style.setProperty('left', left + 'px', 'important');
+            menu.style.setProperty('top', top + 'px', 'important');
+
+            // If an ancestor uses transform/filter, "fixed" becomes relative to it: correct the offset
+            const real = menu.getBoundingClientRect();
+            const dx = left - real.left, dy = top - real.top;
+            if (Math.abs(dx) > 1 || Math.abs(dy) > 1) {
+                menu.style.setProperty('left', (left + dx) + 'px', 'important');
+                menu.style.setProperty('top', (top + dy) + 'px', 'important');
+            }
+
+            // Fixed menus must close when the page scrolls or resizes
+            if (!iframeDoc.__ewebDropdownScrollBound) {
+                iframeDoc.__ewebDropdownScrollBound = true;
+                const closeAll = () => iframeDoc.querySelectorAll('.action-dropdown-menu').forEach(m => m.style.display = 'none');
+                win.addEventListener('scroll', closeAll, { passive: true });
+                win.addEventListener('resize', closeAll);
+            }
+        } catch (err) { console.warn('positionActionDropdown failed', err); }
+    };
+
+    // ==========================================
+    // GLOBAL IMAGE EDITOR MODAL INJECTION (GOAL 1 & 2)
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+        window.openImageEditorModal = function(imageSrc, onApplyCallback) {
+            let modal = document.getElementById('eweb-image-editor-modal');
+            if (!modal) {
+                modal = document.createElement('div');
+                modal.id = 'eweb-image-editor-modal';
+                modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:100000; display:none; justify-content:center; align-items:center; backdrop-filter:blur(5px); font-family:sans-serif;';
+                modal.innerHTML = `
+                    <div style="background:#1e1e1e; width:90%; max-width:800px; height:85vh; border-radius:12px; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,0.5); border:1px solid #333;">
+                        <div style="background:#2d2d2d; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #444;">
+                            <h3 style="color:#fff; margin:0; font-size:1.2em;">🖼️ Image Editor</h3>
+                            <button id="img-edit-close" style="background:none; border:none; color:#aaa; font-size:1.5em; cursor:pointer; transition:color 0.2s;">&times;</button>
+                        </div>
+                        
+                        <div style="background:#252525; padding:10px 20px; display:flex; gap:15px; border-bottom:1px solid #444;">
+                            <button id="img-tool-crop" class="img-tool-btn active" style="background:#007bff; color:#fff; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold; transition:background 0.2s;">✂️ Crop</button>
+                            <button id="img-tool-resize" class="img-tool-btn" style="background:#444; color:#fff; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold; transition:background 0.2s;">↕️ Resize</button>
+                            <button id="img-tool-bg" class="img-tool-btn" style="background:#444; color:#fff; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold; position:relative; transition:background 0.2s;">
+                                🪄 Remove BG
+                            </button>
+                        </div>
+
+                        <div style="flex:1; background:#111; display:flex; justify-content:center; align-items:center; padding:20px; overflow:hidden; position:relative;" id="img-edit-workspace">
+                            <canvas id="img-edit-canvas" style="max-width:100%; max-height:100%; box-shadow:0 0 10px rgba(0,0,0,0.5);"></canvas>
+                            
+                            <div id="img-resize-controls" style="display:none; position:absolute; bottom:20px; background:rgba(0,0,0,0.7); padding:15px; border-radius:8px; display:flex; gap:10px; align-items:center; border:1px solid #333;">
+                                <label style="color:#fff; font-size:12px;">W: <input type="number" id="img-res-w" style="width:60px; padding:5px; border-radius:3px; border:1px solid #555; background:#333; color:#fff;"></label>
+                                <label style="color:#fff; font-size:12px;">H: <input type="number" id="img-res-h" style="width:60px; padding:5px; border-radius:3px; border:1px solid #555; background:#333; color:#fff;"></label>
+                                <label style="color:#fff; font-size:12px; display:flex; align-items:center; gap:5px;"><input type="checkbox" id="img-res-aspect" checked> Maintain Aspect</label>
+                                <button id="img-res-apply" style="background:#28a745; color:#fff; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-weight:bold;">Apply</button>
+                            </div>
+                        </div>
+
+                        <div style="background:#2d2d2d; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #444;">
+                            <button id="img-edit-reset" style="background:#dc3545; color:#fff; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold; transition:background 0.2s;">↺ Reset Image</button>
+                            <button id="img-edit-save" style="background:#28a745; color:#fff; border:none; padding:10px 25px; border-radius:4px; cursor:pointer; font-weight:bold; font-size:1.1em; transition:background 0.2s;">💾 Insert Image</button>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(modal);
+                
+                // --- Editor Logic ---
+                const canvas = document.getElementById('img-edit-canvas');
+                const ctx = canvas.getContext('2d');
+                let currentImg = new Image();
+                let originalImg = new Image();
+                let isCropping = true;
+                let cropStartX, cropStartY, cropEndX, cropEndY;
+                let onSaveCb = null;
+
+                document.getElementById('img-edit-close').onclick = () => modal.style.display = 'none';
+                
+                document.getElementById('img-tool-crop').onclick = function() {
+                    document.querySelectorAll('.img-tool-btn').forEach(b => b.style.background = '#444');
+                    this.style.background = '#007bff';
+                    document.getElementById('img-resize-controls').style.display = 'none';
+                    isCropping = true;
+                    canvas.style.cursor = 'crosshair';
+                };
+
+                document.getElementById('img-tool-resize').onclick = function() {
+                    document.querySelectorAll('.img-tool-btn').forEach(b => b.style.background = '#444');
+                    this.style.background = '#007bff';
+                    document.getElementById('img-resize-controls').style.display = 'flex';
+                    isCropping = false;
+                    canvas.style.cursor = 'default';
+                    document.getElementById('img-res-w').value = canvas.width;
+                    document.getElementById('img-res-h').value = canvas.height;
+                };
+
+                // Aspect Ratio Handlers
+                document.getElementById('img-res-w').oninput = function() {
+                    if(document.getElementById('img-res-aspect').checked && currentImg.width) {
+                        const ratio = currentImg.height / currentImg.width;
+                        document.getElementById('img-res-h').value = Math.round(this.value * ratio);
+                    }
+                };
+                document.getElementById('img-res-h').oninput = function() {
+                    if(document.getElementById('img-res-aspect').checked && currentImg.height) {
+                        const ratio = currentImg.width / currentImg.height;
+                        document.getElementById('img-res-w').value = Math.round(this.value * ratio);
+                    }
+                };
+
+                document.getElementById('img-res-apply').onclick = function() {
+                    const w = parseInt(document.getElementById('img-res-w').value);
+                    const h = parseInt(document.getElementById('img-res-h').value);
+                    if(w > 0 && h > 0) {
+                        const tempCanvas = document.createElement('canvas');
+                        tempCanvas.width = w; tempCanvas.height = h;
+                        tempCanvas.getContext('2d').drawImage(currentImg, 0, 0, w, h);
+                        currentImg.src = tempCanvas.toDataURL();
+                    }
+                };
+
+                document.getElementById('img-edit-reset').onclick = function() {
+                    currentImg.src = originalImg.src;
+                };
+
+                document.getElementById('img-edit-save').onclick = function() {
+                    if(onSaveCb) onSaveCb(currentImg.src);
+                    modal.style.display = 'none';
+                };
+
+                // Canvas Cropping Mouse Events
+                let drag = false;
+                canvas.onmousedown = (e) => { 
+                    if(!isCropping) return; 
+                    drag = true; 
+                    const rect = canvas.getBoundingClientRect(); 
+                    cropStartX = (e.clientX - rect.left) * (canvas.width / rect.width); 
+                    cropStartY = (e.clientY - rect.top) * (canvas.height / rect.height); 
+                };
+                canvas.onmousemove = (e) => {
+                    if(!drag || !isCropping) return;
+                    const rect = canvas.getBoundingClientRect(); 
+                    cropEndX = (e.clientX - rect.left) * (canvas.width / rect.width); 
+                    cropEndY = (e.clientY - rect.top) * (canvas.height / rect.height);
+                    redraw();
+                    ctx.strokeStyle = '#007bff'; 
+                    ctx.lineWidth = 2; 
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeRect(cropStartX, cropStartY, cropEndX - cropStartX, cropEndY - cropStartY);
+                };
+                canvas.onmouseup = () => {
+                    if(!drag || !isCropping) return; 
+                    drag = false;
+                    if(Math.abs(cropEndX - cropStartX) > 10 && Math.abs(cropEndY - cropStartY) > 10) {
+                        const x = Math.min(cropStartX, cropEndX); 
+                        const y = Math.min(cropStartY, cropEndY);
+                        const w = Math.abs(cropEndX - cropStartX); 
+                        const h = Math.abs(cropEndY - cropStartY);
+                        const temp = document.createElement('canvas'); 
+                        temp.width = w; temp.height = h;
+                        temp.getContext('2d').drawImage(currentImg, x, y, w, h, 0, 0, w, h);
+                        currentImg.src = temp.toDataURL();
+                    }
+                };
+
+                // --- GOAL FIX: Remove BG Button with "Coming Soon" Fallback ---
+                document.getElementById('img-tool-bg').onclick = function() {
+                    const btn = this;
+                    const origText = btn.innerHTML;
+                    btn.innerHTML = '⏳ Processing...';
+                    btn.disabled = true;
+
+                    fetch('/api/admin/remove_background', {
+                        method: 'POST',
+                        headers: {'Content-Type': 'application/json'},
+                        body: JSON.stringify({ image_data: currentImg.src })
+                    })
+                    .then(r => r.json())
+                    .then(d => {
+                        if(d.success && d.image) { 
+                            currentImg.src = d.image; 
+                        } else { 
+                            // If backend logic fails (module missing), show "Coming Soon"
+                            alert("Comming soon"); 
+                        }
+                    })
+                    .catch(e => {
+                        // If endpoint doesn't exist or network fails, show "Coming Soon"
+                        alert("Comming soon");
+                    })
+                    .finally(() => { 
+                        btn.innerHTML = origText; 
+                        btn.disabled = false; 
+                    });
+                };
+
+                function redraw() {
+                    canvas.width = currentImg.width; 
+                    canvas.height = currentImg.height;
+                    ctx.drawImage(currentImg, 0, 0);
+                }
+                currentImg.onload = redraw;
+
+                window.__openImageEditorPrivate = function(src, cb) {
+                    originalImg.crossOrigin = "Anonymous";
+                    currentImg.crossOrigin = "Anonymous";
+                    originalImg.src = src;
+                    currentImg.src = src;
+                    onSaveCb = cb;
+                    document.getElementById('img-tool-crop').click();
+                    modal.style.display = 'flex';
+                };
+            }
+            window.__openImageEditorPrivate(imageSrc, onApplyCallback);
+        };
+    });
+
+    // ==========================================
+    // GLOBAL MEDIA MANAGER INJECTOR (ULTRA-ENHANCED)
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+        const parentWin = window.parent || window;
+        const parentDoc = parentWin.document || document;
+        
+        const setNativeValue = (element, value) => {
+            const valueSetter = Object.getOwnPropertyDescriptor(element, 'value')?.set;
+            const prototype = Object.getPrototypeOf(element);
+            const prototypeValueSetter = Object.getOwnPropertyDescriptor(prototype, 'value')?.set;
+
+            if (valueSetter && valueSetter !== prototypeValueSetter) {
+                prototypeValueSetter.call(element, value);
+            } else if (valueSetter) {
+                valueSetter.call(element, value);
+            } else {
+                element.value = value;
+            }
+            
+            element.setAttribute('value', value);
+            element.dispatchEvent(new Event('input', { bubbles: true }));
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+            element.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter', keyCode: 13 }));
+            element.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true, key: 'Enter', keyCode: 13 }));
+        };
+
+        const attachMediaManagerButtons = () => {
+            const inputs = parentDoc.querySelectorAll('input[type="text"], input[type="url"], input[type="search"]');
+            
+            inputs.forEach(input => {
+                if (
+                    input.closest('#eweb-settings-modal') || 
+                    input.closest('#admin-dashboard') || 
+                    input.closest('.admin-panel') || 
+                    input.closest('#image-manager-modal') ||
+                    input.id === 'img-search-query'
+                ) return;
+
+                const ph = (input.placeholder || '').toLowerCase();
+                const id = (input.id || '').toLowerCase();
+                const name = (input.name || '').toLowerCase();
+                const cls = (input.className || '').toLowerCase();
+                
+                let labelText = '';
+                const prevEl = input.previousElementSibling;
+                const parentEl = input.parentElement;
+                if (prevEl && prevEl.tagName === 'LABEL') labelText = prevEl.textContent.toLowerCase();
+                else if (parentEl && parentEl.tagName === 'LABEL') labelText = parentEl.textContent.toLowerCase();
+                else {
+                    const labelId = input.getAttribute('id');
+                    if (labelId) {
+                        const label = parentDoc.querySelector(`label[for="${labelId}"]`);
+                        if (label) labelText = label.textContent.toLowerCase();
+                    }
+                }
+                
+                const isYouTube = id.includes('youtube') || name.includes('youtube') || ph.includes('youtube') || 
+                                  id.includes('vimeo') || name.includes('vimeo') || ph.includes('vimeo') || labelText.includes('youtube') || labelText.includes('vimeo');
+                const isStyling = id.includes('color') || id.includes('padding') || id.includes('margin') || 
+                                  id.includes('height') || id.includes('width') || id.includes('size');
+                
+                if (isYouTube || isStyling) return;
+                
+                const modal = input.closest('.modal, .ui-dialog, [role="dialog"], .modal-content, .widget-settings');
+                const modalHtml = modal ? modal.innerHTML.toLowerCase() : '';
+                
+                const isVideoContext = modalHtml.includes('video') || modalHtml.includes('mp4') || id.includes('video') || ph.includes('video') || name.includes('video') || cls.includes('video') || labelText.includes('video') || labelText.includes('mp4') || labelText.includes('webm') || labelText.includes('ogv') || labelText.includes('url');
+                const isImageContext = modalHtml.includes('image') || modalHtml.includes('img') || modalHtml.includes('carousel') || modalHtml.includes('slide') || id.includes('image') || ph.includes('image') || name.includes('image') || cls.includes('carousel') || labelText.includes('image') || labelText.includes('picture');
+
+                const isUrlField = ph.includes('url') || id.includes('url') || labelText.includes('url') || labelText.includes('address');
+
+                if ((isVideoContext && isUrlField) || isImageContext || (isVideoContext && !isImageContext)) {
+                    if (input.parentNode.querySelector('.media-manager-injected-btn')) return;
+                    
+                    const btn = parentDoc.createElement('button');
+                    btn.type = 'button';
+                    btn.className = 'btn btn-sm btn-primary media-manager-injected-btn';
+                    btn.style.marginLeft = '5px';
+                    btn.style.marginRight = '5px';
+                    btn.style.whiteSpace = 'nowrap';
+                    btn.innerHTML = (isVideoContext && !isImageContext) ? '🎥 Media' : '🖼️ Media';
+                    btn.title = "Open Media Manager";
+                    
+                    btn.onclick = (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        
+                        if (typeof parentWin.openImageManager === 'function') {
+                            parentWin.openImageManager();
+                            const orig = parentWin.insertImageInDoc;
+                            
+                            parentWin.insertImageInDoc = function(doc) {
+                                let mediaUrl = '';
+                                if (typeof parentWin.selectedImageSrc !== 'undefined') mediaUrl = parentWin.selectedImageSrc;
+                                else if (typeof window.selectedImageSrc !== 'undefined') mediaUrl = window.selectedImageSrc;
+
+                                if (mediaUrl) {
+                                    if (typeof parentWin.openImageEditorModal === 'function') {
+                                        const mgrModal = parentDoc.getElementById('image-manager-modal');
+                                        if (mgrModal) mgrModal.style.display = 'none'; 
+                                        
+                                        parentWin.openImageEditorModal(mediaUrl, function(editedUrl) {
+                                            setNativeValue(input, editedUrl);
+                                            if (typeof parentWin.jQuery !== 'undefined') {
+                                                parentWin.jQuery(input).val(editedUrl).trigger('change').trigger('input');
+                                            }
+                                            input.focus();
+                                            input.blur();
+                                            if (orig) parentWin.insertImageInDoc = orig;
+                                        });
+                                        return; 
+                                    } else {
+                                        setNativeValue(input, mediaUrl);
+                                        if (typeof parentWin.jQuery !== 'undefined') {
+                                            parentWin.jQuery(input).val(mediaUrl).trigger('change').trigger('input');
+                                        }
+                                        input.focus();
+                                        input.blur();
+                                    }
+                                }
+                                
+                                if (orig) parentWin.insertImageInDoc = orig;
+                                const mgrModal = parentDoc.getElementById('image-manager-modal');
+                                if(mgrModal) mgrModal.style.display = 'none';
+                            };
+                        } else {
+                            alert("Media Manager not available in this view.");
+                        }
+                    };
+
+                    const parent = input.parentNode;
+                    const siblings = Array.from(parent.children);
+                    let browseBtn = null;
+                    
+                    for (let el of siblings) {
+                        if (el.tagName === 'BUTTON' && (el.textContent.toLowerCase().includes('browse') || el.innerHTML.toLowerCase().includes('folder') || el.textContent.toLowerCase().includes('upload'))) {
+                            browseBtn = el;
+                            break;
+                        }
+                    }
+
+                    if (browseBtn) {
+                        parent.insertBefore(btn, browseBtn.nextSibling);
+                    } else if (parent.style.display === 'flex' || parent.classList.contains('input-group') || parent.classList.contains('d-flex')) {
+                        parent.appendChild(btn);
+                    } else {
+                        const wrapper = parentDoc.createElement('div');
+                        wrapper.style.display = 'flex';
+                        wrapper.style.gap = '5px';
+                        wrapper.style.alignItems = 'center';
+                        wrapper.style.width = '100%';
+                        parent.insertBefore(wrapper, input);
+                        wrapper.appendChild(input);
+                        wrapper.appendChild(btn);
+                    }
+                }
+            });
+        };
+
+        attachMediaManagerButtons();
+
+        let mediaTimeout;
+        const observer = new MutationObserver((mutations) => {
+            let shouldCheck = false;
+            for (let m of mutations) {
+                if (m.addedNodes.length > 0) {
+                    shouldCheck = true;
+                    break;
+                }
+            }
+            if (shouldCheck) {
+                clearTimeout(mediaTimeout);
+                mediaTimeout = setTimeout(attachMediaManagerButtons, 150);
+            }
+        });
+        
+        observer.observe(parentDoc.body, { childList: true, subtree: true });
+    });
+
+    // ==========================================
+    // EDITOR, CONTEXT MENU & INTERACTION LOGIC
+    // ==========================================
+
+    function enableEditing(iframeDoc) {
+        iframeDoc.body.contentEditable = 'true';
+        iframeDoc.body.spellcheck = false;
+        iframeDoc.designMode = 'on'; 
+        isEditing = true;
+        
+        if (typeof updatePreviewControls === 'function') updatePreviewControls();
+        if (typeof updateStatus === 'function') updateStatus(`Editing mode ON for ${currentPreviewFile}. Right-click for options.`);
+
+        let menuFixStyle = iframeDoc.getElementById('ewebgen-menu-fix');
+        if (!menuFixStyle) {
+            menuFixStyle = iframeDoc.createElement('style');
+            menuFixStyle.id = 'ewebgen-menu-fix';
+            menuFixStyle.innerHTML = `
+                /* Force Nav to overlay instead of push */
+                nav { z-index: 9999 !important; position: relative; }
+                nav ul { list-style: none; padding: 0; margin: 0; }
+                nav li { position: relative; }
+                nav li > ul, .dropdown-menu, .nav-item > .dropdown-menu {
+                    position: absolute !important;
+                    top: 100% !important;
+                    left: 0 !important;
+                    min-width: 200px;
+                    z-index: 10000 !important;
+                    display: none;
+                    background: #fff;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    border: 1px solid #eee;
+                    border-radius: 4px;
+                }
+                nav li:hover > ul, .dropdown:hover > .dropdown-menu, .nav-item:hover > .dropdown-menu {
+                    display: block !important;
+                }
+                header { z-index: 9998 !important; position: relative; }
+                .hero, .hero-section { z-index: 1 !important; position: relative; }
+            `;
+            iframeDoc.head.appendChild(menuFixStyle);
+        }
+
+        iframeDoc.body.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+                e.preventDefault();  
+                e.stopPropagation();
+                const saveBtn = window.parent.document.getElementById('save-btn') || document.getElementById('save-btn');
+                if (saveBtn && !saveBtn.disabled) {
+                    saveBtn.click();
+                } else if (typeof window.parent.saveContent === 'function') {
+                    window.parent.saveContent();
+                }
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                if (e.shiftKey) { 
+                    if (typeof window.redoAction === 'function') window.redoAction();
+                    else if (window.parent && typeof window.parent.redoAction === 'function') window.parent.redoAction();
+                } else { 
+                    if (typeof window.undoAction === 'function') window.undoAction();
+                    else if (window.parent && typeof window.parent.undoAction === 'function') window.parent.undoAction();
+                } 
+            }
+        });
+    }
+
+    function reformatEditorUI(iframeDoc) {
+        
+        if (!iframeDoc.getElementById('eweb-plus-btn-styles')) {
+            const style = iframeDoc.createElement('style');
+            style.id = 'eweb-plus-btn-styles';
+            style.textContent = `
+                .eweb-plus-btn-top, .eweb-plus-btn-bottom {
+                    position: absolute;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    width: 24px;
+                    height: 24px;
+                    background-color: #ffffff !important;
+                    color: #6c757d !important;
+                    border: 1px dashed #adb5bd !important;
+                    border-radius: 50%;
+                    font-size: 16px;
+                    font-weight: bold;
+                    line-height: 1;
+                    cursor: pointer;
+                    display: none;
+                    z-index: 10010;
+                    align-items: center;
+                    justify-content: center;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+                    padding: 0;
+                    opacity: 0.9;
+                    transition: all 0.2s;
+                }
+                .eweb-plus-btn-top:hover, .eweb-plus-btn-bottom:hover {
+                    opacity: 1;
+                    background-color: #f8f9fa !important;
+                    color: #343a40 !important;
+                    border-color: #6c757d !important;
+                    transform: translateX(-50%) scale(1.1);
+                }
+                .eweb-plus-btn-top { top: 5px; }
+                .eweb-plus-btn-bottom { bottom: 5px; }
+                
+                .section-hover > .eweb-plus-btn-top, .subsection-hover > .eweb-plus-btn-top,
+                .section-hover > .eweb-plus-btn-bottom, .subsection-hover > .eweb-plus-btn-bottom {
+                    display: flex !important;
+                }
+
+                .add-section-btn, .left-add-plus-btn {
+                    background-color: #ffffff !important;
+                    color: #6c757d !important;
+                    border: 1px dashed #adb5bd !important;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.1) !important;
+                    transition: all 0.2s;
+                }
+                .eweb-section:hover > .left-add-plus-btn, .eweb-block:hover > .left-add-plus-btn, .section-hover > .add-section-btn { 
+                    opacity: 0.9 !important; 
+                }
+                .add-section-btn:hover, .left-add-plus-btn:hover {
+                    opacity: 1 !important;
+                    background-color: #f8f9fa !important;
+                    color: #343a40 !important;
+                    border-color: #6c757d !important;
+                    transform: scale(1.1);
+                }
+                .left-add-plus-btn:hover {
+                    transform: translateY(-50%) translateX(-50%) scale(1.1) !important;
+                }
+
+                .inline-add-widget-btn {
+                    background-color: #ffffff !important;
+                    color: #6c757d !important;
+                    border: 1px dashed #adb5bd !important;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.05) !important;
+                    transition: all 0.2s;
+                }
+                .inline-add-widget-btn:hover {
+                    background-color: #f8f9fa !important;
+                    color: #343a40 !important;
+                    border-color: #6c757d !important;
+                    transform: scale(1.02);
+                }
+                
+                .eweb-column, .col, .col-12, .col-md-6, .col-md-4, section, header, footer, article, main, .container, .row {
+                    position: relative;
+                }
+            `;
+            iframeDoc.head.appendChild(style);
+        }
+
+        iframeDoc.querySelectorAll('.carousel-control-prev, .carousel-control-next, .carousel-indicators').forEach(el => {
+            el.setAttribute('contenteditable', 'false');
+        });
+
+        const sections = iframeDoc.querySelectorAll('section, header, footer, main, article, .card, .col, [class*="col-"], .container, .row, .grid-item, .eweb-freeform-block, .eweb-section, .eweb-block, .eweb-column');
+        
+        sections.forEach(sec => {
+            if(sec.classList.contains('image-wrapper-editable')) return;
+
+            const isMainSection = ['SECTION', 'HEADER', 'FOOTER', 'MAIN', 'ARTICLE'].includes(sec.tagName.toUpperCase()) || sec.classList.contains('eweb-section');
+
+            if (iframeDoc.defaultView && iframeDoc.defaultView.getComputedStyle(sec).position === 'static') {
+                sec.style.position = 'relative';
+            }
+
+            let staleBgContainer = sec.querySelector(':scope > .bg-edit-container');
+            if (staleBgContainer) {
+                staleBgContainer.remove();
+            }
+
+            let actionBar = sec.querySelector(':scope > .section-action-bar');
+            if (!actionBar) {
+                actionBar = iframeDoc.createElement('div');
+                actionBar.className = 'section-action-bar reformatted';
+                actionBar.contentEditable = 'false';
+                sec.appendChild(actionBar);
+            } else {
+                actionBar.classList.add('reformatted');
+            }
+
+            if (!actionBar.querySelector('.drag-handle')) {
+
+                let actionButtonsHtml = '';
+                
+                if (isMainSection) {
+                    actionButtonsHtml += `
+                        <button class="action-btn-up">⬆️ Move Up</button>
+                        <button class="action-btn-down">⬇️ Move Down</button>
+                    `;
+                } else {
+                    actionButtonsHtml += `
+                        <button class="action-btn-left">⬅️ Move Left</button>
+                        <button class="action-btn-right">➡️ Move Right</button>
+                    `;
+                }
+
+                actionButtonsHtml += `
+                    <button class="action-btn-save-sec" style="color:#28a745;">💾 Save Section</button>
+                    <button class="action-btn-dup">👯 Duplicate</button>
+                    <button class="action-btn-cut">✂️ Cut</button>
+                    <button class="action-btn-copy">📋 Copy</button>
+                    <button class="action-btn-paste-before">📥 Paste Before</button>
+                    <button class="action-btn-paste-after">📥 Paste After</button>
+                    <button class="action-btn-settings">⚙️ Settings</button>
+                    <button class="action-btn-delete" style="color:#ff6b6b;">🗑️ Delete</button>
+                `;
+
+                actionBar.innerHTML = `
+                    <div class="drag-handle" title="Drag to move">✥</div>
+                    <div class="action-dropdown-container">
+                        <button class="action-dropdown-toggle" title="More Options">▼</button>
+                        <div class="action-dropdown-menu">
+                            ${actionButtonsHtml}
+                        </div>
+                    </div>
+                `;
+                
+                const toggleBtn = actionBar.querySelector('.action-dropdown-toggle');
+                const menu = actionBar.querySelector('.action-dropdown-menu');
+                toggleBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const isVisible = menu.style.display === 'flex';
+                    iframeDoc.querySelectorAll('.action-dropdown-menu').forEach(m => m.style.display = 'none');
+                    if (isVisible) { menu.style.display = 'none'; return; }
+                    menu.style.display = 'flex';
+                    // FIX: Keep the dropdown fully inside the visible editor area (icon + text),
+                    // even when the section/subsection touches the right/bottom edge or has overflow:hidden.
+                    window.positionActionDropdown(toggleBtn, menu, iframeDoc);
+                };
+
+                if (isMainSection) {
+                    actionBar.querySelector('.action-btn-up').onclick = (e) => { e.stopPropagation(); captureState(); if(sec.previousElementSibling) { sec.parentNode.insertBefore(sec, sec.previousElementSibling); document.getElementById('save-btn').disabled = false; captureState(); } menu.style.display='none'; };
+                    actionBar.querySelector('.action-btn-down').onclick = (e) => { e.stopPropagation(); captureState(); if(sec.nextElementSibling) { sec.parentNode.insertBefore(sec.nextElementSibling, sec); document.getElementById('save-btn').disabled = false; captureState(); } menu.style.display='none'; };
+                } else {
+                    actionBar.querySelector('.action-btn-left').onclick = (e) => { e.stopPropagation(); captureState(); if(sec.previousElementSibling) { sec.parentNode.insertBefore(sec, sec.previousElementSibling); document.getElementById('save-btn').disabled = false; captureState(); } menu.style.display='none'; };
+                    actionBar.querySelector('.action-btn-right').onclick = (e) => { e.stopPropagation(); captureState(); if(sec.nextElementSibling) { sec.parentNode.insertBefore(sec.nextElementSibling.nextSibling, sec); document.getElementById('save-btn').disabled = false; captureState(); } menu.style.display='none'; };
+                }
+
+                actionBar.querySelector('.action-btn-settings').onclick = (e) => {
+                    e.stopPropagation();
+                    menu.style.display='none';
+                    
+                    let type = 'section'; 
+                    const isCol = sec.classList.contains('col') || sec.classList.contains('eweb-column') || (typeof sec.className === 'string' && sec.className.match(/\bcol-/));
+                    if (isCol) type = 'column';
+                    
+                    if (typeof window.parent.openElementSettings === 'function') window.parent.openElementSettings(sec, type);
+                    else if (typeof openElementSettings === 'function') openElementSettings(sec, type);
+                };
+
+                const saveSecBtn = actionBar.querySelector('.action-btn-save-sec');
+                if (saveSecBtn) {
+                    saveSecBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        menu.style.display='none';
+                        if(typeof window.openSaveSectionModal === 'function') window.openSaveSectionModal(sec);
+                    };
+                }
+
+                actionBar.querySelector('.action-btn-dup').onclick = (e) => { 
+                    e.stopPropagation(); 
+                    captureState(); 
+                    const clone = sec.cloneNode(true);
+                    clone.querySelectorAll('.reformatted, .bg-edit-container, .section-action-bar, .add-section-btn, .section-resize-handle, .left-add-plus-btn, .eweb-plus-btn-top, .eweb-plus-btn-bottom').forEach(el => el.remove());
+                    sec.parentNode.insertBefore(clone, sec.nextSibling); 
+                    document.getElementById('save-btn').disabled = false; 
+                    captureState(); 
+                    menu.style.display='none'; 
+                };
+
+                actionBar.querySelector('.action-btn-cut').onclick = (e) => { e.stopPropagation(); captureState(); if(typeof copySection==='function') copySection(sec); sec.remove(); document.getElementById('save-btn').disabled = false; captureState(); menu.style.display='none'; };
+                actionBar.querySelector('.action-btn-copy').onclick = (e) => { e.stopPropagation(); if(typeof copySection==='function') copySection(sec); menu.style.display='none'; };
+                actionBar.querySelector('.action-btn-paste-before').onclick = (e) => { e.stopPropagation(); captureState(); if(typeof pasteSection==='function') pasteSection(sec, 'beforebegin'); menu.style.display='none'; };
+                actionBar.querySelector('.action-btn-paste-after').onclick = (e) => { e.stopPropagation(); captureState(); if(typeof pasteSection==='function') pasteSection(sec, 'afterend'); menu.style.display='none'; };
+                actionBar.querySelector('.action-btn-delete').onclick = (e) => { e.stopPropagation(); captureState(); if(confirm('Delete this item?')) { sec.remove(); document.getElementById('save-btn').disabled = false; captureState(); } menu.style.display='none'; };
+
+                const dragHandle = actionBar.querySelector('.drag-handle');
+                
+                dragHandle.onmouseenter = (e) => { sec.setAttribute('draggable', 'true'); };
+                dragHandle.onmouseleave = (e) => { if (!iframeDoc.defaultView.__draggedSection) { sec.removeAttribute('draggable'); } };
+                dragHandle.onmousedown = (e) => { e.stopPropagation(); sec.setAttribute('draggable', 'true'); };
+                dragHandle.onmouseup = (e) => { e.stopPropagation(); sec.removeAttribute('draggable'); };
+                
+                sec.ondragstart = (e) => {
+                    if (sec.getAttribute('draggable') !== 'true') { e.preventDefault(); return; }
+                    e.dataTransfer.effectAllowed = 'move';
+                    iframeDoc.defaultView.__draggedSection = sec;
+                    e.dataTransfer.setData('text/plain', '__internal_section_drag__');
+                    setTimeout(() => {
+                        sec.style.opacity = '0.4'; 
+                        sec.classList.add('eweb-is-dragging');
+                    }, 0);
+                };
+                
+                sec.ondragend = (e) => {
+                    sec.style.opacity = '1';
+                    sec.classList.remove('eweb-is-dragging');
+                    sec.removeAttribute('draggable');
+                    iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom, .drag-over-left, .drag-over-right, .drag-over-center').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-left', 'drag-over-right', 'drag-over-center'));
+                    iframeDoc.defaultView.__draggedSection = null;
+                };
+            }
+
+            // --- SAFELY REBIND WIDGET AND PLUS BUTTONS (NO DOM MUTATIONS) ---
+            if (sec.classList.contains('col') || sec.classList.contains('eweb-column') || (typeof sec.className === 'string' && sec.className.match(/\bcol-/))) {
+                let hasRealContent = false;
+                Array.from(sec.children).forEach(child => {
+                    if (!child.classList.contains('section-action-bar') &&
+                        !child.classList.contains('column-resize-handle') &&
+                        !child.classList.contains('inline-add-widget-btn') &&
+                        !child.classList.contains('bg-edit-container') &&
+                        !child.classList.contains('section-resize-handle') &&
+                        !child.classList.contains('add-section-btn') &&
+                        !child.classList.contains('eweb-plus-btn-top') &&
+                        !child.classList.contains('eweb-plus-btn-bottom') &&
+                        !child.classList.contains('reformatted') &&
+                        !child.classList.contains('eweb-drop-indicator')) {
+                        hasRealContent = true;
+                    }
+                });
+
+                const textOnly = sec.textContent.replace(/✥|▼|⬆️|⬇️|⬅️|➡️|💾|👯|✂️|📋|📥|⚙️|🗑️|Move Up|Move Down|Move Left|Move Right|Save Section|Duplicate|Cut|Copy|Paste Before|Paste After|Settings|Delete|\+ Add Widget|\+/g, '').trim();
+
+                if (!hasRealContent && textOnly.length === 0) {
+                    sec.setAttribute('data-empty', 'true');
+                } else {
+                    sec.removeAttribute('data-empty');
+                }
+
+                let btn = sec.querySelector(':scope > .inline-add-widget-btn');
+                if (!btn) {
+                    btn = iframeDoc.createElement('button');
+                    btn.className = 'inline-add-widget-btn';
+                    btn.style.cssText = 'padding:8px 16px; background-color:#007bff !important; color:#ffffff !important; border:1px solid #007bff !important; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin: 10px auto; display: block; z-index:10; position:relative;';
+                    btn.innerHTML = '+ Add Widget';
+                    sec.appendChild(btn);
+                } 
+                
+                // Safely wake up the button
+                btn.contentEditable = 'false';
+                btn.onmousedown = (e) => e.preventDefault();
+                btn.onclick = (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    const targetWin = window.parent || window;
+                    targetWin.__insertTarget = sec; 
+                    targetWin.__widgetToReplace = btn;
+                    if (typeof targetWin.openWidgetDrawer === 'function') targetWin.openWidgetDrawer();
+                    else if (typeof targetWin.openInlineWidgetMenu === 'function') targetWin.openInlineWidgetMenu(btn);
+                };
+
+                let needsMove = false;
+                let nextEl = btn.nextElementSibling;
+                while (nextEl) {
+                    if (!nextEl.classList.contains('section-action-bar') &&
+                        !nextEl.classList.contains('column-resize-handle') &&
+                        !nextEl.classList.contains('bg-edit-container') &&
+                        !nextEl.classList.contains('section-resize-handle') &&
+                        !nextEl.classList.contains('add-section-btn') &&
+                        !nextEl.classList.contains('eweb-plus-btn-bottom') &&
+                        !nextEl.classList.contains('eweb-drop-indicator')) {
+                        needsMove = true;
+                        break;
+                    }
+                    nextEl = nextEl.nextElementSibling;
+                }
+                
+                if (needsMove && btn.nextElementSibling) {
+                    sec.appendChild(btn);
+                }
+            }
+
+            let topBtn = sec.querySelector(':scope > .eweb-plus-btn-top');
+            if (!topBtn) {
+                topBtn = iframeDoc.createElement('button');
+                topBtn.className = 'eweb-plus-btn-top';
+                topBtn.innerHTML = '+';
+                sec.appendChild(topBtn);
+            }
+            
+            topBtn.contentEditable = 'false';
+            topBtn.title = 'Add Element Before';
+            topBtn.onclick = (e) => {
+                e.stopPropagation(); e.preventDefault();
+                window.__insertTarget = sec;
+                window.__insertPosition = 'afterbegin'; 
+                if(typeof window.openSectionPlusPopup === 'function') {
+                    const rect = topBtn.getBoundingClientRect();
+                    const iframeRect = iframeDoc.defaultView.frameElement.getBoundingClientRect();
+                    window.openSectionPlusPopup(sec, iframeRect.left + rect.left, iframeRect.top + rect.top);
+                } else if (typeof window.parent.openSectionPlusPopup === 'function') {
+                    const rect = topBtn.getBoundingClientRect();
+                    const iframeRect = iframeDoc.defaultView.frameElement.getBoundingClientRect();
+                    window.parent.openSectionPlusPopup(sec, iframeRect.left + rect.left, iframeRect.top + rect.top);
+                }
+            };
+            
+            let bottomBtn = sec.querySelector(':scope > .eweb-plus-btn-bottom');
+            if (!bottomBtn) {
+                bottomBtn = iframeDoc.createElement('button');
+                bottomBtn.className = 'eweb-plus-btn-bottom';
+                bottomBtn.innerHTML = '+';
+                sec.appendChild(bottomBtn);
+            }
+            
+            bottomBtn.contentEditable = 'false';
+            bottomBtn.title = 'Add Element After';
+            bottomBtn.onclick = (e) => {
+                e.stopPropagation(); e.preventDefault();
+                window.__insertTarget = sec;
+                window.__insertPosition = 'beforeend'; 
+                if(typeof window.openSectionPlusPopup === 'function') {
+                    const rect = bottomBtn.getBoundingClientRect();
+                    const iframeRect = iframeDoc.defaultView.frameElement.getBoundingClientRect();
+                    window.openSectionPlusPopup(sec, iframeRect.left + rect.left, iframeRect.top + rect.top);
+                } else if (typeof window.parent.openSectionPlusPopup === 'function') {
+                    const rect = bottomBtn.getBoundingClientRect();
+                    const iframeRect = iframeDoc.defaultView.frameElement.getBoundingClientRect();
+                    window.parent.openSectionPlusPopup(sec, iframeRect.left + rect.left, iframeRect.top + rect.top);
+                }
+            };
+
+            if (!sec._ewebHoverBound) {
+                sec.addEventListener('mouseenter', () => {
+                    sec.classList.add(isMainSection ? 'section-hover' : 'subsection-hover');
+                });
+                sec.addEventListener('mouseleave', () => {
+                    sec.classList.remove('section-hover', 'subsection-hover');
+                });
+                sec._ewebHoverBound = true;
+            }
+        });
+
+        // --- IMAGE PENCIL OVERLAY LOGIC ---
+        const allImages = iframeDoc.querySelectorAll('img');
+        allImages.forEach(img => {
+            if (img.classList.contains('eweb-no-edit') || img.closest('.eweb-no-edit') || img.closest('.carousel-control-prev') || img.closest('.carousel-control-next')) return;
+            
+            let wrapper = img.closest('.image-wrapper-editable');
+            if (!wrapper) {
+                wrapper = iframeDoc.createElement('div');
+                wrapper.className = 'image-wrapper-editable';
+                wrapper.style.position = 'relative';
+                
+                const displayStyle = iframeDoc.defaultView.getComputedStyle(img).display;
+                wrapper.style.display = (displayStyle === 'block') ? 'block' : 'inline-block';
+                wrapper.style.maxWidth = '100%';
+                wrapper.style.verticalAlign = 'top'; 
+                
+                img.parentNode.insertBefore(wrapper, img);
+                wrapper.appendChild(img);
+            }
+            
+            let pencil = wrapper.querySelector(':scope > .img-edit-pencil');
+            if (!pencil) {
+                pencil = iframeDoc.createElement('button');
+                pencil.className = 'img-edit-pencil reformatted';
+                pencil.innerHTML = '✏️ Edit Image';
+                pencil.contentEditable = 'false';
+                pencil.style.cssText = 'position:absolute; top:8px; right:8px; background:rgba(0,123,255,0.85); color:#fff; border:1px solid rgba(255,255,255,0.5); border-radius:4px; padding:6px 12px; font-size:12px; font-weight:bold; cursor:pointer; z-index:20; display:none; box-shadow:0 2px 8px rgba(0,0,0,0.4); backdrop-filter:blur(2px); transition:all 0.2s;';
+                wrapper.appendChild(pencil);
+            }
+
+            // Always rebind events safely
+            pencil.onmouseover = () => { pencil.style.background = 'rgba(0,86,179,0.95)'; pencil.style.transform = 'scale(1.05)'; };
+            pencil.onmouseout = () => { pencil.style.background = 'rgba(0,123,255,0.85)'; pencil.style.transform = 'scale(1)'; };
+
+            if (!wrapper.dataset.hoverBound) {
+                wrapper.addEventListener('mouseenter', () => pencil.style.display = 'block');
+                wrapper.addEventListener('mouseleave', () => pencil.style.display = 'none');
+                wrapper.dataset.hoverBound = 'true';
+            }
+            
+            pencil.onclick = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                const targetWin = window.parent || window;
+                if(typeof targetWin.openImageEditorModal === 'function') {
+                    targetWin.currentImageToReplace = img;
+                    targetWin.openImageEditorModal(img.src, function(newSrc) {
+                        img.src = newSrc;
+                        if(typeof targetWin.captureState === 'function') targetWin.captureState();
+                    });
+                } else {
+                    targetWin.currentImageToReplace = img;
+                    if (typeof targetWin.openImageManager === 'function') targetWin.openImageManager();
+                }
+            };
+        });
+
+        if (!iframeDoc.body.dataset.clickBoundA) {
+            iframeDoc.addEventListener('click', (e) => { 
+                const cm = iframeDoc.getElementById('custom-context-menu'); 
+                if(cm) cm.style.display = 'none'; 
+                const parentProfileMenu = window.parent.document.getElementById('profile-menu');
+                if(parentProfileMenu) parentProfileMenu.style.display = 'none';
+                
+                const inlineMenu = window.parent.document.getElementById('inline-widget-menu') || document.getElementById('inline-widget-menu');
+                if(inlineMenu && !e.target.closest('.inline-add-widget-btn')) {
+                    inlineMenu.style.display = 'none';
+                }
+
+                let target = e.target;
+
+                const carouselControl = target.closest('.carousel-control-prev, .carousel-control-next');
+                if (carouselControl) {
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    const carousel = carouselControl.closest('.carousel');
+                    if (carousel) {
+                        const activeItem = carousel.querySelector('.carousel-item.active');
+                        if (activeItem) {
+                            const items = Array.from(carousel.querySelectorAll('.carousel-item'));
+                            const currentIndex = items.indexOf(activeItem);
+                            const isNext = carouselControl.classList.contains('carousel-control-next');
+                            let nextIndex = isNext ? currentIndex + 1 : currentIndex - 1;
+                            if (nextIndex >= items.length) nextIndex = 0;
+                            if (nextIndex < 0) nextIndex = items.length - 1;
+                            
+                            activeItem.classList.remove('active');
+                            items[nextIndex].classList.add('active');
+                        }
+                    }
+                    return;
+                }
+
+                const indicator = target.closest('.carousel-indicators button, .carousel-indicators li');
+                if (indicator) {
+                    e.preventDefault(); 
+                    e.stopPropagation();
+                    const carousel = indicator.closest('.carousel');
+                    if (carousel) {
+                        const slideTo = indicator.getAttribute('data-bs-slide-to') || indicator.getAttribute('data-slide-to');
+                        if (slideTo !== null) {
+                            const items = Array.from(carousel.querySelectorAll('.carousel-item'));
+                            const activeItem = carousel.querySelector('.carousel-item.active');
+                            if (activeItem) activeItem.classList.remove('active');
+                            if (items[slideTo]) items[slideTo].classList.add('active');
+                            
+                            const activeInd = carousel.querySelector('.carousel-indicators .active');
+                            if (activeInd) activeInd.classList.remove('active');
+                            indicator.classList.add('active');
+                        }
+                    }
+                    return;
+                }
+
+                if (target.closest('.bg-control-container') || target.closest('.section-action-bar') || target.closest('.column-action-bar') || target.closest('.widget-action-bar') || target.closest('.resize-handle') || target.classList.contains('bg-edit-btn') || target.classList.contains('action-btn')) { return; }
+
+                if (target.nodeType === 3) target = target.parentNode;
+
+                let exactText = target.innerText ? target.innerText.trim() : "";
+                exactText = exactText.replace(/\s+/g, ' ');
+
+                const tagName = target.tagName;
+                const attributes = {};
+                if(target.id) attributes.id = target.id;
+                if(target.className) {
+                    const cleanClass = target.className.replace(/section-hover|subsection-hover|image-wrapper-editable|eweb-column-hover/g, '').trim();
+                    if(cleanClass) attributes.className = cleanClass;
+                }
+                if(target.getAttribute('src')) attributes.src = target.getAttribute('src');
+                if(target.getAttribute('href')) attributes.href = target.getAttribute('href');
+
+                const payload = { tagName: tagName, text: exactText.substring(0, 100), attributes: attributes, id: target.id || null, className: target.className || null };
+                if (window.highlightCodeFromPreview) window.highlightCodeFromPreview(payload);
+                else if (window.parent && window.parent.highlightCodeFromPreview) window.parent.highlightCodeFromPreview(payload);
+            });
+            iframeDoc.body.dataset.clickBoundA = 'true';
+        }
+    }
+
+    function getCleanFullContent(doc) {
+        if (!doc || !doc.documentElement) return "";
+        const clone = doc.documentElement.cloneNode(true);
+        const artifacts = clone.querySelectorAll('.img-edit-pencil, .bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar, .column-action-bar, .widget-action-bar, #custom-context-menu, .ui-helper, .artifact, #editor-styles, #live-styles, #dark-mode-sync, .bg-edit-container, .gradient-popup, .add-section-btn, .section-resize-handle, .reformatted, .eweb-drop-indicator, .eweb-drag-hover, .left-add-plus-btn, .inline-add-widget-btn, .eweb-plus-btn-top, .eweb-plus-btn-bottom');
+        artifacts.forEach(el => el.remove());
+        clone.querySelectorAll('.section-hover, .subsection-hover, .eweb-column-hover').forEach(el => el.classList.remove('section-hover', 'subsection-hover', 'eweb-column-hover'));
+        clone.querySelectorAll('.image-wrapper-editable').forEach(wrapper => {
+            const img = wrapper.querySelector('img');
+            if (img) wrapper.parentNode.replaceChild(img, wrapper); else wrapper.remove(); 
+        });
+        clone.querySelectorAll('*[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+        clone.querySelectorAll('*[class=""]').forEach(el => el.removeAttribute('class'));
+        clone.querySelectorAll('.eweb-section, .eweb-row, .eweb-column, .eweb-block').forEach(el => {
+            if(el.getAttribute('style') === '') el.removeAttribute('style');
+        });
+        if (clone.querySelector('body')) clone.querySelector('body').style.outline = '';
+        return clone.outerHTML;
+    }
+
+    // ==========================================
+    // REBUILT UNDO/REDO & STATE CAPTURE LOGIC
+    // ==========================================
+
+    window.undoAction = function() {
+        if (window.typingTimer) clearTimeout(window.typingTimer);
+        
+        if (window.localHistoryIndex > 0) {
+            window.localHistoryIndex--;
+            window.restoreHTML(window.localHistory[window.localHistoryIndex]);
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof updateStatus === 'function') updateStatus("⏪ Undid last action.");
+        }
+    };
+
+    window.redoAction = function() {
+        if (window.typingTimer) clearTimeout(window.typingTimer);
+        
+        if (window.localHistoryIndex < window.localHistory.length - 1) {
+            window.localHistoryIndex++;
+            window.restoreHTML(window.localHistory[window.localHistoryIndex]);
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof updateStatus === 'function') updateStatus("⏩ Redid last action.");
+        }
+    };
+
+    window.updateUndoRedoButtons = function() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if (window.localHistory) {
+            if(undoBtn) undoBtn.disabled = (window.localHistoryIndex <= 0);
+            if(redoBtn) redoBtn.disabled = (window.localHistoryIndex >= window.localHistory.length - 1);
+        }
+    };
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+            e.preventDefault(); e.stopPropagation();
+            const saveBtn = document.getElementById('save-btn');
+            if(saveBtn && !saveBtn.disabled) saveBtn.click(); 
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+            e.preventDefault(); e.stopPropagation();
+            if (e.shiftKey) { window.redoAction(); } else { window.undoAction(); } 
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if(undoBtn) undoBtn.onclick = window.undoAction;
+        if(redoBtn) redoBtn.onclick = window.redoAction;
+        if(typeof renderElementsPanel === 'function') renderElementsPanel();
+    });
+
+    window.captureState = function(force = false) { 
+        if (typeof isRestoring !== 'undefined' && isRestoring && !force) return; 
+        
+        const iframe = document.getElementById('preview-frame');
+        if(!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document; 
+        if (!doc || !doc.body) return; 
+        
+        let html = (typeof getCleanFullContent === 'function') ? getCleanFullContent(doc) : doc.body.innerHTML;
+        if (!html) return;
+        
+        if (typeof window.localHistory === 'undefined' || !window.localHistory) {
+            window.localHistory = [];
+            window.localHistoryIndex = -1;
+        }
+
+        if (window.localHistoryIndex >= 0 && window.localHistory[window.localHistoryIndex] === html) {
+            return;
+        }
+
+        if (window.localHistoryIndex < window.localHistory.length - 1) {
+            window.localHistory = window.localHistory.slice(0, window.localHistoryIndex + 1);
+        }
+        
+        window.localHistory.push(html); 
+        window.localHistoryIndex++; 
+        
+        if (window.localHistory.length > 50) { 
+            window.localHistory.shift(); 
+            window.localHistoryIndex--; 
+        }
+        
+        if(typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+        if(typeof currentPreviewFile !== 'undefined' && currentPreviewFile) {
+            if (typeof generatedFiles !== 'undefined') {
+                generatedFiles[currentPreviewFile] = html;
+            }
+        }
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+    };
+    
+    window.restoreHTML = function(html) { 
+        if (!html) return; 
+        isRestoring = true; 
+        
+        if (window.typingTimer) clearTimeout(window.typingTimer);
+        
+        const iframe = document.getElementById('preview-frame'); 
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        
+        if (typeof editorObserver !== 'undefined' && editorObserver) editorObserver.disconnect();
+        
+        if (html.trim().toLowerCase().startsWith('<html')) {
+            const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+            doc.documentElement.innerHTML = (htmlMatch && htmlMatch[1]) ? htmlMatch[1] : html;
+        } else {
+            doc.body.innerHTML = html;
+        }
+        
+        initEditor(iframe); 
+        
+        if(typeof currentPreviewFile !== 'undefined' && currentPreviewFile) {
+            if (typeof generatedFiles !== 'undefined') {
+                generatedFiles[currentPreviewFile] = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+            }
+        }
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+        
+        setTimeout(() => { isRestoring = false; }, 300);
+    };
+</script>

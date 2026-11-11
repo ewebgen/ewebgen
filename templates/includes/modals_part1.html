@@ -1,0 +1,391 @@
+<div id="gdpr-banner" style="display:none; position:fixed; bottom:0; left:0; width:100%; background:rgba(33,37,41,0.95); color:white; z-index:99999; padding:15px 30px; justify-content:space-between; align-items:center; box-sizing:border-box; box-shadow: 0 -5px 15px rgba(0,0,0,0.2);">
+    <div id="gdpr-text" style="font-size:0.95em; line-height:1.5; max-width:80%;">We use cookies to ensure you get the best experience on our website.</div>
+    <button onclick="acceptGDPR()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:5px; cursor:pointer; font-weight:bold; white-space:nowrap; margin-left:15px; font-size:1em; transition: background 0.2s;">Accept & Continue</button>
+</div>
+
+<div id="terms-privacy-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:800px; max-width:95%; height:80vh; max-height:800px; display:flex; flex-direction:column; padding:30px; text-align:left; background:white; border-radius:10px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #eee; padding-bottom:15px; margin-bottom:20px;">
+            <h2 id="tp-modal-title" style="margin:0; color:#333;">Legal Information</h2>
+            <button onclick="closeTermsPrivacy()" style="background:none; border:none; font-size:1.8em; cursor:pointer; color:#777;">&times;</button>
+        </div>
+        <div id="terms-container" style="display:none; flex-grow:1; overflow-y:auto; padding-right:15px; color:#444; line-height:1.6;">
+            <div id="terms-modal-content">Loading...</div>
+        </div>
+        <div id="privacy-container" style="display:none; flex-grow:1; overflow-y:auto; padding-right:15px; color:#444; line-height:1.6;">
+            <div id="privacy-modal-content">Loading...</div>
+        </div>
+        <div style="text-align:right; margin-top:20px; border-top:1px solid #eee; padding-top:15px;">
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="closeTermsPrivacy()">Close</button>
+        </div>
+    </div>
+</div>
+
+<div id="notification-popup" class="notification-dropdown">
+    <div class="notif-header">
+        <span>✉️ Messages</span>
+        <div>
+            <span class="mark-read-link" onclick="markAllNotificationsRead()" title="Mark all as read">✓ Read All</span>
+            <button class="notif-close-btn" onclick="closeNotifications()">✕</button>
+        </div>
+    </div>
+    <div class="notif-content" id="notification-list">
+        <div style="padding:15px; text-align:center; color:#777;">Loading...</div>
+    </div>
+    <div class="notif-footer" onclick="openContactAdmin()">
+        📧 Send New Message
+    </div>
+</div>
+
+<div id="limit-reached-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10010; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:center;">
+        <h2 style="color:#d35400; margin-top:0;">🛑 Limit Reached</h2>
+        <p style="color:#666; font-size:1em; margin-bottom:15px;">You have reached a limit for your account type.</p>
+        <p style="color:#555; font-size:0.9em;">Please upgrade your plan to continue.</p>
+        <button class="auth-btn" onclick="safeCloseModal('limit-reached-modal'); openPlanSelectionModal();">View Plans</button>
+        <button class="auth-btn btn-cancel" onclick="safeCloseModal('limit-reached-modal')">Close</button>
+    </div>
+</div>
+
+<div id="contact-admin-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10005; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:left;">
+        <h2 style="margin-top:0;">📧 Contact Admin</h2>
+        <p style="color:#666; font-size:0.9em; margin-bottom:15px;">Send a message to the system administrator.</p>
+        <label style="font-size:0.85em; font-weight:bold;">Subject</label>
+        <input type="text" id="contact-subject" class="auth-input" placeholder="e.g. Bug Report, Feature Request">
+        <label style="font-size:0.85em; font-weight:bold;">Message</label>
+        <textarea id="contact-message" class="auth-input" style="height:120px; resize:none;" placeholder="Describe your issue or request..."></textarea>
+        <label style="font-size:0.85em; font-weight:bold;">Attachment (Optional)</label>
+        <input type="file" id="contact-file" class="auth-input">
+        <button class="auth-btn" onclick="handleSendToAdmin()">Send Message</button>
+        <button class="auth-btn btn-cancel" style="margin-top:5px;" onclick="safeCloseModal('contact-admin-modal')">Cancel</button>
+    </div>
+</div>
+
+<div id="admin-reply-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10006; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:450px; text-align:left;">
+        <h2 style="margin-top:0;">↩️ Reply to User</h2>
+        <input type="hidden" id="reply-target-id">
+        <input type="hidden" id="reply-thread-id">
+        <p style="color:#666; font-size:0.9em; margin-bottom:5px;">To: <span id="reply-target-name" style="font-weight:bold;"></span></p>
+        <p style="color:#666; font-size:0.9em; margin-bottom:15px;">Re: <span id="reply-subject-context" style="font-style:italic;"></span></p>
+        <div id="reply-original-content" style="background:#f9f9f9; padding:10px; border-left:3px solid #ccc; margin-bottom:10px; font-size:0.9em; max-height:100px; overflow-y:auto; display:none;"></div>
+        <label style="font-size:0.85em; font-weight:bold;">Reply Message</label>
+        <textarea id="reply-message" class="auth-input" style="height:120px; resize:none;" placeholder="Type your reply..."></textarea>
+        <label style="font-size:0.85em; font-weight:bold;">Attachment (Optional)</label>
+        <input type="file" id="admin-reply-file" class="auth-input">
+        <button class="auth-btn" onclick="sendAdminReply()">Send Reply</button>
+        <button class="auth-btn btn-cancel" style="margin-top:5px;" onclick="safeCloseModal('admin-reply-modal')">Cancel</button>
+    </div>
+</div>
+
+<div id="message-detail-modal" class="message-modal-overlay" style="display:none;">
+    <div class="message-modal-box" style="width:500px; display:flex; flex-direction:column; max-height:85vh;">
+        <div style="flex-shrink:0;">
+            <h3 id="msg-detail-subject" style="margin-top:0; border-bottom:1px solid #eee; padding-bottom:10px;">Subject</h3>
+        </div>
+        <div id="msg-thread-container" style="flex-grow:1; overflow-y:auto; padding:10px 0; margin-bottom:10px;"></div>
+        <div style="border-top:1px solid #eee; padding-top:10px; flex-shrink:0;">
+            <input type="hidden" id="reply-parent-id">
+            <textarea id="reply-body" class="auth-input" style="height:60px; margin-bottom:5px; font-size:0.9em;" placeholder="Type a reply..."></textarea>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <input type="file" id="reply-file" style="font-size:0.8em;">
+                <div style="display:flex; gap:5px;">
+                    <button class="auth-btn reply-btn" style="width:auto; margin:0; padding:6px 12px; font-size:0.9em;" onclick="sendUserReply()">Reply</button>
+                    <button class="auth-btn btn-cancel" style="width:auto; margin:0; padding:6px 12px; font-size:0.9em;" onclick="closeMessageDetail()">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="admin-config-reminder" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10001; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:center;">
+        <h2 style="color:#d35400;">⚠️ Configuration Required</h2>
+        <p style="color:#555;">Welcome Admin! Some critical settings seem to be missing:</p>
+        <ul style="text-align:left; color:#666; font-size:0.9em; margin-bottom:20px;">
+            <li>AI API Keys (Gemini/OpenAI etc.)</li>
+            <li>Image Provider Keys</li>
+            <li>Email Configuration</li>
+        </ul>
+        <p style="font-size:0.9em;">Please go to <b>Admin CMS</b> > <b>AI & System</b> to configure them.</p>
+        <button class="auth-btn" onclick="safeCloseModal('admin-config-reminder'); openAdminDashboard();">Go to Settings</button>
+        <button class="auth-btn btn-cancel" onclick="safeCloseModal('admin-config-reminder')">Remind Me Later</button>
+    </div>
+</div>
+
+<div id="hyperlink-modal">
+    <div class="link-modal-box">
+        <h2 style="margin-top:0; border-bottom:1px solid #ddd; padding-bottom:10px;">🔗 Configure Link</h2>
+        <div class="link-option-group" id="group-url" onclick="handleLinkOptionChange('url')">
+            <div class="link-option-header">
+                <input type="radio" name="link-type" value="url" class="link-radio" checked>
+                <span>Option 1: Link to URL</span>
+            </div>
+            <input type="text" id="link-url-input" class="auth-input" placeholder="https://example.com" style="margin-bottom:5px;">
+            <select id="link-url-target" class="auth-input">
+                <option value="_self">Open in same page</option>
+                <option value="_blank">Open in new window</option>
+                <option value="_global_blank">Open in new window for all links</option>
+            </select>
+        </div>
+        <div class="link-option-group disabled" id="group-page" onclick="handleLinkOptionChange('page')">
+            <div class="link-option-header">
+                <input type="radio" name="link-type" value="page" class="link-radio">
+                <span>Option 2: Link to Page</span>
+            </div>
+            <select id="link-page-select" class="auth-input" disabled></select>
+        </div>
+        <div class="link-actions">
+            <button class="auth-btn btn-cancel" style="width:auto;" onclick="closeHyperlinkModal()">Cancel</button>
+            <button class="auth-btn" style="width:auto; background:#28a745;" onclick="applyUnifiedLink()">OK</button>
+        </div>
+    </div>
+</div>
+
+<!-- Old "Personal Settings" dialog removed: the newer one lives in modals_part2.html -->
+
+<style>
+    /* Personal Settings tabs (underline style) */
+    #user-settings-modal .user-settings-tab { background: none !important; color: #333 !important; border-bottom: 2px solid transparent !important; }
+    #user-settings-modal .user-settings-tab:hover:not(.active) { color: #007bff !important; }
+    #user-settings-modal .user-settings-tab.active { color: #007bff !important; border-bottom-color: #007bff !important; }
+</style>
+
+<div id="image-manager-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:11000; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:800px; height:600px; max-width:95%; max-height:95%; display:flex; flex-direction:column; padding:0; overflow:hidden;">
+        <div style="padding:15px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
+            <h3 style="margin:0; font-size:1.2em;">🖼️ Image Manager</h3>
+            <button onclick="closeImageManager()" style="background:none; border:none; font-size:1.2em; cursor:pointer; color:#555;">✕</button>
+        </div>
+        <div class="img-mgr-tabs">
+            <div class="img-tab active" id="tab-btn-gallery" onclick="switchImgTab('gallery')">📂 My Gallery</div>
+            <div class="img-tab" id="tab-btn-ai" onclick="switchImgTab('ai')">🤖 AI Generate</div>
+            <div class="img-tab" id="tab-btn-search" onclick="switchImgTab('search')">🔍 Search Web</div>
+        </div>
+        
+        <div style="flex-grow:1; overflow:hidden; position:relative; height:100%;">
+            <div id="img-tab-gallery" class="img-tab-content" style="display:block; padding:20px; overflow-y:auto;">
+                <div class="sub-img-tabs">
+                    <div class="sub-img-tab active" id="sub-tab-my-images" onclick="switchGallerySubTab('my-images')">🖼️ My Images</div>
+                    <div class="sub-img-tab" id="sub-tab-project-images" onclick="switchGallerySubTab('project-images')">📁 Project Images</div>
+                </div>
+
+                <div id="gallery-sub-my-images" style="display:block;">
+                    <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                        <h4 style="margin:0; font-size:1em;">Uploaded & Generated Images</h4>
+                        <button class="auth-btn" style="width:auto; margin:0; padding:8px 15px; font-size:0.9em; background:#007bff;" onclick="triggerLocalUpload()">⬆️ Upload New</button>
+                        <input type="file" id="local-img-upload" style="display:none;" accept="image/*" multiple onchange="handleLocalUpload(this)">
+                    </div>
+                    <div id="gallery-grid" class="img-grid"><div style="text-align:center; color:#999; padding:20px; grid-column:1/-1;">Loading gallery...</div></div>
+                </div>
+
+                <div id="gallery-sub-project-images" style="display:none;">
+                    <div style="margin-bottom:15px;">
+                        <h4 style="margin:0; font-size:1em;">Images used in your saved projects</h4>
+                        <p style="font-size:0.85em; color:#666; margin:5px 0 0 0;">These are hotlinked images extracted from your previous project files.</p>
+                    </div>
+                    <div id="project-images-grid" class="img-grid"><div style="text-align:center; color:#999; padding:20px; grid-column:1/-1;">Loading project images...</div></div>
+                    <div id="project-images-load-more" style="text-align:center; margin-top:20px; display:none;">
+                        <button class="auth-btn" style="width:auto; background:#6c757d;" onclick="loadMoreProjectImages()">Load More</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="img-tab-ai" class="img-tab-content" style="display:none;">
+                <div class="ai-gen-layout">
+                    <div class="ai-controls-pane">
+                        <h4 style="margin-top:0;">Generate Settings</h4>
+                        <div class="settings-group">
+                            <label style="display:block; font-weight:bold; margin-bottom:8px;">1. Generation Type</label>
+                            <div style="display:flex; flex-direction:column; gap:10px; margin-bottom:10px;">
+                                <label style="cursor:pointer; display:flex; align-items:center;">
+                                    <input type="radio" name="ai-gen-type" value="image" checked onchange="toggleAiLogoOptions()"> <span style="margin-left:8px;">General Photo / Art</span>
+                                </label>
+                                <label style="cursor:pointer; display:flex; align-items:center;">
+                                    <input type="radio" name="ai-gen-type" value="logo" onchange="toggleAiLogoOptions()"> <span style="margin-left:8px;">Logo / Icon / Vector</span>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="settings-group">
+                            <label style="display:block; font-weight:bold; margin-bottom:8px;">2. Description / Prompt</label>
+                            <textarea id="ai-img-prompt" class="auth-input" style="height:100px; margin-bottom:10px;" placeholder="Describe the image in detail..."></textarea>
+                        </div>
+                        <div id="ai-logo-opts" style="display:none; background:#e8f4fd; padding:15px; border-radius:4px; margin-bottom:15px; border:1px solid #b8daff;">
+                             <label style="font-size:0.9em; font-weight:bold; display:block; margin-bottom:5px;">Logo Text (Optional)</label>
+                             <input type="text" id="ai-logo-text" class="auth-input" placeholder="Brand Name" style="background:white;">
+                        </div>
+                        <button class="auth-btn" id="btn-gen-ai" onclick="generateAiImage()">✨ Generate</button>
+                        <div id="ai-progress-container" class="ai-progress-container"><div id="ai-progress-bar" class="ai-progress-bar"></div></div>
+                        <div id="ai-status-text" style="font-size:0.85em; color:#666; text-align:center; margin-top:5px; min-height:1.2em;"></div>
+                    </div>
+                    <div class="ai-preview-pane">
+                         <h4 style="margin-top:0; width:100%;">Preview Result</h4>
+                         <div id="ai-preview-box" class="ai-large-preview">
+                             <div style="color:#aaa; text-align:center;">Generated image will appear here.<br><span style="font-size:3em; display:block; margin-top:10px;">🖼️</span></div>
+                         </div>
+                         <div id="ai-action-buttons" style="display:none; gap:10px; margin-top:15px;">
+                             <button class="auth-btn" style="width:auto; background:#28a745;" onclick="selectGeneratedImage()">✅ Use This Image</button>
+                             <button class="auth-btn" style="width:auto; background:#6c757d;" onclick="saveGeneratedToGallery()">💾 Save to Gallery</button>
+                         </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="img-tab-search" class="img-tab-content" style="display:none; padding:20px; overflow-y:auto;">
+                <div class="search-bar-container">
+                    <input type="text" id="img-search-query" class="auth-input" style="margin:0; flex-grow:1; font-size:1.1em; padding:10px;" placeholder="Search for high-quality images (e.g. 'modern office')...">
+                    <button class="auth-btn" style="width:auto; margin:0; background:#17a2b8; padding:0 25px;" onclick="searchWebImages()">Search</button>
+                </div>
+                <p style="font-size:0.9em; color:#666; margin-top:0;">Tip: Press <b>Enter</b> to search. Click an image to select it.</p>
+                <div id="search-results-grid" class="img-grid"><div style="text-align:center; color:#999; padding:40px; grid-column:1/-1; font-size:1.1em;">Enter a keyword above to find images.</div></div>
+            </div>
+        </div>
+        
+        <div style="padding:15px; border-top:1px solid #eee; background:#f8f9fa; display:flex; justify-content:flex-end; gap:10px; align-items:center; flex-shrink:0;">
+            <span id="img-selected-status" style="margin-right:auto; color:#666; font-size:0.9em; font-weight:bold; padding-left:10px;">No image selected</span>
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="closeImageManager()">Cancel</button>
+            <button class="auth-btn" id="btn-insert-img" style="width:auto; margin:0; background:#28a745; opacity:0.6; cursor:not-allowed;" disabled onclick="insertSelectedImage()">Insert Selected</button>
+        </div>
+    </div>
+</div>
+
+<div id="floating-options">
+    <div id="floating-options-header">
+        <span>⚙️ Settings</span>
+        <span onclick="toggleFloatingOptions()" style="cursor:pointer;">✕</span>
+    </div>
+    <div id="floating-options-content">
+        <p><strong>Configurable Options</strong></p>
+        <label><input type="checkbox" checked> Auto-save on edit</label><br>
+        <label><input type="checkbox"> Show grid lines</label><br>
+    </div>
+</div>
+
+<div id="download-progress-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:20000; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:400px; text-align:center;">
+        <h2 style="margin-top:0; color:#007bff;">📦 Preparing Download</h2>
+        <p style="color:#666; font-size:0.95em;">Packaging your website files and downloading assets. Please wait...</p>
+        <div style="width:100%; background:#e9ecef; height:10px; border-radius:5px; overflow:hidden; margin: 20px 0; position:relative;">
+            <div id="download-progress-bar" style="position:absolute; width:50%; height:100%; background:#28a745; border-radius:5px; animation: indeterminateProgress 1.5s infinite linear;"></div>
+        </div>
+        <p id="download-status-text" style="color:#333; font-weight:bold;">Zipping files...</p>
+        <style>
+            @keyframes indeterminateProgress {
+                0% { left: -50%; }
+                100% { left: 100%; }
+            }
+        </style>
+    </div>
+</div>
+
+<div id="admin-user-edit-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10010; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:450px; text-align:left;">
+        <h2 style="margin-top:0;">👤 Edit User Account</h2>
+        <input type="hidden" id="admin-edit-id">
+        
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>Username</label><input type="text" id="admin-edit-username" class="auth-input"></div>
+            <div style="flex:1;"><label>Full Name</label><input type="text" id="admin-edit-fullname" class="auth-input"></div>
+        </div>
+        
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>Email</label><input type="email" id="admin-edit-email" class="auth-input"></div>
+            <div style="flex:1;"><label>Phone</label><input type="text" id="admin-edit-phone" class="auth-input"></div>
+        </div>
+        
+        <label>Country</label>
+        <input list="country-list-edit" id="admin-edit-country" class="auth-input" placeholder="Select or type Country...">
+        <datalist id="country-list-edit">
+            <option value="Afghanistan"><option value="Albania"><option value="Algeria"><option value="Andorra">
+            <option value="Angola"><option value="Antigua and Barbuda"><option value="Argentina"><option value="Armenia">
+            <option value="Australia"><option value="Austria"><option value="Azerbaijan"><option value="Bahamas">
+            <option value="Bahrain"><option value="Bangladesh"><option value="Barbados"><option value="Belarus">
+            <option value="Belgium"><option value="Belize"><option value="Benin"><option value="Bhutan">
+            <option value="Bolivia"><option value="Bosnia and Herzegovina"><option value="Botswana"><option value="Brazil">
+            <option value="Brunei"><option value="Bulgaria"><option value="Burkina Faso"><option value="Burundi">
+            <option value="Cabo Verde"><option value="Cambodia"><option value="Cameroon"><option value="Canada">
+            <option value="Central African Republic"><option value="Chad"><option value="Chile"><option value="China">
+            <option value="Colombia"><option value="Comoros"><option value="Congo"><option value="Costa Rica">
+            <option value="Croatia"><option value="Cuba"><option value="Cyprus"><option value="Czech Republic">
+            <option value="Denmark"><option value="Djibouti"><option value="Dominica"><option value="Dominican Republic">
+            <option value="Ecuador"><option value="Egypt"><option value="El Salvador"><option value="Equatorial Guinea">
+            <option value="Eritrea"><option value="Estonia"><option value="Eswatini"><option value="Ethiopia">
+            <option value="Fiji"><option value="Finland"><option value="France"><option value="Gabon">
+            <option value="Gambia"><option value="Georgia"><option value="Germany"><option value="Ghana">
+            <option value="Greece"><option value="Grenada"><option value="Guatemala"><option value="Guinea">
+            <option value="Guinea-Bissau"><option value="Guyana"><option value="Haiti"><option value="Honduras">
+            <option value="Hungary"><option value="Iceland"><option value="India"><option value="Indonesia">
+            <option value="Iran"><option value="Iraq"><option value="Ireland"><option value="Israel">
+            <option value="Italy"><option value="Jamaica"><option value="Japan"><option value="Jordan">
+            <option value="Kazakhstan"><option value="Kenya"><option value="Kiribati"><option value="Kuwait">
+            <option value="Kyrgyzstan"><option value="Laos"><option value="Latvia"><option value="Lebanon">
+            <option value="Lesotho"><option value="Liberia"><option value="Libya"><option value="Liechtenstein">
+            <option value="Lithuania"><option value="Luxembourg"><option value="Madagascar"><option value="Malawi">
+            <option value="Malaysia"><option value="Maldives"><option value="Mali"><option value="Malta">
+            <option value="Marshall Islands"><option value="Mauritania"><option value="Mauritius"><option value="Mexico">
+            <option value="Micronesia"><option value="Moldova"><option value="Monaco"><option value="Mongolia">
+            <option value="Montenegro"><option value="Morocco"><option value="Mozambique"><option value="Myanmar">
+            <option value="Namibia"><option value="Nauru"><option value="Nepal"><option value="Netherlands">
+            <option value="New Zealand"><option value="Nicaragua"><option value="Niger"><option value="Nigeria">
+            <option value="North Korea"><option value="North Macedonia"><option value="Norway"><option value="Oman">
+            <option value="Pakistan"><option value="Palau"><option value="Palestine"><option value="Panama">
+            <option value="Papua New Guinea"><option value="Paraguay"><option value="Peru"><option value="Philippines">
+            <option value="Poland"><option value="Portugal"><option value="Qatar"><option value="Romania">
+            <option value="Russia"><option value="Rwanda"><option value="Saint Kitts and Nevis"><option value="Saint Lucia">
+            <option value="Saint Vincent and the Grenadines"><option value="Samoa"><option value="San Marino">
+            <option value="Sao Tome and Principe"><option value="Saudi Arabia"><option value="Senegal"><option value="Serbia">
+            <option value="Seychelles"><option value="Sierra Leone"><option value="Singapore"><option value="Slovakia">
+            <option value="Slovenia"><option value="Solomon Islands"><option value="Somalia"><option value="South Africa">
+            <option value="South Korea"><option value="South Sudan"><option value="Spain"><option value="Sri Lanka">
+            <option value="Sudan"><option value="Suriname"><option value="Sweden"><option value="Switzerland">
+            <option value="Syria"><option value="Taiwan"><option value="Tajikistan"><option value="Tanzania">
+            <option value="Thailand"><option value="Timor-Leste"><option value="Togo"><option value="Tonga">
+            <option value="Trinidad and Tobago"><option value="Tunisia"><option value="Turkey"><option value="Turkmenistan">
+            <option value="Tuvalu"><option value="Uganda"><option value="Ukraine"><option value="United Arab Emirates">
+            <option value="United Kingdom"><option value="United States"><option value="Uruguay"><option value="Uzbekistan">
+            <option value="Vanuatu"><option value="Vatican City"><option value="Venezuela"><option value="Vietnam">
+            <option value="Yemen"><option value="Zambia"><option value="Zimbabwe">
+        </datalist>
+        
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <div style="flex:1;"><label>Role</label><select id="admin-edit-role" class="auth-input"><option value="client">Client</option><option value="admin">Admin</option></select></div>
+            <div style="flex:1;"><label>User Type</label><select id="admin-edit-usertype" class="auth-input"><option value="">Default</option></select></div>
+        </div>
+
+        <div style="background:#e8f4fd; padding:15px; border-radius:8px; border:1px solid #b8daff; margin-bottom:15px;">
+            <h4 style="margin:0 0 10px 0; color:#0056b3; font-size:0.9em;">📊 Current Remaining Limits</h4>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9em;">
+                <span>Remaining Websites:</span>
+                <strong id="admin-edit-rem-sites" style="color:#28a745;">--</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.9em;">
+                <span>Remaining Images:</span>
+                <strong id="admin-edit-rem-images" style="color:#28a745;">--</strong>
+            </div>
+        </div>
+
+        <div style="background:#fdfdfd; padding:15px; border-radius:8px; border:1px solid #eee; margin-bottom:15px;">
+            <h4 style="margin:0 0 10px 0; color:#333; font-size:0.9em;">➕ Increase User Limits</h4>
+            <p style="font-size:0.75em; color:#888; margin-top:-5px;">Enter values to ADD to current limits (not overwrite).</p>
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1;">
+                    <label style="font-size:0.8em; font-weight:bold;">Add Websites</label>
+                    <input type="number" id="admin-edit-add-sites" class="auth-input" placeholder="+0" min="0" style="margin:0;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:0.8em; font-weight:bold;">Add Images</label>
+                    <input type="number" id="admin-edit-add-images" class="auth-input" placeholder="+0" min="0" style="margin:0;">
+                </div>
+            </div>
+        </div>
+
+        <label style="cursor:pointer;"><input type="checkbox" id="admin-edit-verified"> Verified User</label>
+        
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="safeCloseModal('admin-user-edit-modal')">Cancel</button>
+            <button class="auth-btn" style="width:auto; margin:0; background:#007bff;" onclick="saveAdminUserChanges()">Save Account Changes</button>
+        </div>
+        <p id="admin-edit-msg" style="color:red; text-align:center; margin-top:10px; font-size:0.9em;"></p>
+    </div>
+</div>

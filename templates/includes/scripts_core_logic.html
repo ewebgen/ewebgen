@@ -1,0 +1,1131 @@
+<script>
+    // ==========================================
+    // CORE FUNCTIONS & AI GENERATION
+    // ==========================================
+
+    function updateStatus(message, isError = false) {
+        const statusMessage = document.getElementById('status-message');
+        if (!statusMessage) return;
+        statusMessage.textContent = message;
+        if (document.body.classList.contains('dark-mode')) {
+            statusMessage.style.backgroundColor = isError ? '#330000' : '#1e2a38';
+            statusMessage.style.color = isError ? '#ffaaaa' : '#90caf9';
+        } else {
+            statusMessage.style.backgroundColor = isError ? '#fdd' : '#e3f2fd';
+            statusMessage.style.color = isError ? '#c62828' : '#1565c0';
+        }
+    }
+    
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    window.updateGenerationSteps = function(percent, codeStr) {
+        let step = 1; // Connecting
+        let barWidth = 0;
+        
+        if (percent > 5) { step = 2; barWidth = 25; } // Architecture
+        if (codeStr.includes('styles.css') || codeStr.includes('<style') || percent > 35) { step = 3; barWidth = 50; } // Styling
+        if (codeStr.includes('<img') || codeStr.includes('background-image') || percent > 65) { step = 4; barWidth = 75; } // Assets
+        if (percent >= 95) { step = 5; barWidth = 100; } // Finishing
+        
+        const pb = document.getElementById('gen-steps-progress-bar');
+        if (pb) pb.style.width = barWidth + '%';
+
+        for (let i = 1; i <= 5; i++) {
+            let el = document.getElementById('gen-step-' + i);
+            if (el) {
+                if (i < step) {
+                    el.className = 'gen-step completed';
+                } else if (i === step) {
+                    el.className = 'gen-step active';
+                } else {
+                    el.className = 'gen-step pending';
+                }
+            }
+        }
+    };
+
+    function showProgressOverlay(initialText = "Initializing...") {
+        const overlay = document.getElementById('progress-overlay');
+        if(!overlay) return;
+        
+        overlay.style.display = 'flex';
+        const generateBtn = document.getElementById('generate-btn');
+        if(generateBtn) generateBtn.disabled = true;
+        
+        const stopBtn = document.getElementById('stop-gen-btn');
+        if(stopBtn) {
+            stopBtn.disabled = false;
+            stopBtn.textContent = "⏹ Stop Generation";
+        }
+        
+        const codeView = document.getElementById('code-stream-view');
+        if (codeView) codeView.style.display = 'none';
+        
+        const backdrop = overlay.querySelector('.overlay-backdrop');
+        if (backdrop) backdrop.style.opacity = '0.4';
+
+        if (!document.getElementById('gen-steps-container')) {
+            const stepsHtml = `
+                <div id="gen-steps-container" style="width: 90%; max-width: 650px; margin: 25px auto 35px auto; display: flex; justify-content: space-between; position: relative; font-family: 'Segoe UI', Tahoma, sans-serif;">
+                    <div style="position: absolute; top: 18px; left: 10%; right: 10%; height: 4px; background: rgba(255,255,255,0.2); z-index: 1; border-radius: 2px;">
+                        <div id="gen-steps-progress-bar" style="height: 100%; width: 0%; background: #007bff; transition: width 0.4s ease; border-radius: 2px;"></div>
+                    </div>
+                    
+                    <div id="gen-step-1" class="gen-step active" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #007bff; color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">1</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 700; color: #fff; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Connecting</span>
+                    </div>
+                    <div id="gen-step-2" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">2</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Architecture</span>
+                    </div>
+                    <div id="gen-step-3" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">3</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Styling</span>
+                    </div>
+                    <div id="gen-step-4" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">4</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Assets</span>
+                    </div>
+                    <div id="gen-step-5" class="gen-step pending" style="z-index: 2; display: flex; flex-direction: column; align-items: center; width: 20%;">
+                        <div class="step-icon" style="width: 40px; height: 40px; border-radius: 50%; background: #e9ecef; color: #adb5bd; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 4px solid #fff; transition: all 0.3s; font-size: 14px; box-shadow: 0 2px 5px rgba(0,0,0,0.1);">5</div>
+                        <span style="font-size: 11px; margin-top: 8px; font-weight: 600; color: #ccc; text-align: center; text-shadow: 0 1px 3px rgba(0,0,0,0.5);">Finishing</span>
+                    </div>
+                </div>
+            `;
+            
+            if (stopBtn) {
+                stopBtn.insertAdjacentHTML('beforebegin', stepsHtml);
+                
+                const style = document.createElement('style');
+                style.innerHTML = `
+                    .gen-step.completed .step-icon { background: #28a745 !important; color: white !important; }
+                    .gen-step.completed span { color: #28a745 !important; }
+                    .gen-step.active .step-icon { background: #007bff !important; color: white !important; box-shadow: 0 0 0 4px rgba(0,123,255,0.3); transform: scale(1.1); }
+                    .gen-step.active span { color: #fff !important; font-weight: 800 !important; }
+                `;
+                document.head.appendChild(style);
+            }
+        }
+        
+        if (typeof window.updateGenerationSteps === 'function') {
+            window.updateGenerationSteps(0, "");
+        }
+
+        updateProgressCircle(0, initialText);
+        
+        const iframe = document.getElementById('preview-frame');
+        if(iframe && iframe.contentDocument) {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            doc.open();
+            doc.write('<html><head><meta name="viewport" content="width=device-width, initial-scale=1.0"><style id="live-styles"></style></head><body style="background:transparent;"><div style="font-family:sans-serif;color:#666;padding:20px;text-align:center;margin-top:10vh;"><h2>🏗️ Building your site...</h2><p>Live preview will appear here shortly.</p></div></body></html>');
+            doc.close();
+            window.currentCssBuffer = '';
+        }
+    }
+
+    function updateProgressCircle(percent, text) {
+        const circle = document.querySelector('.circular-progress');
+        const valueSpan = document.getElementById('progress-percent');
+        const textSpan = document.getElementById('progress-text');
+        if(circle) circle.style.background = `conic-gradient(#007bff ${percent * 3.6}deg, #e9ecef 0deg)`;
+        if(valueSpan) valueSpan.textContent = `${Math.round(percent)}%`;
+        if(textSpan) textSpan.textContent = text;
+    }
+
+    function hideProgressOverlay() {
+        const overlay = document.getElementById('progress-overlay');
+        if(overlay) overlay.style.display = 'none';
+        const generateBtn = document.getElementById('generate-btn');
+        if(generateBtn) generateBtn.disabled = false;
+        const codeView = document.getElementById('code-stream-view');
+        if (codeView) codeView.style.display = 'none';
+    }
+    
+    function hideCodeStream() { 
+        const codeView = document.getElementById('code-stream-view');
+        if (codeView) codeView.style.display = 'none'; 
+    }
+
+    function stopGeneration() {
+        if (typeof abortController !== 'undefined' && abortController) { abortController.abort(); window.abortController = null; }
+        if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+        window.isBuildingSequenceActive = false; 
+        
+        const textSpan = document.getElementById('progress-text');
+        if(textSpan) textSpan.textContent = "Stopped";
+        
+        const stopBtn = document.getElementById('stop-gen-btn');
+        if(stopBtn) {
+            stopBtn.textContent = "Generation Stopped";
+            stopBtn.disabled = true;
+        }
+        
+        const generateBtn = document.getElementById('generate-btn');
+        if(generateBtn) generateBtn.disabled = false;
+        
+        updateStatus("⚠️ Generation stopped by user.", true);
+    }
+
+    function appendMessage(role, text) {
+        const chatDisplay = document.getElementById('chat-display');
+        if(!chatDisplay) return;
+        
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add(role === 'user' ? 'user-message' : 'ai-message');
+        msgDiv.innerHTML = role === 'user' ? text : 'AI response received. Building website...'; 
+        
+        if (role === 'ai' && text !== 'AI response received. Building website...') {
+            msgDiv.innerHTML = text;
+        }
+        
+        chatDisplay.appendChild(msgDiv);
+        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+    }
+
+    function updateHistoryButtons(canUndo, canRedo) {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if(undoBtn) undoBtn.disabled = !canUndo;
+        if(redoBtn) redoBtn.disabled = !canRedo;
+    }
+
+    function checkHistoryStatus() {
+        if(typeof localHistoryIndex !== 'undefined' && typeof localHistory !== 'undefined') {
+            updateHistoryButtons(localHistoryIndex > 0, localHistoryIndex < localHistory.length - 1);
+        }
+    }
+    
+    function captureState() {
+        const iframe = document.getElementById('preview-frame');
+        if(!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!doc || !doc.body) return;
+        
+        let currentHTML = "";
+        if (typeof getCleanFullContent === 'function') {
+            currentHTML = getCleanFullContent(doc);
+        } else {
+            currentHTML = doc.body.innerHTML;
+        }
+        
+        if (typeof localHistoryIndex !== 'undefined' && typeof localHistory !== 'undefined') {
+            if (localHistoryIndex < localHistory.length - 1) {
+                window.localHistory = localHistory.slice(0, localHistoryIndex + 1);
+            }
+            if (localHistory.length > 0 && localHistory[localHistory.length - 1] === currentHTML) return;
+
+            window.localHistory.push(currentHTML);
+            window.localHistoryIndex++;
+            checkHistoryStatus();
+        }
+        
+        const saveBtn = document.getElementById('save-btn');
+        if(saveBtn) saveBtn.disabled = false;
+    }
+
+    function updatePreviewControls() {
+        if(typeof generatedFiles === 'undefined') return;
+        const hasFiles = Object.keys(generatedFiles).length > 0;
+        
+        const setDisabled = (id, val) => { const el = document.getElementById(id); if(el) el.disabled = val; };
+        
+        setDisabled('save-as-btn', !hasFiles);
+        setDisabled('download-zip-btn', !hasFiles);
+        setDisabled('open-new-window-btn', !hasFiles);
+        
+        const pageDropdown = document.getElementById('page-dropdown');
+        if(pageDropdown) pageDropdown.disabled = !hasFiles;
+        
+        const isEditingVal = (typeof isEditing !== 'undefined' && isEditing);
+        
+        const saveBtn = document.getElementById('save-btn');
+        if(saveBtn) saveBtn.disabled = !isEditingVal;
+        
+        setDisabled('voice-edit-btn', !isEditingVal);
+        setDisabled('font-btn', !isEditingVal);
+        setDisabled('add-img-btn', !isEditingVal);
+        setDisabled('options-btn', !isEditingVal);
+    }
+
+    function loadPreview(filename) {
+        return new Promise((resolve) => {
+            window.lastValidRange = null;
+
+            if (typeof generatedFiles !== 'undefined' && generatedFiles[filename]) {
+                const container = document.getElementById('preview-container');
+                if (!container) { resolve(); return; }
+
+                let oldIframe = document.getElementById('preview-frame');
+                if (oldIframe) {
+                    oldIframe.remove();
+                }
+
+                const newIframe = document.createElement('iframe');
+                newIframe.id = 'preview-frame';
+                newIframe.className = 'preview-frame';
+                newIframe.style.width = '100%';
+                newIframe.style.height = '100%';
+                newIframe.style.border = 'none';
+                newIframe.style.backgroundColor = '#ffffff';
+
+                newIframe.onload = () => { 
+                    if(typeof initEditor === 'function') initEditor(newIframe); 
+                    window.localHistory = [];
+                    window.localHistoryIndex = -1;
+                    captureState(); 
+                    resolve(); 
+                };
+
+                container.appendChild(newIframe);
+                
+                const url = `/preview/${filename}?t=` + new Date().getTime();
+                window.currentPreviewFile = filename;
+                updatePageDropdown(filename);
+                newIframe.src = url;
+            } else { resolve(); }
+        });
+    }
+    
+    function updatePageDropdown(activeFile) {
+        const pageDropdown = document.getElementById('page-dropdown');
+        if(!pageDropdown || typeof generatedFiles === 'undefined') return;
+        pageDropdown.innerHTML = ''; 
+        const files = Object.keys(generatedFiles).filter(name => name.endsWith('.html')).sort();
+        
+        files.forEach(filename => {
+            const option = document.createElement('option');
+            option.value = filename;
+            option.textContent = filename.replace('.html', '').toUpperCase();
+            if (filename === activeFile) option.selected = true;
+            pageDropdown.appendChild(option);
+        });
+        
+        const sep = document.createElement('option');
+        sep.disabled = true;
+        sep.textContent = '──────────';
+        pageDropdown.appendChild(sep);
+        
+        const addOpt = document.createElement('option');
+        addOpt.value = '__NEW_PAGE__';
+        addOpt.textContent = '➕ Add New Page...';
+        addOpt.style.fontWeight = 'bold';
+        addOpt.style.color = '#28a745';
+        pageDropdown.appendChild(addOpt);
+        
+        if (files.length > 1) {
+             const delOpt = document.createElement('option');
+             delOpt.value = '__DELETE_PAGE__';
+             delOpt.textContent = '🗑️ Delete Current Page';
+             delOpt.style.fontWeight = 'bold';
+             delOpt.style.color = '#dc3545';
+             pageDropdown.appendChild(delOpt);
+        }
+    }
+    
+    document.addEventListener("DOMContentLoaded", () => {
+        // FIX: Only explicit "New website / New project" controls force a fresh generation.
+        // The old version walked up to big DIVs (whose text contains "generate") so almost any
+        // click flagged the next prompt as a new site and broke "edit the loaded template".
+        document.addEventListener('click', (e) => {
+            const el = e.target && e.target.closest ? e.target.closest('button, a, li, [role="button"]') : null;
+            if (!el) return;
+            const id = (el.id || '').toLowerCase();
+            if (id === 'generate-btn' || (typeof el.className === 'string' && el.className.includes('chat-submit'))) return;
+            const txt = (el.innerText || el.textContent || '').toLowerCase().trim();
+            if (txt.length > 60) return;
+            if (/\bnew (website|project|site)\b|start (new|over)|fresh (website|design)/.test(txt)) {
+                window._forceNewWebsite = true;
+            }
+        });
+
+        if (typeof window.startNewGenerationSession === 'function') {
+            const originalStart = window.startNewGenerationSession;
+            window.startNewGenerationSession = function(...args) {
+                window._forceNewWebsite = true;
+                return originalStart.apply(this, args);
+            };
+        }
+
+        // Page dropdown changes are handled only by handlePageDropdown() (inline onchange).
+    });
+
+    async function runLiveConstructionSequence(files) {
+        hideProgressOverlay(); 
+        const pages = Object.keys(files).filter(f => f.endsWith('.html'));
+        if (pages.length === 0) return;
+        window.isBuildingSequenceActive = true;
+        updateStatus("✨ Rendering Final Frontend UI...");
+        
+        const mainPage = pages.includes('index.html') ? 'index.html' : pages[0];
+        await loadPreview(mainPage);
+        
+        if (window.isBuildingSequenceActive) updateStatus("✅ Website generation complete. Ready for edits.");
+        window.isBuildingSequenceActive = false;
+    }
+
+    window.previewThrottleTimer = null;
+    window.latestStreamedCode = "";
+
+    function updateLivePreview(jsonStreamText) {
+        if (typeof appConfigData !== 'undefined' && !(appConfigData.show_live_preview === true || appConfigData.show_live_preview === 'true')) {
+            return; 
+        }
+
+        window.latestStreamedCode = jsonStreamText;
+        if (window.previewThrottleTimer) return;
+
+        window.previewThrottleTimer = setTimeout(() => {
+            window.previewThrottleTimer = null; 
+
+            const iframe = document.getElementById('preview-frame');
+            if (!iframe) return;
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+            const cssKeyStr = '"styles.css":';
+            const cssStartIdx = window.latestStreamedCode.indexOf(cssKeyStr);
+            if (cssStartIdx !== -1) {
+                const contentStartIdx = window.latestStreamedCode.indexOf('"', cssStartIdx + cssKeyStr.length);
+                if (contentStartIdx !== -1) {
+                    let partialCss = window.latestStreamedCode.substring(contentStartIdx + 1);
+                    const nextKeyIdx = partialCss.indexOf('", "');
+                    if (nextKeyIdx !== -1) partialCss = partialCss.substring(0, nextKeyIdx);
+
+                    let liveCss = partialCss.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+                    liveCss = liveCss.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
+                    
+                    window.currentCssBuffer = liveCss;
+                }
+            }
+
+            const htmlKeyStr = '"index.html":';
+            const htmlStartIdx = window.latestStreamedCode.indexOf(htmlKeyStr);
+            if (htmlStartIdx !== -1) {
+                const contentStartIdx = window.latestStreamedCode.indexOf('"', htmlStartIdx + htmlKeyStr.length);
+                if (contentStartIdx !== -1) {
+                    let partialRaw = window.latestStreamedCode.substring(contentStartIdx + 1);
+                    const nextKeyIdx = partialRaw.indexOf('", "');
+                    if (nextKeyIdx !== -1) partialRaw = partialRaw.substring(0, nextKeyIdx);
+
+                    let liveHtml = partialRaw
+                        .replace(/\\n/g, '\n')
+                        .replace(/\\"/g, '"')
+                        .replace(/\\t/g, '\t')
+                        .replace(/\\\\/g, '\\');
+
+                    liveHtml = liveHtml.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
+                    liveHtml = liveHtml.replace(/<link[^>]+href=["']styles\.css["'][^>]*>/gi, '');
+                    
+                    if (typeof currentCssBuffer !== 'undefined' && currentCssBuffer) {
+                        if (liveHtml.includes('</head>')) {
+                            liveHtml = liveHtml.replace('</head>', `<style id="live-styles">${currentCssBuffer}</style></head>`);
+                        } else {
+                            liveHtml += `<style id="live-styles">${currentCssBuffer}</style>`;
+                        }
+                    } else if (!liveHtml.includes('<style id="live-styles">')) {
+                        liveHtml += '<style id="live-styles">body{font-family:sans-serif; padding:20px; transition:all 0.3s;} section{border:1px dashed #ccc; padding:10px; margin-bottom:10px; opacity:0.8;} img{max-width:100%; height:auto; background:#eee; min-height:100px; display:block;}</style>';
+                    }
+
+                    iframeDoc.documentElement.innerHTML = liveHtml;
+                }
+            }
+        }, 800); 
+    }
+
+    function checkProjectLimit() {
+        return fetch('/api/check_project_limit')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.allowed) {
+                    const modal = document.getElementById('limit-reached-modal');
+                    if(modal) modal.style.display = 'flex';
+                    else alert("Project Limit Reached. Please upgrade or delete old projects.");
+                    return false;
+                }
+                return true;
+            })
+            .catch(() => true);
+    }
+
+    async function generateWebsite() {
+        const promptInput = document.getElementById('prompt-input');
+        if(!promptInput) return;
+        
+        let rawPrompt = promptInput.value.trim();
+        if (!rawPrompt) { updateStatus("Please enter a prompt.", true); return; }
+        
+        if (typeof checkProjectLimit === 'function') {
+            const canProceed = await checkProjectLimit();
+            if(!canProceed) {
+                updateStatus("❌ Project Limit Reached. Cannot generate.", true);
+                return;
+            }
+        }
+        
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const voiceEditButton = document.getElementById('voice-edit-btn');
+            if(voiceEditButton && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(voiceEditButton);
+        }
+
+        const lowerPrompt = rawPrompt.toLowerCase();
+        const isNewWebsiteRequest = /(create|build|generate|make|design)\b.{0,20}\b(new|another|fresh|different)\b.{0,20}\b(website|site|web site)\b|start\s+over|from\s+scratch/i.test(lowerPrompt);
+        let isFreshSession = (typeof generatedFiles === 'undefined' || Object.keys(generatedFiles).length === 0);
+
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument && iframe.contentDocument.body) {
+            const bodyHtml = iframe.contentDocument.body.innerHTML.replace(/\s+/g, '');
+            if (bodyHtml.length < 250 && !bodyHtml.includes('<section') && !bodyHtml.includes('<nav')) {
+                isFreshSession = true;
+            }
+        }
+
+        if (window._forceNewWebsite === true) {
+            isFreshSession = true;
+            window._forceNewWebsite = false; 
+        }
+
+        let is_new_generation = false;
+        let promptToSend = rawPrompt;
+
+        if (isNewWebsiteRequest || isFreshSession) {
+            const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+            session.activeProject = null;
+            session.active_project = null;
+            localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+            window.currentChatHistory = [];
+            window.generatedFiles = {}; 
+            currentChatHistory = [];
+            generatedFiles = {};
+            updateStatus("Starting a new website project...");
+            is_new_generation = true; 
+            
+            if (!lowerPrompt.includes("create a new website") && !lowerPrompt.includes("create new website")) {
+                promptToSend = "Create a new website: " + rawPrompt;
+            }
+            
+            window.isSwitchingPage = true;
+            window.localHistory = [];
+            window.localHistoryIndex = -1;
+            
+            if (iframe) {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                if(doc) { doc.open(); doc.write(''); doc.close(); }
+            }
+            if (typeof updatePageDropdown === 'function') updatePageDropdown();
+        } else if (typeof generatedFiles !== 'undefined' && Object.keys(generatedFiles).length > 0) {
+            if(typeof currentChatHistory !== 'undefined') {
+                if(currentChatHistory.length === 0 || !currentChatHistory.some(msg => msg.parts[0].text.includes("[SYSTEM NOTE]"))) {
+                     currentChatHistory.push({ 
+                         role: "user", 
+                         parts: [{ text: "[SYSTEM NOTE] We are modifying the existing loaded template/website. Keep the current layout and overall structure, just apply the specific changes requested in the next prompts." }] 
+                     });
+                }
+            }
+        }
+
+        if(typeof currentChatHistory !== 'undefined') currentChatHistory.push({ role: "user", parts: [{ text: promptToSend }] });
+        
+        appendMessage('user', promptToSend);
+        promptInput.value = '';
+
+        window.abortController = new AbortController();
+        const signal = window.abortController.signal;
+        showProgressOverlay("Connecting...");
+        updateStatus("AI is developing the UI...");
+
+        const codeView = document.getElementById('code-stream-view');
+        if (codeView) {
+            codeView.style.display = 'none';
+        }
+
+        let fastPercent = 0;
+        if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+        window.fastProgressInterval = setInterval(() => {
+            if (fastPercent < 85) {
+                fastPercent += Math.floor(Math.random() * 4) + 1;
+                if (fastPercent > 85) fastPercent = 85;
+                updateProgressCircle(fastPercent, "Connecting & Building...");
+            }
+        }, 300);
+
+        try {
+            const response = await fetch('/generate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: window.currentChatHistory || [], is_new_generation: is_new_generation }),
+                signal: signal
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || errData.error || `HTTP error! status: ${response.status}`);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullStreamedCode = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop(); 
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.substring(6);
+                        try {
+                            const eventData = JSON.parse(jsonStr);
+                            
+                            if (eventData.type === 'error') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+                                hideProgressOverlay();
+                                if (codeView) codeView.style.display = 'none';
+                                
+                                if (typeof showGenerationErrorModal === 'function') {
+                                    showGenerationErrorModal(eventData.message);
+                                } else {
+                                    updateStatus(`API Error: ${eventData.message}`, true);
+                                    alert(eventData.message);
+                                }
+                                
+                                const chatDisplay = document.getElementById('chat-display');
+                                if (chatDisplay) {
+                                    const lastAiMsg = chatDisplay.lastElementChild;
+                                    if(lastAiMsg && lastAiMsg.classList.contains('ai-message')) {
+                                        lastAiMsg.innerHTML = `⚠️ Generation stopped due to an error.`;
+                                        lastAiMsg.style.color = "#dc3545";
+                                    }
+                                }
+                                return; 
+                            }
+                            
+                            else if (eventData.type === 'queue') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+                                updateProgressCircle(0, "Queue Position: " + eventData.position);
+                                updateStatus(`Server busy. Waiting in queue... Position: ${eventData.position}`);
+                                if (codeView) codeView.style.display = 'none';
+                            }
+                            
+                            else if (eventData.type === 'chunk') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval); 
+                                fullStreamedCode += eventData.content;
+                                updateLivePreview(fullStreamedCode);
+                                
+                                const pSpan = document.getElementById('progress-percent');
+                                const currentPercent = pSpan ? (parseInt(pSpan.innerText) || 0) : 0;
+                                const estimatedTotalLength = 35000; 
+                                let calculatedPercent = Math.min(95, Math.floor((fullStreamedCode.length / estimatedTotalLength) * 100));
+                                let nextPercent = Math.max(currentPercent, calculatedPercent);
+                                if (nextPercent === currentPercent && currentPercent < 95) nextPercent += 1; 
+
+                                updateProgressCircle(nextPercent, "Writing Code...");
+                                
+                                if (typeof window.updateGenerationSteps === 'function') {
+                                    window.updateGenerationSteps(nextPercent, fullStreamedCode);
+                                }
+
+                            } 
+                            else if (eventData.type === 'complete') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+                                updateProgressCircle(100, "Finishing...");
+                                
+                                if (typeof window.updateGenerationSteps === 'function') {
+                                    window.updateGenerationSteps(100, fullStreamedCode);
+                                }
+
+                                if (codeView) codeView.style.display = 'none'; 
+                                window.generatedFiles = eventData.files;
+                                updatePreviewControls();
+                                if(typeof listProjects === 'function') listProjects();
+                                updateStatus("Code received. Polishing Preview...");
+                                runLiveConstructionSequence(window.generatedFiles);
+                            }
+                        } catch (e) { 
+                        }
+                    }
+                }
+            }
+        } catch (error) {
+            if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+            if (error.name === 'AbortError') { 
+                console.log('Fetch aborted'); 
+            } else { 
+                hideProgressOverlay(); 
+                
+                const chatDisplay = document.getElementById('chat-display');
+                if (chatDisplay) {
+                    const lastAiMsg = chatDisplay.lastElementChild;
+                    if(lastAiMsg && lastAiMsg.classList.contains('ai-message')) {
+                        lastAiMsg.innerHTML = `⚠️ <b>Generation Stopped.</b><br>Please view the error popup for details.`;
+                        lastAiMsg.style.color = "#dc3545";
+                    }
+                }
+                
+                if (typeof showGenerationErrorModal === 'function') {
+                    showGenerationErrorModal(error.message);
+                } else {
+                    updateStatus(`Error: ${error.message}`, true); 
+                    alert(error.message);
+                }
+            }
+        }
+    }
+
+    function undoAction() {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        if (typeof localHistoryIndex !== 'undefined' && typeof localHistory !== 'undefined' && localHistoryIndex > 0) {
+            window.localHistoryIndex--;
+            const html = localHistory[localHistoryIndex];
+            restoreHTML(html);
+            updateStatus("Undo successful.");
+            checkHistoryStatus();
+        }
+    }
+
+    function redoAction() {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        if (typeof localHistoryIndex !== 'undefined' && typeof localHistory !== 'undefined' && localHistoryIndex < localHistory.length - 1) {
+            window.localHistoryIndex++;
+            const html = localHistory[localHistoryIndex];
+            restoreHTML(html);
+            updateStatus("Redo successful.");
+            checkHistoryStatus();
+        }
+    }
+
+    function restoreHTML(html) {
+        const iframe = document.getElementById('preview-frame');
+        if(!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.body.innerHTML = html;
+        if (typeof initEditor === 'function') initEditor(iframe); 
+        const saveBtn = document.getElementById('save-btn');
+        if(saveBtn) saveBtn.disabled = false;
+    }
+
+    // =========================================================================
+    // GOAL 1 & 2 FIX: ROBUST "SAVE AS" AND BACKEND SYNC LOGIC
+    // =========================================================================
+    
+    window._performSaveProjectAs = function(projName, skipReload) {
+        showProgressOverlay("Saving Project Workspace...");
+        
+        fetch('/save_project', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ project_name: projName }) 
+        })
+        .then(r => r.json())
+        .then(d => { 
+            if (d.success) { 
+                updateProgressCircle(100, "Done!");
+                updateStatus(d.message); 
+                
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                session.activeProject = projName; 
+                session.active_project = projName; // Fallback sync
+                localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+                if (typeof listProjects === 'function') listProjects(); 
+
+                setTimeout(() => {
+                    hideProgressOverlay();
+                    const saveBtn = document.getElementById('save-btn');
+                    if (saveBtn) {
+                        saveBtn.textContent = "Saved";
+                        saveBtn.disabled = true;
+                    }
+                    if (!skipReload && typeof loadProjectByName === 'function') {
+                        loadProjectByName(projName);
+                    }
+                }, 500);
+
+            } else { 
+                updateStatus(`Save Failed: ${d.error}`, true); 
+                setTimeout(() => { hideProgressOverlay(); }, 800);
+            }
+        })
+        .catch(err => {
+            hideProgressOverlay();
+            updateStatus(`Save Error: ${err.message}`, true);
+        });
+    };
+
+    window.saveProject = async function(isSaveAs = false, skipReload = true) {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        if (typeof checkProjectLimit === 'function') {
+            const canProceed = await checkProjectLimit();
+            if(!canProceed) return;
+        }
+
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        const currentName = session.activeProject || session.active_project || "MyWebsite";
+
+        let projName = "MyProject";
+        if (isSaveAs || (!session.activeProject && !session.active_project)) {
+            projName = prompt("Enter a name for your project to save it to your workspace:", currentName);
+        } else {
+            projName = currentName; 
+        }
+        if (!projName) return; 
+        
+        updateStatus("Syncing edits before saving...");
+
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
+        let newBody = "";
+        
+        if (doc) {
+            if (typeof window.getCleanFullContent === 'function') {
+                newBody = window.getCleanFullContent(doc);
+            } else {
+                const clone = doc.body.cloneNode(true);
+                clone.querySelectorAll('.bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar').forEach(c => c.remove());
+                newBody = clone.innerHTML;
+            }
+        }
+
+        const previewFile = typeof currentPreviewFile !== 'undefined' && currentPreviewFile ? currentPreviewFile : 'index.html';
+
+        if (newBody) {
+            fetch('/save', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: previewFile, new_body_content: newBody })
+            }).then(r => r.json()).then(data => {
+                window._performSaveProjectAs(projName, skipReload);
+            }).catch(err => {
+                window._performSaveProjectAs(projName, skipReload); 
+            });
+        } else {
+            window._performSaveProjectAs(projName, skipReload);
+        }
+    };
+
+    window.saveContent = function() {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        const iframe = document.getElementById('preview-frame');
+        if(!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        let newBodyContent = "";
+        
+        if (typeof window.getCleanFullContent === 'function') {
+            newBodyContent = window.getCleanFullContent(doc);
+        } else {
+            const clone = doc.body.cloneNode(true);
+            clone.querySelectorAll('.bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar').forEach(c => c.remove());
+            newBodyContent = clone.innerHTML;
+        }
+
+        if(typeof currentPreviewFile !== 'undefined' && currentPreviewFile) {
+            if (typeof generatedFiles !== 'undefined') {
+                generatedFiles[currentPreviewFile] = newBodyContent;
+            }
+        }
+
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        
+        if (!session.activeProject && !session.active_project) {
+            updateStatus("Please name your project to save edits...");
+            if (typeof window.saveProject === 'function') {
+                window.saveProject(true, true); 
+            }
+            return; 
+        }
+
+        if(typeof currentPreviewFile !== 'undefined') {
+            updateStatus(`Saving ${currentPreviewFile}...`);
+        }
+
+        const saveBtn = document.getElementById('save-btn');
+        if (saveBtn) {
+            saveBtn.textContent = "Saving...";
+            saveBtn.disabled = true;
+        }
+
+        fetch('/save', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: typeof currentPreviewFile !== 'undefined' ? currentPreviewFile : 'index.html', new_body_content: newBodyContent })
+        }).then(response => response.json()).then(data => {
+            if (data.success) {
+                updateStatus(`Saved ${typeof currentPreviewFile !== 'undefined' ? currentPreviewFile : 'index.html'}.`);
+                if (saveBtn) {
+                    saveBtn.textContent = "Saved";
+                    saveBtn.disabled = true; 
+                }
+                if (data.saved_content) { 
+                    window.isRestoring = true;
+                    if(typeof initEditor === 'function') initEditor(iframe); 
+                    setTimeout(() => { window.isRestoring = false; }, 300);
+                }
+            } else { 
+                updateStatus(`Save Failed: ${data.error}`, true); 
+                if (typeof enableSaveButton === 'function') enableSaveButton();
+            }
+        }).catch(err => {
+            updateStatus(`Save Error: ${err.message}`, true);
+            if (typeof enableSaveButton === 'function') enableSaveButton();
+        });
+    };
+
+    function toggleProjectMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('project-menu');
+        if(!menu) return;
+        if (menu.style.display === 'block') {
+            menu.style.display = 'none';
+        } else { 
+            const searchInput = document.getElementById('project-search-input');
+            if (searchInput) {
+                searchInput.value = ''; 
+            }
+            if(typeof listProjects === 'function') listProjects(); 
+            menu.style.display = 'block'; 
+        }
+    }
+    
+    function closeProjectMenu() { 
+        const menu = document.getElementById('project-menu');
+        if(menu) menu.style.display = 'none'; 
+    }
+
+    function filterProjects() {
+        const input = document.getElementById('project-search-input');
+        if(!input) return;
+        const query = input.value.toLowerCase();
+        const items = document.querySelectorAll('.project-list-content .project-item');
+        let visibleCount = 0;
+        
+        items.forEach(item => {
+            const nameSpan = item.querySelector('.project-name-span');
+            if (nameSpan) {
+                const name = nameSpan.textContent.toLowerCase();
+                if (name.includes(query)) {
+                    item.style.display = 'flex'; 
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            }
+        });
+        
+        const menuContent = document.querySelector('.project-list-content');
+        let noMsg = document.getElementById('project-search-no-msg');
+        
+        if (visibleCount === 0 && items.length > 0) {
+            if (!noMsg) {
+                noMsg = document.createElement('div');
+                noMsg.id = 'project-search-no-msg';
+                noMsg.style.cssText = 'padding:10px; color:#aaa; font-size:0.9em; text-align:center;';
+                noMsg.textContent = 'No projects match your search.';
+                menuContent.appendChild(noMsg);
+            } else {
+                noMsg.style.display = 'block';
+            }
+        } else if (noMsg) {
+            noMsg.style.display = 'none';
+        }
+    }
+
+    function listProjects() {
+        fetch('/list_projects').then(r => r.json()).then(data => {
+            const menuContent = document.querySelector('.project-list-content');
+            if(!menuContent) return;
+            menuContent.innerHTML = ''; 
+            if (data.projects.length === 0) { menuContent.innerHTML = '<div style="padding:10px; color:#aaa; font-size:0.9em;">No projects saved.</div>'; return; }
+            data.projects.forEach(project => {
+                const itemDiv = document.createElement('div'); itemDiv.className = 'project-item';
+                
+                const nameSpan = document.createElement('span'); 
+                nameSpan.className = 'project-name-span'; 
+                nameSpan.textContent = project; 
+                nameSpan.onclick = () => { if(typeof loadProjectByName === 'function') loadProjectByName(project); };
+                
+                const controlsDiv = document.createElement('div');
+                controlsDiv.style.display = 'flex';
+                controlsDiv.style.alignItems = 'center';
+
+                const editBtn = document.createElement('button'); 
+                editBtn.className = 'edit-project-btn'; 
+                editBtn.innerHTML = '✎';
+                editBtn.title = "Rename Project";
+                editBtn.onclick = (e) => { e.stopPropagation(); renameProject(project); };
+
+                const deleteBtn = document.createElement('button'); 
+                deleteBtn.className = 'delete-project-btn'; 
+                deleteBtn.innerHTML = '✕'; 
+                deleteBtn.title = "Delete Project";
+                deleteBtn.onclick = (e) => { e.stopPropagation(); deleteProject(project); };
+                
+                controlsDiv.appendChild(editBtn);
+                controlsDiv.appendChild(deleteBtn);
+
+                itemDiv.appendChild(nameSpan); 
+                itemDiv.appendChild(controlsDiv); 
+                menuContent.appendChild(itemDiv);
+            });
+            if(typeof filterProjects === 'function') filterProjects();
+        });
+    }
+
+    function renameProject(oldName) {
+        const newName = prompt("Enter new name for project:", oldName);
+        if (!newName || newName === oldName) return;
+
+        fetch('/rename_project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_name: oldName, new_name: newName })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                updateStatus(d.message);
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                if(session.activeProject === oldName) {
+                    session.activeProject = newName;
+                    localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                }
+                if (typeof listProjects === 'function') listProjects();
+            } else {
+                updateStatus(`Rename Failed: ${d.error}`, true);
+            }
+        })
+        .catch(err => { updateStatus("Error renaming project.", true); });
+    }
+
+    function loadProjectByName(name) {
+        closeProjectMenu(); 
+        
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        updateStatus(`Loading project '${name}'...`); 
+        showProgressOverlay("Loading..."); 
+        hideCodeStream(); 
+        
+        fetch('/load_project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: name }) }).then(r => r.json()).then(data => {
+            hideProgressOverlay();
+            if (data.success) {
+                
+                window.isSwitchingPage = true;
+                window.localHistory = [];
+                window.localHistoryIndex = -1;
+
+                window.generatedFiles = data.files; 
+                window.currentChatHistory = data.prompts || []; 
+                
+                const chatDisplay = document.getElementById('chat-display');
+                if(chatDisplay) chatDisplay.innerHTML = ''; 
+                
+                if (typeof enableSaveButton === 'function') enableSaveButton();
+                
+                loadPreview(data.current_page); 
+                updatePreviewControls(); 
+                
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                session.activeProject = name;
+                session.active_project = name;
+                localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                
+                if(typeof checkHistoryStatus === 'function') checkHistoryStatus(); 
+                updateStatus(data.message);
+            } else { updateStatus(`Load Failed: ${data.error}`, true); }
+        }).catch(err => {
+            hideProgressOverlay();
+            updateStatus("Network error loading project.", true);
+        });
+    }
+    
+    function deleteProject(name) {
+        if(!confirm(`Delete '${name}'?`)) return;
+        fetch('/delete_project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: name }) })
+        .then(r => r.json()).then(d => { 
+            if (d.success) { 
+                updateStatus(d.message); 
+                
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                if(session.activeProject === name) {
+                    session.activeProject = null;
+                    localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                }
+                
+                if(typeof listProjects === 'function') listProjects(); 
+            } else { 
+                updateStatus(`Error: ${d.error}`, true); 
+            } 
+        });
+    }
+
+    function openNewWindow() { 
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if(btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        window.open(window.location.origin + `/preview/${typeof currentPreviewFile !== 'undefined' ? currentPreviewFile : 'index.html'}`, '_blank'); 
+    }
+
+    window.downloadWebsite = function() {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if(btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        updateStatus("Preparing download...");
+        
+        fetch('/download', { method: 'POST' }).then(r => {
+            if (r.status === 403) {
+                return r.json().then(data => {
+                    if (data.needs_upgrade) {
+                        if(confirm(data.message + "\n\nClick OK to view upgrade plans.")) {
+                            if(typeof openPlanSelectionModal === 'function') openPlanSelectionModal();
+                        }
+                    } else {
+                        alert(data.error || "Permission denied.");
+                    }
+                    throw new Error("Upgrade Required");
+                });
+            }
+            if (!r.ok) throw new Error('Download failed');
+            
+            const disp = r.headers.get('Content-Disposition');
+            let filename = 'website.zip';
+            if (disp && disp.indexOf('attachment') !== -1) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
+                if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+            }
+            return r.blob().then(blob => ({ blob, filename }));
+        }).then(({blob, filename}) => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.style.display = 'none'; a.href = url; a.download = filename; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a); updateStatus("✅ Download started!");
+        }).catch(e => {
+            if(e.message !== "Upgrade Required") alert("Download Error: " + e.message);
+        });
+    }
+
+    function getLocalSession() {
+        try { return JSON.parse(localStorage.getItem('ai_web_builder_session')) || {}; }
+        catch (e) { return {}; }
+    }
+</script>

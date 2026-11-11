@@ -1,0 +1,800 @@
+<div id="tab-users" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">👥 Manage Users</h3>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <input type="text" id="user-search" placeholder="Search by name or email..." class="auth-input" style="width:300px; margin:0;">
+                        <button onclick="loadAdminUsers()" style="background:#17a2b8; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Refresh List</button>
+                    </div>
+                    <table class="user-table">
+                        <thead><tr><th>ID</th><th>User</th><th>Contact</th><th>Role / Type</th><th>Verified</th><th>Status / Actions</th></tr></thead>
+                        <tbody id="user-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-usertypes" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                        <div>
+                            <h3 style="margin-top:0; margin-bottom:5px;">🏅 User Types & Limits</h3>
+                            <p style="color:#666; margin:0;">Define user roles and generation limits.</p>
+                        </div>
+                        <button onclick="openNewUserTypeModal()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">+ Add New User Type</button>
+                    </div>
+
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Type Name</th>
+                                <th>Projects</th>
+                                <th>Images Limit</th>
+                                <th>Storage Limit</th>
+                                <th>Default</th>
+                                <th>Users</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usertypes-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-plans" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">💎 Subscription Plans</h3>
+                    <p style="color:#666;">Create pricing plans. Use the "Direct Link" to embed purchase links on external pages.</p>
+                    
+                    <div style="background:#f0f8ff; padding:20px; border-radius:6px; border:1px solid #cce5ff; margin-bottom:20px;">
+                        <h4 style="margin-top:0;">Create New Plan</h4>
+                        <div style="display:flex; gap:15px; flex-wrap:wrap;">
+                            <div style="flex:1; min-width:200px;">
+                                <label style="font-weight:bold; font-size:0.9em;">Plan Name</label>
+                                <input type="text" id="new-plan-name" class="auth-input" placeholder="e.g. Premium Starter">
+                            </div>
+                            <div style="flex:1; min-width:150px;">
+                                <label style="font-weight:bold; font-size:0.9em;">Price</label>
+                                <div style="display:flex; gap:5px;">
+                                    <input type="number" id="new-plan-price" class="auth-input" placeholder="0.00" step="0.01">
+                                    <select id="new-plan-currency" class="auth-input" style="width:80px;">
+                                        <option value="USD">USD</option>
+                                        <option value="EUR">EUR</option>
+                                        <option value="GBP">GBP</option>
+                                        <option value="INR">INR</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="flex:1; min-width:120px;">
+                                <label style="font-weight:bold; font-size:0.9em;">Billing Cycle</label>
+                                <select id="new-plan-billing-cycle" class="auth-input">
+                                    <option value="monthly">Monthly</option>
+                                    <option value="yearly">Yearly</option>
+                                    <option value="lifetime">Lifetime</option>
+                                </select>
+                            </div>
+                            <div style="flex:1; min-width:200px;">
+                                <label style="font-weight:bold; font-size:0.9em;">Link to User Type</label>
+                                <select id="new-plan-usertype" class="auth-input">
+                                    <option value="" disabled selected>Select User Type...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div style="margin-top:10px;">
+                            <label style="font-weight:bold; font-size:0.9em;">Features List (One per line)</label>
+                            <textarea id="new-plan-features" class="auth-input" style="height:80px;" placeholder="e.g. &#10;Unlimited Projects&#10;Access to GPT-4&#10;Priority Support"></textarea>
+                        </div>
+                        <button onclick="createSubscriptionPlan()" style="background:#007bff; color:white; border:none; padding:10px 20px; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:10px;">+ Create Plan</button>
+                    </div>
+
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Price</th>
+                                <th>Billing Cycle</th>
+                                <th>Linked Type</th>
+                                <th>Features</th>
+                                <th>Direct Link</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="plans-table-body"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-payments" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">💳 Payment Gateways & Currency</h3>
+                    
+                    <div class="settings-group" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-bottom:15px;">
+                        <label style="color: #28a745;">💱 Global Currency Settings</label>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <label style="margin:0; font-weight:normal;">Default Store Currency:</label>
+                            <select id="admin-currency-select" class="auth-input" style="width:100px; margin:0;" onchange="saveCurrencySettings()">
+                                <option value="USD">USD ($)</option>
+                                <option value="EUR">EUR (€)</option>
+                                <option value="GBP">GBP (£)</option>
+                                <option value="INR">INR (₹)</option>
+                                <option value="CAD">CAD ($)</option>
+                                <option value="AUD">AUD ($)</option>
+                                <option value="JPY">JPY (¥)</option>
+                            </select>
+                            <button class="auth-btn" style="width:auto; padding: 8px 15px; margin-top:0;" onclick="saveCurrencySettings()">Update Currency</button>
+                        </div>
+                    </div>
+
+                    <div class="settings-group" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-bottom:15px;">
+                        <label style="color: #28a745;">🛒 Global Tax Settings (Checkout)</label>
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                            <input type="checkbox" id="admin-tax-enabled">
+                            <span><b>Enable Tax Calculation during Checkout</b></span>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <label style="margin:0; font-weight:normal;">Tax Percentage (%):</label>
+                            <input type="number" id="admin-tax-percentage" class="auth-input" style="width:80px; margin:0;" placeholder="e.g. 18" step="0.1" min="0">
+                        </div>
+                        <p style="font-size:0.8em; color:#666; margin-top:5px;">If enabled, this percentage will be added to the final price of Subscription Plans when users purchase them.</p>
+                        <button class="auth-btn" style="width:auto; padding: 8px 15px; margin-top:10px;" onclick="saveAdminSettings()">Save Tax Settings</button>
+                    </div>
+
+                    <h4 style="margin-bottom:10px;">Configured Gateways</h4>
+                    <div id="payment-gateways-container">
+                        <div style="text-align:center; padding:20px; color:#aaa;">Loading Gateways...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-api-key-reqs" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3 style="margin-top:0;">🔑 API Key Purchase Requests</h3>
+                            <p style="color:#666; font-size:13px; margin:4px 0 0 0;">Manage user requests to purchase dedicated AI API Keys.</p>
+                        </div>
+                        <button onclick="loadAdminApiKeyRequests()" style="background:#17a2b8; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">🔄 Refresh</button>
+                    </div>
+
+                    <table class="user-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>User Email</th>
+                                <th>Provider</th>
+                                <th>Amount ($)</th>
+                                <th>Status</th>
+                                <th>Assigned Key</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-api-key-reqs-tbody">
+                            <tr><td colspan="7" style="text-align:center; padding:20px; color:#888;">Loading requests...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div id="tab-notifs" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">✉️ Messages & Notifications</h3>
+                    
+                    <div style="display:flex; gap:20px; flex-wrap:wrap;">
+                        <div style="flex: 1; min-width:300px; border-right:1px solid #eee; padding-right:20px;">
+                            <h4>📢 Broadcast / Send Notification</h4>
+                            <div class="settings-group">
+                                <label>Recipient</label>
+                                <select id="admin-notif-target" class="auth-input">
+                                    <option value="all">📢 All Users (Broadcast)</option>
+                                </select>
+                            </div>
+                            <div class="settings-group">
+                                <label>Subject</label>
+                                <input type="text" id="admin-notif-subject" class="auth-input" placeholder="e.g. System Update">
+                            </div>
+                            <div class="settings-group">
+                                <label>Message</label>
+                                <textarea id="admin-notif-body" class="auth-input" style="height:100px;" placeholder="Enter message..."></textarea>
+                            </div>
+                            <button class="auth-btn" onclick="sendAdminNotification()">Send Notification</button>
+                        </div>
+
+                        <div style="flex: 1.5; min-width:300px; padding-left:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <h4>📥 User Messages (Inbox)</h4>
+                                <button onclick="loadAdminMessages()" style="font-size:0.8em; background:none; border:none; color:#007bff; cursor:pointer;">Force Refresh</button>
+                            </div>
+                            <div id="admin-msg-inbox" style="background:#f9f9f9; border:1px solid #eee; height:450px; overflow-y:auto; border-radius:4px;">
+                                <div style="padding:20px; text-align:center; color:#888;">Loading messages...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div id="tab-ai" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">🤖 AI & System Configuration</h3>
+                    
+                    <div class="settings-group" style="background: #f8f9fa; padding: 15px; border-radius: 5px; border: 1px solid #e9ecef; margin-bottom: 20px;">
+                        <label style="color: #007bff;">🚀 Active Generation Provider</label>
+                        <select id="admin-ai-provider" class="auth-input" style="font-weight:bold;" onchange="window.toggleProviderSettings()">
+                            <option value="gemini">Google Gemini (Default)</option>
+                            <option value="openai">ChatGPT (OpenAI)</option>
+                            <option value="claude">Claude (Anthropic)</option>
+                            <option value="deepseek">DeepSeek</option>
+                            <option value="grok">xAI (Grok)</option>
+                            <option value="meta">Meta AI (Llama)</option>
+                            <option value="perplexity">Perplexity AI</option>
+                        </select>
+                        <p style="font-size:0.8em; color:#666; margin-top:5px;">Select which AI model handles website generation requests.</p>
+                    </div>
+
+                    <div style="display:flex; gap:10px; margin-bottom:20px; border-bottom: 2px solid #eee; padding-bottom: 10px; overflow-x: auto;">
+                        <button class="ai-conf-btn active" onclick="switchAiConfTab('keys', this)" style="padding:8px 15px; cursor:pointer; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; white-space:nowrap;">🔑 API Keys</button>
+                        <button class="ai-conf-btn" onclick="switchAiConfTab('model', this)" style="padding:8px 15px; cursor:pointer; background:#6c757d; color:white; border:none; border-radius:4px; font-weight:bold; white-space:nowrap;">🧠 AI Model</button>
+                        <button class="ai-conf-btn" onclick="switchAiConfTab('instructions', this)" style="padding:8px 15px; cursor:pointer; background:#6c757d; color:white; border:none; border-radius:4px; font-weight:bold; white-space:nowrap;">📜 System Instructions</button>
+                        <button class="ai-conf-btn" onclick="switchAiConfTab('design', this)" style="padding:8px 15px; cursor:pointer; background:#6c757d; color:white; border:none; border-radius:4px; font-weight:bold; white-space:nowrap;">🎨 Look & Feel</button>
+                        <button class="ai-conf-btn" onclick="switchAiConfTab('pages', this)" style="padding:8px 15px; cursor:pointer; background:#6c757d; color:white; border:none; border-radius:4px; font-weight:bold; white-space:nowrap;">📄 Default Pages</button>
+                    </div>
+
+                    <div id="ai-conf-keys" class="ai-conf-section" style="display:block;">
+                        <div class="provider-key-view provider-gemini">
+                            <div class="settings-group">
+                                <label>Google Gemini API Keys</label>
+                                <div id="keys-container-gemini"></div>
+                                <button onclick="addKeyField('gemini')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                        <div class="provider-key-view provider-openai" style="display:none;">
+                            <div class="settings-group">
+                                <label>OpenAI API Keys (ChatGPT)</label>
+                                <div id="keys-container-openai"></div>
+                                <button onclick="addKeyField('openai')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                        <div class="provider-key-view provider-claude" style="display:none;">
+                            <div class="settings-group">
+                                <label>Claude API Keys (Anthropic)</label>
+                                <div id="keys-container-claude"></div>
+                                <button onclick="addKeyField('claude')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                        <div class="provider-key-view provider-deepseek" style="display:none;">
+                            <div class="settings-group">
+                                <label>DeepSeek API Keys</label>
+                                <div id="keys-container-deepseek"></div>
+                                <button onclick="addKeyField('deepseek')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                        <div class="provider-key-view provider-grok" style="display:none;">
+                            <div class="settings-group">
+                                <label>xAI API Keys (Grok)</label>
+                                <div id="keys-container-grok"></div>
+                                <button onclick="addKeyField('grok')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                        <div class="provider-key-view provider-meta" style="display:none;">
+                            <div class="settings-group">
+                                <label>Meta AI API Keys (Llama Provider)</label>
+                                <div id="keys-container-meta"></div>
+                                <button onclick="addKeyField('meta')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                        <div class="provider-key-view provider-perplexity" style="display:none;">
+                            <div class="settings-group">
+                                <label>Perplexity API Keys</label>
+                                <div id="keys-container-perplexity"></div>
+                                <button onclick="addKeyField('perplexity')" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; font-size:12px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="ai-conf-model" class="ai-conf-section" style="display:none;">
+                        
+                        <div class="provider-model-view provider-gemini">
+                            <label style="font-weight:bold; color: #007bff;">Gemini Text Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-gemini-select" class="auth-input" onchange="toggleCustomModel('gemini')">
+                                       <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                                        <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+					<option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview</option>
+                                 
+                                    
+                                    <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-gemini-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #007bff; margin-top: 15px; display:block;">Gemini Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-gemini-select" class="auth-input" onchange="toggleCustomImageModel('gemini')">
+                                    <option value="imagen-4.0-generate-001">imagen-4.0-generate-001</option>
+                                    <option value="imagen-3.0-generate-002">imagen-3.0-generate-002</option>
+                                     
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-gemini-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #007bff; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-gemini-select" class="auth-input" onchange="window.toggleAdminTokenLimit('gemini')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-gemini-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+                        
+                        <div class="provider-model-view provider-openai" style="display:none;">
+                            <label style="font-weight:bold; color: #10a37f;">OpenAI Text Model Selection (ChatGPT)</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-openai-select" class="auth-input" onchange="toggleCustomModel('openai')">
+                                    <option value="gpt-4.1">gpt-4.1</option>
+				     <option value="gpt-5.4">gpt-5.4</option>
+                                   <option value="gpt-5.5">gpt-5.5</option>
+				    <option value="gpt-4o">gpt-4o</option>
+                                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                    <option value="gpt-4-turbo">gpt-4-turbo</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-openai-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #10a37f; margin-top: 15px; display:block;">OpenAI Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-openai-select" class="auth-input" onchange="toggleCustomImageModel('openai')">
+                                    <option value="gpt-image-1">gpt-image-1.5</option>
+                                    <option value="gpt-image-1-mini">gpt-image-1-mini</option>
+                                    <option value="dall-e-3">dall-e-3</option>
+                                    <option value="dall-e-2">dall-e-2</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-openai-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #10a37f; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-openai-select" class="auth-input" onchange="window.toggleAdminTokenLimit('openai')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-openai-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+
+                        <div class="provider-model-view provider-claude" style="display:none;">
+                            <label style="font-weight:bold; color: #d97757;">Claude Text Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-claude-select" class="auth-input" onchange="toggleCustomModel('claude')">
+                                    
+				    <option value="claude-sonnet-4-6">claude-sonnet-4-6</option>
+				    <option value="claude-opus-4-1">claude-opus-4-1</option>
+				    <option value="claude-haiku-4-5-20251001">claude-haiku-4-5-20251001</option>
+                                    <option value="claude-opus-4-6">claude-opus-4-6</option>
+                                    
+                                    <option value="claude-3-7-sonnet-20250219">claude-3-7-sonnet</option>
+                                    <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet</option>
+                                    <option value="claude-3-opus-20240229">claude-3-opus</option>
+                                    <option value="claude-3-haiku-20240307">claude-3-haiku</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-claude-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #d97757; margin-top: 15px; display:block;">Claude Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-claude-select" class="auth-input" onchange="toggleCustomImageModel('claude')">
+                                    <option value="">No Native Image Model (Fallback to DALL-E)</option>
+                                    <option value="custom">Other (OpenAI-compatible Endpoint Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-claude-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #d97757; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-claude-select" class="auth-input" onchange="window.toggleAdminTokenLimit('claude')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-claude-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+
+                        <div class="provider-model-view provider-deepseek" style="display:none;">
+                            <label style="font-weight:bold; color: #4d94ff;">DeepSeek Text Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-deepseek-select" class="auth-input" onchange="toggleCustomModel('deepseek')">
+					<option value="deepseek-chat">deepseek-chat</option>
+                                    <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+                                    <option value="deepseek-v4-flash">deepseek-v4-flash</option>
+                                    
+                                    <option value="deepseek-reasoner">deepseek-reasoner</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-deepseek-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #4d94ff; margin-top: 15px; display:block;">DeepSeek Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-deepseek-select" class="auth-input" onchange="toggleCustomImageModel('deepseek')">
+                                    <option value="">No Native Image Model (Fallback to DALL-E)</option>
+                                    <option value="custom">Other (OpenAI-compatible Endpoint Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-deepseek-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #4d94ff; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-deepseek-select" class="auth-input" onchange="window.toggleAdminTokenLimit('deepseek')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-deepseek-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+
+                        <div class="provider-model-view provider-grok" style="display:none;">
+                            <label style="font-weight:bold; color: #000;">Grok Text Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-grok-select" class="auth-input" onchange="toggleCustomModel('grok')">
+                                    <option value="grok-4.3">grok-4.3</option>
+                                    <option value="grok-4">grok-4</option>
+                                    <option value="grok-4-fast">grok-4-fast</option>
+                                    <option value="grok-3">grok-3</option>
+			
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-grok-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #000; margin-top: 15px; display:block;">Grok Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-grok-select" class="auth-input" onchange="toggleCustomImageModel('grok')">
+                                    <option value="">No Native Image Model (Fallback to DALL-E)</option>
+                                    <option value="custom">Other (OpenAI-compatible Endpoint Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-grok-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #000; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-grok-select" class="auth-input" onchange="window.toggleAdminTokenLimit('grok')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-grok-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+
+                        <div class="provider-model-view provider-meta" style="display:none;">
+                            <label style="font-weight:bold; color: #0668E1;">Meta Text Model Selection (Llama)</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-meta-select" class="auth-input" onchange="toggleCustomModel('meta')">
+                                    <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                                    <option value="meta-llama/llama-4-maverick-17b-128e-instruct">meta-llama/llama-4-maverick-17b-128e-instruct</option>
+                                    <option value="meta-llama/llama-4-scout-17b-16e-instruct">meta-llama/llama-4-scout-17b-16e-instruct</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-meta-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #0668E1; margin-top: 15px; display:block;">Meta Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-meta-select" class="auth-input" onchange="toggleCustomImageModel('meta')">
+                                    <option value="">No Native Image Model (Fallback to DALL-E)</option>
+                                    <option value="custom">Other (OpenAI-compatible Endpoint Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-meta-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #0668E1; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-meta-select" class="auth-input" onchange="window.toggleAdminTokenLimit('meta')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-meta-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+
+                        <div class="provider-model-view provider-perplexity" style="display:none;">
+                            <label style="font-weight:bold; color: #22b8cd;">Perplexity Text Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-model-perplexity-select" class="auth-input" onchange="toggleCustomModel('perplexity')">
+                                    <option value="sonar-pro">sonar-pro</option>
+                                    <option value="sonar">sonar</option>
+                                    <option value="sonar-reasoning-pro">sonar-reasoning-pro</option>
+                                    <option value="custom">Other (Custom Model)</option>
+                                </select>
+                                <input type="text" id="admin-model-perplexity-custom" class="auth-input" placeholder="Enter custom model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #22b8cd; margin-top: 15px; display:block;">Perplexity Image Model Selection</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-image-model-perplexity-select" class="auth-input" onchange="toggleCustomImageModel('perplexity')">
+                                    <option value="">No Native Image Model (Fallback to DALL-E)</option>
+                                    <option value="custom">Other (OpenAI-compatible Endpoint Model)</option>
+                                </select>
+                                <input type="text" id="admin-image-model-perplexity-custom" class="auth-input" placeholder="Enter custom image model name..." style="display:none;">
+                            </div>
+
+                            <label style="font-weight:bold; color: #22b8cd; margin-top: 15px; display:block;">Token Limit</label>
+                            <div style="display:flex; gap:10px;">
+                                <select id="admin-token-limit-perplexity-select" class="auth-input" onchange="window.toggleAdminTokenLimit('perplexity')">
+                                    <option value="">Maximum Limit (Default)</option>
+                                     
+                                    <option value="custom">Other (Manual Entry)</option>
+                                </select>
+                                <input type="text" id="admin-token-limit-perplexity-custom" class="auth-input" placeholder="e.g. 4096" style="display:none;">
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="ai-conf-instructions" class="ai-conf-section" style="display:none;">
+                        <div class="provider-inst-view provider-gemini">
+                            <label style="font-weight:bold; color: #007bff;">System Instructions (Gemini)</label>
+                            <textarea id="admin-inst-gemini" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                        <div class="provider-inst-view provider-openai" style="display:none;">
+                            <label style="font-weight:bold; color: #10a37f;">System Instructions (OpenAI)</label>
+                            <textarea id="admin-inst-openai" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                        <div class="provider-inst-view provider-claude" style="display:none;">
+                            <label style="font-weight:bold; color: #d97757;">System Instructions (Claude)</label>
+                            <textarea id="admin-inst-claude" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                        <div class="provider-inst-view provider-deepseek" style="display:none;">
+                            <label style="font-weight:bold; color: #4d94ff;">System Instructions (DeepSeek)</label>
+                            <textarea id="admin-inst-deepseek" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                        <div class="provider-inst-view provider-grok" style="display:none;">
+                            <label style="font-weight:bold; color: #000;">System Instructions (Grok)</label>
+                            <textarea id="admin-inst-grok" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                        <div class="provider-inst-view provider-meta" style="display:none;">
+                            <label style="font-weight:bold; color: #0668E1;">System Instructions (Meta/Llama)</label>
+                            <textarea id="admin-inst-meta" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                        <div class="provider-inst-view provider-perplexity" style="display:none;">
+                            <label style="font-weight:bold; color: #22b8cd;">System Instructions (Perplexity)</label>
+                            <textarea id="admin-inst-perplexity" class="auth-input" style="height:250px; font-family:monospace;" placeholder="Default instructions..."></textarea>
+                        </div>
+                    </div>
+
+                    <div id="ai-conf-design" class="ai-conf-section" style="display:none;">
+                        <label style="font-weight:bold;">Global Design & Look and Feel Rules</label>
+                        <textarea id="admin-design-guidelines" class="auth-input" style="height:150px; font-family:monospace;" placeholder="e.g. Always use rounded corners (border-radius: 8px). Apply subtle drop shadows. Use modern gradients..."></textarea>
+                        <p style="font-size:0.8em; color:#666;">These overarching rules will be appended to the system instructions globally to ensure the website generations feel modern and consistent regardless of the AI model chosen.</p>
+                    </div>
+
+                    <div id="ai-conf-pages" class="ai-conf-section" style="display:none;">
+                        <h4 style="margin-top:0; color:#0056b3;">📄 Default Project Structure</h4>
+                        <p style="font-size:0.9em; color:#666; margin-bottom:20px;">Configure the default pages to generate. You can set specific pages to only appear in the Footer navigation.</p>
+                        
+                        <div style="margin-bottom:20px; display:flex; align-items:center; gap:15px;">
+                            <label style="font-weight:bold; min-width:180px;">Default Page Count:</label>
+                            <input type="number" id="admin-default-page-count" class="auth-input" style="width:80px; margin:0;" value="7" min="1" max="15" onchange="generateDynamicPageInputs(this.value)">
+                            <span style="font-size:0.85em; color:#888;">(Max 15 pages recommended)</span>
+                        </div>
+
+                        <div style="display:flex; gap:10px; padding:10px 12px; background:#e8f4fd; border:1px solid #b8daff; border-radius:6px; font-size:12px; font-weight:bold; color:#0056b3; margin-bottom:12px; align-items:center;">
+                            <span style="min-width:25px;">#</span>
+                            <span style="flex:1; min-width:150px;">Page Filename (.html)</span>
+                            <span style="flex:2; min-width:200px;">Page Type / Topic / Goal</span>
+                            <span style="flex:1; min-width:120px;">Menu Placement</span>
+                        </div>
+
+                        <div id="dynamic-pages-container" style="display:flex; flex-direction:column; gap:10px; border-top:1px solid #eee; padding-top:10px;">
+                            </div>
+                    </div>
+                    
+                    <button class="auth-btn" style="width:auto; margin-top:20px;" onclick="saveAdminSettings()">Save AI Settings</button>
+                </div>
+            </div>
+
+            <div id="tab-images" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">🖼️ Image Providers</h3>
+                    <p style="color:#666;">Enable/Disable sources for the "Search Images" feature.</p>
+                    <div class="form-group" style="margin-bottom:15px;">
+                        <label>Search Result Limit</label>
+                        <input type="number" id="admin-search-limit" class="auth-input" style="width:80px;" value="10">
+                    </div>
+                    <div id="image-providers-list"></div>
+                    <button class="auth-btn" style="width:auto; margin-top:20px;" onclick="saveAdminSettings()">Save Providers</button>
+                </div>
+            </div>
+
+            <div id="tab-smtp" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">📧 Email System Configuration</h3>
+                    <div class="settings-group">
+                        <label>Delivery Method</label>
+                        <select id="email-method" class="auth-input" style="width:200px;" onchange="toggleEmailFields()">
+                            <option value="smtp">SMTP (Standard)</option>
+                            <option value="api">Open API (Managed/No SMTP)</option>
+                        </select>
+                    </div>
+                    <div id="smtp-fields">
+                        <div class="settings-group"><label>SMTP Host</label><input type="text" id="smtp-host" class="auth-input" placeholder="smtp.gmail.com"></div>
+                        <div class="settings-group"><label>SMTP Port</label><input type="number" id="smtp-port" class="auth-input" placeholder="587"></div>
+                        <div class="settings-group"><label>Username / Email</label><input type="text" id="smtp-user" class="auth-input" placeholder="you@gmail.com"></div>
+                        <div class="settings-group"><label>Password / App Key</label><input type="password" id="smtp-pass" class="auth-input" placeholder="Leave blank to keep unchanged"></div>
+                    </div>
+                    <div id="api-fields" style="display:none;">
+                        <div class="settings-group"><label>API URL</label><input type="text" id="email-api-url" class="auth-input" placeholder="https://api.provider.com/send"></div>
+                        <div class="settings-group"><label>API Key</label><input type="password" id="email-api-key" class="auth-input" placeholder="Secret API Key"></div>
+                    </div>
+                    <div class="settings-group"><label>From Email Address</label><input type="text" id="smtp-from" class="auth-input" placeholder="noreply@domain.com"></div>
+                    <button class="auth-btn" style="width:auto;" onclick="saveAdminSettings()">Save Email Config</button>
+                </div>
+            </div>
+
+            <div id="tab-updates" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">🚀 System Update Manager</h3>
+                    
+                    <div class="settings-group" style="background: #f0f8ff; padding: 20px; border-radius: 6px; border: 1px solid #cce5ff; margin-bottom: 20px; text-align: center;">
+                        <div id="cms-update-status-icon" style="font-size: 3em; margin-bottom: 10px;">🔄</div>
+                        <h4 id="cms-update-title" style="margin: 5px 0;">System Status</h4>
+                        <p id="cms-update-desc" style="color: #666; margin-bottom: 15px;">Checking for updates...</p>
+                        
+                        <button class="auth-btn" onclick="openUpdateModal()" style="width: auto; background: #007bff; padding: 10px 20px;">
+                            Check for Updates
+                        </button>
+                    </div>
+
+                    <div class="settings-group">
+                        <h4 style="margin-bottom:10px;">⏪ Restore Previous Version</h4>
+                        <p style="color:#666; font-size:0.9em; margin-bottom:10px;">If the latest update caused issues, you can roll back to a previous version here.</p>
+                        
+                        <div style="display:flex; gap:10px;">
+                            <select id="cms-restore-select" class="auth-input" style="flex-grow:1;">
+                                <option value="" disabled selected>Load versions first...</option>
+                            </select>
+                            <button class="auth-btn" onclick="performRestoreFromCMS()" style="width:auto; background:#6c757d; margin:0;">Restore</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<div id="admin-usertype-new-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6) !important; z-index:20000; justify-content:center; align-items:center; backdrop-filter: blur(5px);">
+    <div class="auth-box" style="background:#fff; padding:25px; border-radius:8px; width:450px; max-width:90%;">
+        <h3 style="margin-top:0; color:#333;">🏅 Create New User Type</h3>
+        
+        <div style="margin-bottom:15px;">
+            <label style="font-weight:bold; font-size:0.9em;">Type Name</label>
+            <input type="text" id="new-ut-name" class="auth-input" placeholder="e.g. Gold Tier">
+        </div>
+        
+        <div style="display:flex; gap:15px; margin-bottom:15px;">
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:0.9em;">Project Limit</label>
+                <input type="number" id="new-ut-limit" class="auth-input" placeholder="e.g. 10">
+                <div style="margin-top:5px; font-size:0.8em;">
+                    <label><input type="checkbox" id="new-ut-unlimited" onchange="document.getElementById('new-ut-limit').disabled = this.checked; if(this.checked) document.getElementById('new-ut-limit').value = '';"> Unlimited</label>
+                </div>
+            </div>
+            <div style="flex:1;">
+                <label style="font-weight:bold; font-size:0.9em;">Image Limit</label>
+                <input type="number" id="new-ut-img-limit" class="auth-input" placeholder="e.g. 50">
+                <div style="margin-top:5px; font-size:0.8em;">
+                    <label><input type="checkbox" id="new-ut-img-unlimited" onchange="document.getElementById('new-ut-img-limit').disabled = this.checked; if(this.checked) document.getElementById('new-ut-img-limit').value = '';"> Unlimited</label>
+                </div>
+            </div>
+        </div>
+        
+        <div style="margin-bottom:15px;">
+            <label style="font-weight:bold; font-size:0.9em;">Storage Limit (MB)</label>
+            <input type="number" id="new-ut-storage" class="auth-input" value="500">
+        </div>
+
+        <div id="new-ut-extra-fields-container"></div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
+            <button onclick="document.getElementById('admin-usertype-new-modal').style.display='none'" class="auth-btn" style="width:auto; background:#6c757d; margin:0;">Cancel</button>
+            <button onclick="createUserType()" class="auth-btn" style="width:auto; background:#28a745; margin:0;">Create Type</button>
+        </div>
+    </div>
+</div>
+
+<div id="admin-user-edit-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10010; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:450px; text-align:left;">
+        <h2 style="margin-top:0;">👤 Edit User Account</h2>
+        <input type="hidden" id="admin-edit-id">
+        
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>Username</label><input type="text" id="admin-edit-username" class="auth-input"></div>
+            <div style="flex:1;"><label>Full Name</label><input type="text" id="admin-edit-fullname" class="auth-input"></div>
+        </div>
+        
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1;"><label>Email</label><input type="email" id="admin-edit-email" class="auth-input"></div>
+            <div style="flex:1;"><label>Phone</label><input type="text" id="admin-edit-phone" class="auth-input"></div>
+        </div>
+        
+        <label>Country</label>
+        <input list="country-list-edit" id="admin-edit-country" class="auth-input" placeholder="Select or type Country...">
+        
+        <div style="display:flex; gap:10px; margin-bottom:10px;">
+            <div style="flex:1;"><label>Role</label><select id="admin-edit-role" class="auth-input"><option value="client">Client</option><option value="admin">Admin</option></select></div>
+            <div style="flex:1;"><label>User Type</label><select id="admin-edit-usertype" class="auth-input"><option value="">Default</option></select></div>
+        </div>
+
+        <div style="background:#e8f4fd; padding:15px; border-radius:8px; border:1px solid #b8daff; margin-bottom:15px;">
+            <h4 style="margin:0 0 10px 0; color:#0056b3; font-size:0.9em;">📊 Current Remaining Limits</h4>
+            <div style="display:flex; justify-content:space-between; margin-bottom:5px; font-size:0.9em;">
+                <span>Remaining Websites:</span>
+                <strong id="admin-edit-rem-sites" style="color:#28a745;">--</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; font-size:0.9em;">
+                <span>Remaining Images:</span>
+                <strong id="admin-edit-rem-images" style="color:#28a745;">--</strong>
+            </div>
+        </div>
+
+        <div style="background:#fdfdfd; padding:15px; border-radius:8px; border:1px solid #eee; margin-bottom:15px;">
+            <h4 style="margin:0 0 10px 0; color:#333; font-size:0.9em;">➕ Increase User Limits</h4>
+            <p style="font-size:0.75em; color:#888; margin-top:-5px;">Enter values to ADD to current limits (not overwrite).</p>
+            <div style="display:flex; gap:10px;">
+                <div style="flex:1;">
+                    <label style="font-size:0.8em; font-weight:bold;">Add Websites</label>
+                    <input type="number" id="admin-edit-add-sites" class="auth-input" placeholder="+0" min="0" style="margin:0;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:0.8em; font-weight:bold;">Add Images</label>
+                    <input type="number" id="admin-edit-add-images" class="auth-input" placeholder="+0" min="0" style="margin:0;">
+                </div>
+            </div>
+        </div>
+
+        <label style="cursor:pointer;"><input type="checkbox" id="admin-edit-verified"> Verified User</label>
+        
+        <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="safeCloseModal('admin-user-edit-modal')">Cancel</button>
+            <button class="auth-btn" style="width:auto; margin:0; background:#007bff;" onclick="saveAdminUserChanges()">Save Account Changes</button>
+        </div>
+        <p id="admin-edit-msg" style="color:red; text-align:center; margin-top:10px; font-size:0.9em;"></p>
+    </div>
+</div>
+
+<div id="admin-api-key-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10010; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:450px; text-align:left; background:#fff; padding:25px; border-radius:8px;">
+        <h3 style="margin-top:0;">🔑 Process API Key Request</h3>
+        <input type="hidden" id="admin-api-req-id">
+        
+        <div style="margin-bottom:15px;">
+            <label style="font-weight:bold; font-size:0.9em;">Status</label>
+            <select id="admin-api-req-status" class="auth-input">
+                <option value="Pending">Pending</option>
+                <option value="Completed">Completed</option>
+                <option value="Cancelled">Cancelled</option>
+            </select>
+        </div>
+        
+        <div style="margin-bottom:15px;">
+            <label style="font-weight:bold; font-size:0.9em;">Assign API Key <span style="font-weight:normal; color:#666;">(Required if completing)</span></label>
+            <input type="text" id="admin-api-req-key" class="auth-input" placeholder="Paste the generated API Key here...">
+        </div>
+        
+        <p style="font-size:12px; color:#666; margin-bottom:20px;">If marked as "Completed", an email notification will be sent automatically to the user with the assigned key.</p>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="safeCloseModal('admin-api-key-modal')">Cancel</button>
+            <button class="auth-btn" style="width:auto; margin:0; background:#28a745;" onclick="saveAdminApiKeyRequest()">Update Request</button>
+        </div>
+    </div>
+</div>

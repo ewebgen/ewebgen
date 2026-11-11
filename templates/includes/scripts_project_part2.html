@@ -1,0 +1,1505 @@
+<script>
+    // ==========================================
+    // 5. IMPORT LOGIC
+    // ==========================================
+
+    // --- INJECT "WEB SERVER (FTP)" INTO THE HTML DROPDOWN MENU ---
+    document.addEventListener('DOMContentLoaded', () => {
+        // Use an interval to ensure the dropdown exists and catches any dynamic UI rendering
+        setInterval(() => {
+            const importMenu = document.getElementById('import-menu-dropdown');
+            if (importMenu && !document.getElementById('ftp-import-dropdown-btn')) {
+                // Add a border to the previous last item for styling consistency
+                const items = importMenu.querySelectorAll('div');
+                if (items.length > 0) {
+                    items[items.length - 1].style.borderBottom = '1px solid #eee';
+                }
+                
+                const ftpBtn = document.createElement('div');
+                ftpBtn.id = 'ftp-import-dropdown-btn';
+                ftpBtn.style.cssText = 'padding:10px 15px; cursor:pointer; color:#333; transition: background 0.2s;';
+                ftpBtn.innerHTML = '🌐 Import from Web Server';
+                ftpBtn.onmouseover = function() { this.style.background='#f0f0f0'; };
+                ftpBtn.onmouseout = function() { this.style.background='transparent'; };
+                ftpBtn.onclick = function(e) {
+                    e.stopPropagation();
+                    this.parentElement.style.display='none';
+                    if(typeof window.openFtpImportModal === 'function') window.openFtpImportModal();
+                };
+                importMenu.appendChild(ftpBtn);
+            }
+        }, 1000);
+    });
+
+    // GOAL 1 FIX: Intercept triggerImport to show a Folder, ZIP, and Web Server (FTP) selection modal (Fallback)
+    function triggerImport() {
+        // Ensure the hidden ZIP input exists in the DOM
+        if (!document.getElementById('zip-import-input')) {
+            const zipInput = document.createElement('input');
+            zipInput.type = 'file';
+            zipInput.id = 'zip-import-input';
+            zipInput.accept = '.zip';
+            zipInput.style.display = 'none';
+            zipInput.onchange = function() {
+                if(this.files.length > 0) handleZipImport(this.files[0], false);
+            };
+            document.body.appendChild(zipInput);
+        }
+
+        // Show a custom modal dialog forcing the choice between Folder, ZIP, and Web Server
+        const modalHtml = `
+        <div id="temp-import-modal" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:100000; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(5px);">
+            <div style="background:#fff; padding:30px; border-radius:10px; width:450px; max-width:90%; text-align:center; box-shadow:0 15px 35px rgba(0,0,0,0.3);">
+                <h2 style="margin-top:0; color:#333; font-size:1.5em;">📂 Import Project</h2>
+                <p style="color:#666; font-size:0.95em; margin-bottom:25px;">Please choose how you would like to upload your website files.</p>
+                
+                <div style="display:flex; flex-direction:column; gap:12px;">
+                    <button onclick="document.getElementById('folder-import-input').click(); document.getElementById('temp-import-modal').remove();" style="padding:12px; background:#17a2b8; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:1em; display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <span style="font-size:1.2em;">📁</span> Import Extracted Folder
+                    </button>
+                    
+                    <button onclick="document.getElementById('zip-import-input').click(); document.getElementById('temp-import-modal').remove();" style="padding:12px; background:#28a745; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:1em; display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <span style="font-size:1.2em;">🗜️</span> Import .ZIP Archive
+                    </button>
+
+                    <button onclick="document.getElementById('temp-import-modal').remove(); window.openFtpImportModal();" style="padding:12px; background:#6f42c1; color:white; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:1em; display:flex; align-items:center; justify-content:center; gap:8px;">
+                        <span style="font-size:1.2em;">🌐</span> Import from Web Server (FTP)
+                    </button>
+                    
+                    <button onclick="document.getElementById('temp-import-modal').remove();" style="padding:10px; background:transparent; color:#888; border:1px solid #ccc; border-radius:6px; cursor:pointer; margin-top:10px; font-weight:bold;">Cancel</button>
+                </div>
+            </div>
+        </div>`;
+        document.body.insertAdjacentHTML('beforeend', modalHtml);
+    }
+
+    // --- NEW: FTP CREDENTIALS FETCHER ---
+    window.fetchFtpCredentials = function(callback) {
+        fetch('/api/user/ftp_credentials')
+        .then(r => r.json())
+        .then(d => { if(d.success) callback(d); else callback(null); })
+        .catch(() => callback(null));
+    };
+
+    // --- NEW: FTP IMPORT MODAL ---
+    window.openFtpImportModal = function() {
+        let modal = document.getElementById('ftp-import-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'ftp-import-modal';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:100050; display:none; justify-content:center; align-items:center; backdrop-filter: blur(5px);';
+            modal.innerHTML = `
+                <div style="background:#fff; width:500px; max-width:90%; border-radius:10px; overflow:hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.3); font-family:sans-serif;">
+                    <div style="background:#6f42c1; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="margin:0; font-size:1.2em;">🌐 Import from Web Server</h3>
+                        <button onclick="document.getElementById('ftp-import-modal').style.display='none'" style="background:none; border:none; color:white; font-size:1.5em; cursor:pointer;">&times;</button>
+                    </div>
+                    <div style="padding:20px;">
+                        <p style="font-size:13px; color:#555; margin-top:0;">Connect to your remote FTP server to import an existing website directly into the editor.</p>
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">Project Name</label>
+                        <input type="text" id="ftp-imp-name" class="auth-input" placeholder="Imported_Project" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+
+                        <label style="font-weight:bold; font-size:12px; color:#333;">FTP Host (Server IP or Domain)</label>
+                        <input type="text" id="ftp-imp-host" class="auth-input" placeholder="ftp.yourdomain.com" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">FTP Username</label>
+                        <input type="text" id="ftp-imp-user" class="auth-input" placeholder="username" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">FTP Password</label>
+                        <input type="password" id="ftp-imp-pass" class="auth-input" placeholder="Leave empty to use saved password..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">Target Directory</label>
+                        <input type="text" id="ftp-imp-dir" class="auth-input" placeholder="/public_html" value="/public_html" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+
+                        <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:#333; cursor:pointer; margin-bottom:20px;">
+                            <input type="checkbox" id="ftp-imp-save-creds" style="width:16px; height:16px; margin-top:2px;"> 
+                            <span>I agree to securely store my FTP credentials. Read our <a href="#" onclick="showTerms(); return false;" style="color:#007bff; text-decoration:underline;">Terms & Conditions</a>.</span>
+                        </label>
+
+                        <button id="ftp-imp-submit-btn" onclick="executeFtpImport()" style="width:100%; background:#28a745; color:white; border:none; padding:12px; border-radius:5px; font-size:16px; font-weight:bold; cursor:pointer;">⬇️ Connect & Import Files</button>
+                        <div id="ftp-imp-status" style="margin-top:15px; text-align:center; font-size:13px; font-weight:bold; display:none;"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        // Pre-fill credentials if saved
+        window.fetchFtpCredentials((creds) => {
+            if (creds && creds.host) {
+                document.getElementById('ftp-imp-host').value = creds.host;
+                document.getElementById('ftp-imp-user').value = creds.user;
+                if(creds.target_dir) document.getElementById('ftp-imp-dir').value = creds.target_dir;
+                if (creds.has_saved_password) {
+                    document.getElementById('ftp-imp-pass').placeholder = "•••••••• (Using Saved Password)";
+                    document.getElementById('ftp-imp-save-creds').checked = true;
+                }
+            }
+        });
+
+        document.getElementById('ftp-imp-status').style.display = 'none';
+        document.getElementById('ftp-imp-submit-btn').disabled = false;
+        document.getElementById('ftp-imp-submit-btn').innerHTML = '⬇️ Connect & Import Files';
+        modal.style.display = 'flex';
+    };
+
+    window.executeFtpImport = function() {
+        const btn = document.getElementById('ftp-imp-submit-btn');
+        const status = document.getElementById('ftp-imp-status');
+        
+        const projNameInput = document.getElementById('ftp-imp-name');
+        const projNameVal = projNameInput && projNameInput.value ? projNameInput.value : 'Imported_FTP_Site';
+        window._pendingFtpProjectName = projNameVal;
+        
+        const payload = {
+            project_name: projNameVal,
+            ftp_host: document.getElementById('ftp-imp-host').value.trim(),
+            ftp_user: document.getElementById('ftp-imp-user').value.trim(),
+            ftp_pass: document.getElementById('ftp-imp-pass').value,
+            target_dir: document.getElementById('ftp-imp-dir').value.trim(),
+            save_credentials: document.getElementById('ftp-imp-save-creds').checked
+        };
+
+        if (!payload.ftp_host || !payload.ftp_user) {
+            alert("Host and Username are required.");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Connecting & Downloading (Please Wait...)';
+        status.style.display = 'block';
+        status.style.color = '#007bff';
+        status.innerHTML = 'Connecting to server. This may take a minute for large sites...';
+
+        // --- NEW: Trigger progress overlay during FTP download ---
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Connecting to Web Server...");
+
+        fetch('/api/import_ftp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(d => {
+            btn.disabled = false;
+            btn.innerHTML = '⬇️ Connect & Import Files';
+            if (d.success) {
+                document.getElementById('ftp-import-modal').style.display = 'none';
+                
+                // If files were returned, push them through the finishImportProcess to see the progress bar
+                // FIX: We now pass d.project_name into the finishImportProcess to preserve it
+                if (d.files) {
+                    finishImportProcess(d.files, d.project_name);
+                } else {
+                    status.style.color = 'green';
+                    status.innerHTML = '✅ Import Complete! Reloading workspace...';
+                    setTimeout(() => window.location.reload(), 1500);
+                }
+            } else {
+                status.style.color = 'red';
+                status.innerHTML = '❌ Error: ' + d.error;
+                if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            }
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '⬇️ Connect & Import Files';
+            status.style.color = 'red';
+            status.innerHTML = '❌ Network error during import. It might have timed out.';
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+        });
+    };
+
+    async function handleFolderImport(fileList) {
+        if (fileList.length === 0) return;
+        
+        if (Object.keys(generatedFiles).length > 0) {
+            if(!confirm("Importing a NEW template will close the current project. Continue?")) {
+                document.getElementById('folder-import-input').value = ''; 
+                return;
+            }
+        }
+
+        // --- GOAL 2 FIX: WIPE OLD WORKSPACE ENTIRELY ---
+        generatedFiles = {}; 
+        currentChatHistory = []; 
+        currentPreviewFile = null;
+        
+        const chatDisplay = document.getElementById('chat-display');
+        if(chatDisplay) chatDisplay.innerHTML = '';
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            iframe.contentDocument.documentElement.innerHTML = '<head></head><body></body>';
+        }
+
+        updateStatus("Importing files...");
+        
+        // Explicitly force progress overlay to display
+        const progOverlay = document.getElementById('progress-overlay');
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+        if(progOverlay) progOverlay.style.display = 'flex';
+        if(progText) progText.textContent = "Reading Files...";
+        if(progPercent) progPercent.textContent = "10%";
+        
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Importing Project...");
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(10, "Reading Files...");
+        
+        if (fileList.length === 1 && fileList[0].name.toLowerCase().endsWith('.zip')) {
+            await handleZipImport(fileList[0], true); // true = skip duplicate confirm dialog
+            return;
+        }
+
+        const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+        
+        let pendingFiles = {}; 
+        let htmlCount = 0;
+
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            
+            let relativePath = file.webkitRelativePath || file.name;
+            if (relativePath.includes('/')) {
+                relativePath = relativePath.substring(relativePath.indexOf('/') + 1);
+            }
+            const filename = relativePath;
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (textExtensions.includes(ext)) {
+                try {
+                    const text = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsText(file);
+                    });
+                    pendingFiles[filename] = text;
+                    if(ext === '.html' || ext === '.php') htmlCount++;
+                } catch(e) {}
+            } else {
+                try {
+                    const base64Data = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    pendingFiles[filename] = base64Data;
+                } catch(e) {
+                    console.warn(`Skipped file ${filename}: ${e}`);
+                }
+            }
+        }
+        
+        await finishImportProcess(pendingFiles);
+    }
+async function handleZipImport(zipFile, skipConfirm = false) {
+        if (typeof JSZip === 'undefined') {
+            alert("Error: JSZip library is required to import zip files. Please contact the administrator.");
+            const zipInput = document.getElementById('zip-import-input');
+            if (zipInput) zipInput.value = '';
+            const folderInput = document.getElementById('folder-import-input');
+            if (folderInput) folderInput.value = '';
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+            return;
+        }
+
+        if (!skipConfirm && Object.keys(generatedFiles).length > 0) {
+            if(!confirm("Importing a NEW template will close the current project. Continue?")) {
+                const zipInput = document.getElementById('zip-import-input');
+                if (zipInput) zipInput.value = '';
+                return;
+            }
+        }
+
+        // --- GOAL 2 FIX: WIPE OLD WORKSPACE ENTIRELY BEFORE EXTRACTING ---
+        generatedFiles = {}; 
+        currentChatHistory = []; 
+        currentPreviewFile = null;
+        
+        const chatDisplay = document.getElementById('chat-display');
+        if(chatDisplay) chatDisplay.innerHTML = '';
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            iframe.contentDocument.documentElement.innerHTML = '<head></head><body></body>';
+        }
+
+        // Explicitly force progress overlay to display
+        const progOverlay = document.getElementById('progress-overlay');
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+        if(progOverlay) progOverlay.style.display = 'flex';
+        if(progText) progText.textContent = "Extracting ZIP...";
+        if(progPercent) progPercent.textContent = "20%";
+
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(20, "Extracting ZIP...");
+        
+        try {
+            const zip = new JSZip();
+            const contents = await zip.loadAsync(zipFile);
+            
+            let pendingFiles = {};
+            const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+            const fileNames = Object.keys(contents.files);
+            
+            // Strip top-level folder if everything is inside one folder
+            let topLevelFolder = null;
+            const rootFiles = fileNames.filter(n => !n.includes('/'));
+            if (rootFiles.length === 0 && fileNames.length > 0) {
+                const firstPath = fileNames[0].split('/')[0];
+                const allUnderFirst = fileNames.every(n => n.startsWith(firstPath + '/'));
+                if (allUnderFirst) topLevelFolder = firstPath + '/';
+            }
+
+            for (let i = 0; i < fileNames.length; i++) {
+                const filename = fileNames[i];
+                const fileObj = contents.files[filename];
+                
+                if (fileObj.dir) continue; // Skip directories
+                
+                // Clean the path
+                let relativePath = filename;
+                if (topLevelFolder && relativePath.startsWith(topLevelFolder)) {
+                    relativePath = relativePath.substring(topLevelFolder.length);
+                }
+                
+                const ext = '.' + relativePath.split('.').pop().toLowerCase();
+                
+                if (textExtensions.includes(ext)) {
+                    const text = await fileObj.async("string");
+                    pendingFiles[relativePath] = text;
+                } else {
+                    const base64Data = await fileObj.async("base64");
+                    // Detect mime type roughly
+                    let mime = 'application/octet-stream';
+                    if (ext === '.png') mime = 'image/png';
+                    else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+                    else if (ext === '.gif') mime = 'image/gif';
+                    else if (ext === '.webp') mime = 'image/webp';
+                    
+                    pendingFiles[relativePath] = `data:${mime};base64,${base64Data}`;
+                }
+            }
+            
+            // Zip files don't have a backend project name yet, so pass null
+            await finishImportProcess(pendingFiles, null);
+            
+        } catch (e) {
+            console.error("ZIP Extraction Error:", e);
+            alert("Failed to extract ZIP file. It might be corrupted.");
+            
+            const zipInput = document.getElementById('zip-import-input');
+            if (zipInput) zipInput.value = '';
+            const folderInput = document.getElementById('folder-import-input');
+            if (folderInput) folderInput.value = '';
+            
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+        }
+    }
+
+    // FIX: Receive importedProjectName parameter so the server knows the project's identity
+    async function finishImportProcess(pendingFiles, importedProjectName = null) {
+        const fileKeys = Object.keys(pendingFiles);
+        if (fileKeys.length === 0) {
+            alert("No valid files found.");
+            
+            const zipInput = document.getElementById('zip-import-input');
+            if (zipInput) zipInput.value = '';
+            const folderInput = document.getElementById('folder-import-input');
+            if (folderInput) folderInput.value = '';
+            
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+            return;
+        }
+
+        updateStatus(`Syncing ${fileKeys.length} files...`);
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(40, "Syncing to Database...");
+        
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+
+        const chunkSize = 10;
+        for (let i = 0; i < fileKeys.length; i += chunkSize) {
+            const chunk = {};
+            const keysChunk = fileKeys.slice(i, i + chunkSize);
+            keysChunk.forEach(k => { chunk[k] = pendingFiles[k]; });
+            
+            const isFirstChunk = (i === 0);
+            
+            const payload = {
+                files: chunk,
+                partial: !isFirstChunk,
+                is_new_project: isFirstChunk,
+                preserve_project_name: importedProjectName // Passes the FTP name back to Python backend
+            };
+
+            await fetch('/api/sync_state', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            
+            const percent = 40 + Math.round(((i + keysChunk.length) / fileKeys.length) * 60);
+            if (typeof updateProgressCircle === 'function') updateProgressCircle(percent, `Syncing... ${percent}%`);
+            
+            if(progPercent) progPercent.textContent = percent + '%';
+            if(progText) progText.textContent = `Syncing... ${percent}%`;
+            updateStatus(`Syncing... ${percent}%`);
+        }
+
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(100, "Done!");
+        if(progPercent) progPercent.textContent = '100%';
+        if(progText) progText.textContent = 'Done!';
+        
+        generatedFiles = pendingFiles; 
+        
+        if (typeof enableSaveButton === 'function') enableSaveButton();
+        updatePreviewControls(); 
+        
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        
+        // FIX: Retain the project identity in the frontend session data
+        if (importedProjectName) {
+            session.activeProject = importedProjectName;
+            session.active_project = importedProjectName;
+        } else {
+            session.activeProject = null;
+            session.active_project = null;
+        }
+        localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+        let startPage = 'index.html';
+        if (!generatedFiles['index.html']) {
+            if(generatedFiles['index.php']) startPage = 'index.php';
+            else {
+                const anyPage = Object.keys(generatedFiles).find(f => f.endsWith('.html') || f.endsWith('.php'));
+                if(anyPage) startPage = anyPage;
+            }
+        }
+        
+        updateStatus("Import complete.");
+        if(startPage && generatedFiles[startPage]) loadPreview(startPage);
+        else updatePageDropdown();
+        
+        const folderInput = document.getElementById('folder-import-input');
+        if (folderInput) folderInput.value = '';
+        const zipInput = document.getElementById('zip-import-input');
+        if (zipInput) zipInput.value = '';
+        
+        setTimeout(() => { 
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay(); 
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+        }, 800);
+    }
+
+    // ==========================================
+    // 6. DEPLOYMENT LOGIC (GOAL 1: 100% FIXED)
+    // ==========================================
+
+    function openDeployModal() {
+        if (!currentUser) { 
+            alert("Please login to deploy."); 
+            if(document.getElementById('auth-modal')) document.getElementById('auth-modal').style.display = 'flex';
+            return; 
+        }
+        
+        // FIX: Check if actual code exists in memory rather than deadlocking on session.activeProject
+        if (!generatedFiles || Object.keys(generatedFiles).length === 0) {
+            alert("No website files found! Please generate or import a project before deploying.");
+            return;
+        }
+        
+        const session = getLocalSession();
+        let activeProjName = session.activeProject || session.active_project || 'My_Website';
+        
+        let modal = document.getElementById('deploy-modal');
+        
+        // Re-inject dynamic modal if static modal is missing core input IDs
+        if (!modal || !document.getElementById('deploy-host')) {
+            if (modal) modal.remove();
+            
+            modal = document.createElement('div');
+            modal.id = 'deploy-modal';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:100050; display:none; justify-content:center; align-items:center; backdrop-filter: blur(5px);';
+            modal.innerHTML = `
+                <div style="background:#fff; width:500px; max-width:90%; border-radius:10px; overflow:hidden; box-shadow: 0 15px 35px rgba(0,0,0,0.3); font-family:sans-serif;">
+                    <div style="background:#007bff; color:white; padding:15px 20px; display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="margin:0; font-size:1.2em;">🚀 Deploy to Web Server (FTP)</h3>
+                        <button onclick="document.getElementById('deploy-modal').style.display='none'" style="background:none; border:none; color:white; font-size:1.5em; cursor:pointer;">&times;</button>
+                    </div>
+                    <div style="padding:20px;">
+                        <p style="font-size:13px; color:#555; margin-top:0;">Publish your website directly to your live hosting server.</p>
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">Project Name</label>
+                        <input type="text" id="deploy-proj-name" class="auth-input" placeholder="Website" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+
+                        <label style="font-weight:bold; font-size:12px; color:#333;">FTP Host (Server IP or Domain)</label>
+                        <input type="text" id="deploy-host" class="auth-input" placeholder="ftp.yourdomain.com" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">FTP Username</label>
+                        <input type="text" id="deploy-user" class="auth-input" placeholder="username" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">FTP Password</label>
+                        <input type="password" id="deploy-pass" class="auth-input" placeholder="Leave empty to use saved password..." style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+                        
+                        <label style="font-weight:bold; font-size:12px; color:#333;">Target Directory</label>
+                        <input type="text" id="deploy-dir" class="auth-input" placeholder="/public_html" value="/public_html" style="width:100%; padding:10px; margin-bottom:15px; border:1px solid #ccc; border-radius:5px; box-sizing:border-box;">
+
+                        <div style="background:#fff3cd; color:#856404; padding:12px 15px; border-radius:6px; margin-bottom:15px; font-size:0.9em; border:1px solid #ffeeba;">
+                            <strong>⚠️ Warning:</strong> This action will override existing files on the remote server. Please ensure you have taken a backup before deploying.
+                        </div>
+
+                        <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:#333; cursor:pointer; margin-bottom:10px; font-weight:bold;">
+                            <input type="checkbox" id="deploy-accept" style="width:16px; height:16px; margin-top:2px;" onchange="document.getElementById('deploy-submit-btn').disabled = !this.checked"> 
+                            <span>I accept that this will override existing files.</span>
+                        </label>
+
+                        <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; color:#333; cursor:pointer; margin-bottom:20px;">
+                            <input type="checkbox" id="deploy-save-creds" style="width:16px; height:16px; margin-top:2px;"> 
+                            <span>I agree to securely store my FTP credentials. Read our <a href="#" onclick="showTerms(); return false;" style="color:#007bff; text-decoration:underline;">Terms & Conditions</a>.</span>
+                        </label>
+
+                        <button id="deploy-submit-btn" disabled onclick="window.executeDeploy()" style="width:100%; background:#28a745; color:white; border:none; padding:12px; border-radius:5px; font-size:16px; font-weight:bold; cursor:pointer; opacity:1;">🚀 Deploy Website</button>
+                        <div id="deploy-logs" style="margin-top:15px; text-align:left; font-size:12px; color:#555; background:#f8f9fa; padding:10px; border-radius:5px; max-height:150px; overflow-y:auto; display:none; border:1px solid #ddd;"></div>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(modal);
+        }
+        
+        const pInput = document.getElementById('deploy-proj-name');
+        if (pInput) pInput.value = activeProjName;
+
+        // Pre-fill credentials if saved
+        if (typeof window.fetchFtpCredentials === 'function') {
+            window.fetchFtpCredentials((creds) => {
+                if (creds && creds.host) {
+                    const setIf = (id, val) => { const el = document.getElementById(id); if(el) el.value = val; };
+                    setIf('deploy-host', creds.host);
+                    setIf('deploy-user', creds.user);
+                    if(creds.target_dir) setIf('deploy-dir', creds.target_dir);
+                    if (creds.has_saved_password) {
+                        const passEl = document.getElementById('deploy-pass');
+                        if(passEl) passEl.placeholder = "•••••••• (Using Saved Password)";
+                        const credsEl = document.getElementById('deploy-save-creds');
+                        if(credsEl) credsEl.checked = true;
+                    }
+                }
+            });
+        }
+        
+        const logsEl = document.getElementById('deploy-logs');
+        if(logsEl) logsEl.style.display = 'none';
+        
+        const accEl = document.getElementById('deploy-accept');
+        if(accEl) accEl.checked = false;
+        
+        const subBtn = document.getElementById('deploy-submit-btn');
+        if(subBtn) {
+            subBtn.disabled = true;
+            subBtn.textContent = '🚀 Deploy Website';
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    window.executeDeploy = function() {
+        // Fallback extractor supporting both dynamic IDs and static template IDs
+        const getVal = (id1, id2) => {
+            const el = document.getElementById(id1) || (id2 ? document.getElementById(id2) : null);
+            return el ? el.value.trim() : '';
+        };
+
+        const session = getLocalSession();
+        let projectName = getVal('deploy-proj-name') || session.activeProject || session.active_project || 'Live_Website';
+
+        const host = getVal('deploy-host', 'ftp-host');
+        const user = getVal('deploy-user', 'ftp-user');
+        const passEl = document.getElementById('deploy-pass') || document.getElementById('ftp-pass');
+        const pass = passEl ? passEl.value : '';
+        const dir = getVal('deploy-dir', 'ftp-dir') || '/public_html';
+        const saveCredsEl = document.getElementById('deploy-save-creds') || document.getElementById('ftp-save-creds');
+        const saveCreds = saveCredsEl ? saveCredsEl.checked : false;
+
+        if (!host || !user) {
+            alert("FTP Host and Username are required.");
+            return;
+        }
+
+        const btn = document.getElementById('deploy-submit-btn') || document.getElementById('btn-deploy-start');
+        const logsDiv = document.getElementById('deploy-logs') || document.getElementById('deploy-status-logs');
+
+        if(btn) {
+            btn.disabled = true;
+            btn.textContent = "Deploying...";
+        }
+        
+        if(logsDiv) {
+            logsDiv.style.display = 'block';
+            logsDiv.innerHTML = '<div>🔄 Connecting to hosting server & transferring files...</div>';
+        }
+
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Deploying Website via FTP...");
+
+        // FIX: Push the page currently open in the editor to the server first, so the very
+        // latest edits are what gets uploaded (and overwrite the old files on the host).
+        const flushEditor = () => {
+            try {
+                const iframe = document.getElementById('preview-frame');
+                const doc = iframe && (iframe.contentDocument || iframe.contentWindow.document);
+                const page = window.currentPreviewFile;
+                if (!doc || !doc.body || !page) return Promise.resolve();
+                const body = (typeof window.getCleanFullContent === 'function') ? window.getCleanFullContent(doc) : doc.body.innerHTML;
+                if (!body || body.replace(/\s+/g, '').length < 20) return Promise.resolve();
+                if (typeof generatedFiles !== 'undefined') generatedFiles[page] = body;
+                return fetch('/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: page, new_body_content: body })
+                }).then(r => r.json()).catch(() => null);
+            } catch (e) { return Promise.resolve(); }
+        };
+
+        flushEditor().then(() => fetch('/api/deploy_website', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                project_name: projectName,
+                ftp_host: host,
+                ftp_user: user,
+                ftp_pass: pass,
+                target_dir: dir,
+                save_credentials: saveCreds
+            })
+        }))
+        .then(r => r.json())
+        .then(data => {
+            if(btn) {
+                btn.disabled = false;
+                btn.textContent = "🚀 Deploy Website";
+            }
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            
+            if(data.logs && logsDiv) {
+                logsDiv.innerHTML = data.logs.map(l => `<div>${l}</div>`).join('');
+                logsDiv.scrollTop = logsDiv.scrollHeight;
+            }
+            
+            if(data.success) {
+                alert(data.message || "🚀 Website Deployed Successfully!");
+                if (document.getElementById('deploy-modal')) document.getElementById('deploy-modal').style.display = 'none';
+            } else {
+                alert("❌ Deployment Failed: " + (data.error || "Check logs"));
+            }
+        })
+        .catch(e => {
+            if(btn) {
+                btn.disabled = false;
+                btn.textContent = "🚀 Deploy Website";
+            }
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            alert("❌ Network Error during deployment.");
+        });
+    };
+
+    // --- Ensure global availability ---
+    window.triggerImport = triggerImport;
+    window.handleFolderImport = handleFolderImport;
+    window.handleZipImport = handleZipImport;
+    window.openDeployModal = openDeployModal;
+    window.deployWebsite = window.executeDeploy; // Bridges static buttons calling deployWebsite()
+
+    // ==========================================
+    // 7. TEMPLATE CACHING & INSTANT UI
+    // ==========================================
+
+    window.sidebarCache = { categories: null, templates: {} };
+    window.activeProjectThumbnailBlob = null; // Stores screenshot blob
+
+    window.importActiveProjectForTemplate = function() {
+        if (!generatedFiles || Object.keys(generatedFiles).length === 0) {
+            alert("No active project found! Please generate or import a website first.");
+            return;
+        }
+        window.activeProjectForTemplate = generatedFiles;
+        const summary = document.getElementById('folder-upload-summary');
+        if (summary) {
+            summary.style.display = 'block';
+            summary.innerHTML = `✅ Ready! Loaded ${Object.keys(generatedFiles).length} files from active editor.`;
+        }
+        const fileInput = document.getElementById('new-template-project-folder');
+        if (fileInput) fileInput.value = '';
+        const htmlInput = document.getElementById('new-template-html');
+        if (htmlInput) htmlInput.value = '';
+    };
+
+    window.toggleElementsSlider = function(event) {
+        if (event) event.stopPropagation();
+        const slider = document.getElementById('elements-slider');
+        const overlay = document.getElementById('slider-overlay');
+        const btn = document.getElementById('sidebar-add-btn');
+        
+        if (slider.classList.contains('open')) {
+            slider.classList.remove('open');
+            if(overlay) overlay.style.display = 'none';
+            if(btn) btn.classList.remove('active');
+        } else {
+            slider.classList.add('open');
+            if(overlay) overlay.style.display = 'block';
+            if(btn) btn.classList.add('active'); 
+            
+            if(typeof window.loadSidebarCategories === 'function') {
+                window.loadSidebarCategories();
+            }
+        }
+    };
+
+    window.closeElementsSlider = function() {
+        const slider = document.getElementById('elements-slider');
+        const overlay = document.getElementById('slider-overlay');
+        const btn = document.getElementById('sidebar-add-btn');
+        if(slider) slider.classList.remove('open');
+        if(overlay) overlay.style.display = 'none';
+        if(btn) btn.classList.remove('active');
+    };
+
+    function renderCategories(data) {
+        const leftPane = document.getElementById('slider-categories');
+        if(!leftPane) return;
+        leftPane.innerHTML = '';
+        
+        const addCatBtn = document.getElementById('admin-add-category-btn');
+        if (currentUser && currentUser.role === 'admin' && addCatBtn) {
+            addCatBtn.style.display = 'flex';
+        }
+
+        // --- GOAL 5 FIX: INJECT "ALL TEMPLATES" CATEGORY AUTOMATICALLY ---
+        const allCatDiv = document.createElement('div');
+        allCatDiv.className = 'category-item active';
+        allCatDiv.innerHTML = `<span>All Templates</span>`;
+        allCatDiv.onclick = () => {
+            document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+            allCatDiv.classList.add('active');
+            window.loadSidebarTemplates('all');
+        };
+        leftPane.appendChild(allCatDiv);
+
+        if (data && data.length > 0) {
+            data.forEach(c => {
+                const catDiv = document.createElement('div');
+                catDiv.className = 'category-item';
+                catDiv.innerHTML = `<span>${c.name}</span>`;
+                catDiv.onclick = () => {
+                    document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+                    catDiv.classList.add('active');
+                    window.loadSidebarTemplates(c.id);
+                };
+                leftPane.appendChild(catDiv);
+            });
+        }
+        
+        // Auto-click the first available category ("All Templates")
+        setTimeout(() => { allCatDiv.click(); }, 100);
+    }
+
+    window.loadSidebarCategories = function() {
+        const leftPane = document.getElementById('slider-categories');
+        if(!leftPane) return;
+
+        // Use cache if available for instant load
+        if (window.sidebarCache.categories) {
+            renderCategories(window.sidebarCache.categories);
+            return;
+        }
+
+        leftPane.innerHTML = '<div style="padding:10px; color:#aaa; font-size:12px; text-align:center;">Loading...</div>';
+        
+        fetch('/api/templates/categories')
+        .then(r => r.json())
+        .then(data => {
+            window.sidebarCache.categories = data; // Save to Cache
+            renderCategories(data);
+        }).catch(e => console.error("Error loading categories", e));
+    };
+
+    function renderTemplates(data, categoryId) {
+        const rightPane = document.getElementById('slider-templates');
+        if(!rightPane) return;
+        
+        rightPane.innerHTML = '';
+        if (data && data.length > 0) {
+            data.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'template-card';
+                card.onclick = () => loadTemplateAsProject(item);
+                
+                // --- GOAL 5 FIX: IF CATEGORY IS "ALL TEMPLATES" (OR 'all'), DISABLE DELETION ---
+                let editBtnHtml = '';
+                const isAllTemplates = (categoryId === 'all');
+                
+                if (currentUser && currentUser.role === 'admin' && !isAllTemplates) {
+                    editBtnHtml = `
+                        <div class="template-actions">
+                            <button class="template-action-btn template-edit-btn" title="Edit Template" onclick="editTemplateAction(event, ${item.id})">✏️</button>
+                            <button class="template-action-btn del" title="Delete Template" onclick="deleteTemplateAction(event, ${item.id})">🗑️</button>
+                        </div>
+                    `;
+                }
+
+                card.innerHTML = `
+                    <div class="template-img-wrapper">
+                        <img src="${item.thumbnail_url || 'https://placehold.co/400x300?text=Preview'}" alt="Template" loading="lazy">
+                    </div>
+                    <div class="template-info">${item.name}</div>
+                    ${editBtnHtml}
+                `;
+                rightPane.appendChild(card);
+            });
+        } else {
+            rightPane.innerHTML = '<div style="color:#999; text-align:center; margin-top:20px;">No templates in this category.</div>';
+        }
+    }
+
+    window.loadSidebarTemplates = function(categoryId) {
+        const rightPane = document.getElementById('slider-templates');
+        if(!rightPane) return;
+
+        // Use cache if available for instant load
+        if (window.sidebarCache.templates[categoryId]) {
+            renderTemplates(window.sidebarCache.templates[categoryId], categoryId);
+            return;
+        }
+
+        // Show fast loading skeleton
+        rightPane.innerHTML = `
+            <div style="display:flex; flex-direction:column; gap:15px; width:100%; padding:10px;">
+                <div style="height:200px; background:#e0e0e0; border-radius:8px; animation: pulse 1.5s infinite;"></div>
+                <div style="height:200px; background:#e0e0e0; border-radius:8px; animation: pulse 1.5s infinite;"></div>
+            </div>
+            <style>@keyframes pulse { 0% {opacity:0.6;} 50% {opacity:0.3;} 100% {opacity:0.6;} }</style>
+        `;
+        
+        // --- GOAL 5 FIX: Direct to the raw endpoint if "All" is requested ---
+        const fetchUrl = categoryId === 'all' ? '/api/templates/items' : `/api/templates/items?category_id=${categoryId}`;
+
+        fetch(fetchUrl)
+        .then(r => r.json())
+        .then(data => {
+            window.sidebarCache.templates[categoryId] = data; // Save to Cache
+            renderTemplates(data, categoryId);
+        }).catch(e => {
+            console.error(e);
+            rightPane.innerHTML = '<div style="color:#dc3545; text-align:center; margin-top:20px;">Error loading templates.</div>';
+        });
+    };
+
+    window.deleteTemplateAction = function(event, templateId) {
+        event.stopPropagation();
+        if(!confirm("Are you sure you want to delete this template?")) return;
+        fetch(`/api/admin/templates/items/${templateId}`, { method: 'DELETE' })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) {
+                alert("Template deleted.");
+                window.sidebarCache = { categories: null, templates: {} }; // Clear cache
+                if(typeof window.loadSidebarCategories === 'function') window.loadSidebarCategories(); 
+            } else {
+                alert("Error: " + d.error);
+            }
+        });
+    };
+
+    window.editTemplateAction = function(event, templateId) {
+        event.stopPropagation();
+        window.activeProjectThumbnailBlob = null; // Clear old blob
+        const modal = document.getElementById('admin-template-modal');
+        if (modal) modal.style.display = 'flex';
+        
+        window.switchTemplateTab('item');
+        
+        let idInput = document.getElementById('edit-template-id');
+        if (!idInput) {
+            idInput = document.createElement('input');
+            idInput.type = 'hidden';
+            idInput.id = 'edit-template-id';
+            const formContainer = document.getElementById('form-add-item');
+            if(formContainer) formContainer.appendChild(idInput);
+        }
+        idInput.value = templateId;
+        
+        fetch(`/api/admin/templates/items/${templateId}`)
+        .then(r => r.json())
+        .then(data => {
+            if(data.success && data.item) {
+                const nameInput = document.getElementById('new-template-name');
+                const htmlInput = document.getElementById('new-template-html');
+                if(nameInput) nameInput.value = data.item.name || '';
+                if(htmlInput) htmlInput.value = data.item.content_html || '';
+                
+                const previewDiv = document.getElementById('template-thumb-preview');
+                if (previewDiv) {
+                    if (data.item.thumbnail_url) {
+                        previewDiv.innerHTML = `<img src="${data.item.thumbnail_url}" style="width:100%; height:100%; object-fit:cover;">`;
+                    } else {
+                        previewDiv.innerHTML = '<span style="color:#aaa; font-size:10px;">None</span>';
+                    }
+                }
+                
+                const catSelect = document.getElementById('new-template-category');
+                if(catSelect) {
+                    fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                        catSelect.innerHTML = '';
+                        if(cats && cats.length > 0){
+                            cats.forEach(c => {
+                                const sel = (c.id == data.item.category_id) ? 'selected' : '';
+                                catSelect.innerHTML += `<option value="${c.id}" ${sel}>${c.name}</option>`;
+                            });
+                        }
+                    });
+                }
+            }
+        });
+    };
+
+    window.openAddTemplateModal = function() {
+        window.activeProjectThumbnailBlob = null; 
+        const previewDiv = document.getElementById('template-thumb-preview'); 
+        if (previewDiv) previewDiv.innerHTML = '<span style="color:#aaa; font-size:10px;">None</span>';
+
+        const modal = document.getElementById('admin-template-modal');
+        if (modal) modal.style.display = 'flex';
+        
+        let idInput = document.getElementById('edit-template-id');
+        if (idInput) idInput.value = '';
+        
+        const nameInput = document.getElementById('new-template-name');
+        const catNameInput = document.getElementById('new-category-name');
+        const htmlInput = document.getElementById('new-template-html');
+        if(nameInput) nameInput.value = '';
+        if(catNameInput) catNameInput.value = '';
+        if(htmlInput) htmlInput.value = '';
+
+        const catSelect = document.getElementById('new-template-category');
+        if(catSelect) {
+            catSelect.innerHTML = '<option value="" disabled selected>Loading...</option>';
+            fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                catSelect.innerHTML = '<option value="" disabled selected>Select Category...</option>'; 
+                if(cats && cats.length > 0){
+                    cats.forEach(c => {
+                        catSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                } else {
+                    catSelect.innerHTML = '<option disabled>No categories exist. Create one first.</option>';
+                }
+            });
+        }
+        
+        const manageCatSelect = document.getElementById('manage-category-select');
+        if(manageCatSelect) {
+            manageCatSelect.innerHTML = '<option value="" disabled selected>Loading...</option>';
+            fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                if(cats && cats.length > 0){
+                    cats.forEach(c => {
+                        manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                    });
+                }
+            });
+        }
+
+        window.switchTemplateTab('category');
+    };
+
+    window.switchTemplateTab = function(tab) {
+        document.querySelectorAll('#admin-template-modal .sub-img-tab').forEach(t => t.classList.remove('active'));
+        const formCat = document.getElementById('form-add-category');
+        const formItem = document.getElementById('form-add-item');
+        if(formCat) formCat.style.display = 'none';
+        if(formItem) formItem.style.display = 'none';
+        
+        if(tab === 'category') {
+            const tabBtn = document.getElementById('tab-add-category');
+            if(tabBtn) tabBtn.classList.add('active');
+            if(formCat) formCat.style.display = 'block';
+            
+            const manageCatSelect = document.getElementById('manage-category-select');
+            if (manageCatSelect) {
+                 fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                    if(cats && cats.length > 0){
+                        cats.forEach(c => {
+                            manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`;
+                        });
+                    }
+                });
+            }
+
+        } else {
+            const tabBtn = document.getElementById('tab-add-item');
+            if(tabBtn) tabBtn.classList.add('active');
+            if(formItem) formItem.style.display = 'block';
+        }
+    };
+
+    window.saveNewCategory = function() {
+        const nameInput = document.getElementById('new-category-name');
+        if(!nameInput) return;
+        const name = nameInput.value.trim();
+        if(!name) { alert("Please enter a category name"); return; }
+        
+        fetch('/api/admin/templates/categories', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: name })
+        }).then(r=>r.json()).then(d => {
+            if(d.success) {
+                alert("Category created successfully!");
+                nameInput.value = '';
+                
+                window.sidebarCache.categories = null; // Clear cache
+                
+                const manageCatSelect = document.getElementById('manage-category-select');
+                const templateCatSelect = document.getElementById('new-template-category');
+                
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    if (manageCatSelect) {
+                        manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                        cats.forEach(c => manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                    if (templateCatSelect) {
+                        templateCatSelect.innerHTML = '<option value="" disabled selected>Select Category...</option>';
+                        cats.forEach(c => {
+                            const sel = c.id == d.category.id ? 'selected' : '';
+                            templateCatSelect.innerHTML += `<option value="${c.id}" ${sel}>${c.name}</option>`;
+                        });
+                    }
+                });
+
+                window.switchTemplateTab('item');
+                if(typeof window.loadSidebarCategories === 'function') window.loadSidebarCategories();
+            } else {
+                alert("Error: " + d.error);
+            }
+        }).catch(e => alert("Network Error saving category."));
+    };
+
+    window.loadTemplateAsProject = async function(templateId) {
+        
+        // Explicitly force progress overlay to display
+        const progOverlay = document.getElementById('progress-overlay');
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+        if(progOverlay) progOverlay.style.display = 'flex';
+        if(progText) progText.textContent = "Loading Template...";
+        if(progPercent) progPercent.textContent = "0%";
+        
+        if(typeof showProgressOverlay === 'function') showProgressOverlay("Loading Template...");
+        
+        const fetchId = typeof templateId === 'object' ? templateId.id : templateId;
+        
+        try {
+            const response = await fetch(`/api/admin/templates/items/${fetchId}`);
+            const data = await response.json();
+            
+            if (data.success && data.item) {
+                if (data.item.project_data_json) {
+                    const files = JSON.parse(data.item.project_data_json);
+                    if (!files || Object.keys(files).length === 0) throw new Error("Empty files");
+                    
+                    // --- BUG FIX: PREVENT MOBILE VIEW DISTORTION / QUIRKS MODE ---
+                    // Inject missing DOCTYPE and Viewport tags into loaded templates
+                    for (let key in files) {
+                        if (key.endsWith('.html') || key.endsWith('.php')) {
+                            let content = files[key];
+                            if (!content.trim().toLowerCase().startsWith('<!doctype')) {
+                                content = '<!DOCTYPE html>\n' + content;
+                            }
+                            if (!content.includes('name="viewport"')) {
+                                if (content.includes('<head>')) {
+                                    content = content.replace('<head>', '<head>\n    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">');
+                                } else {
+                                    content = content.replace('<html', '<html\n><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"></head>');
+                                }
+                            }
+                            files[key] = content;
+                        }
+                    }
+                    // -------------------------------------------------------------
+                    
+                    generatedFiles = files;
+                    
+                    currentChatHistory = []; 
+                    const chatDisplay = document.getElementById('chat-display');
+                    if (chatDisplay) {
+                        chatDisplay.innerHTML = '';
+                    }
+                    
+                    if(progText) progText.textContent = "Syncing Template to Session...";
+                    if(progPercent) progPercent.textContent = "40%";
+                    if(typeof updateProgressCircle === 'function') updateProgressCircle(40, "Syncing Template to Session...");
+
+                    const fileKeys = Object.keys(files);
+                    const chunkSize = 10;
+                    for (let i = 0; i < fileKeys.length; i += chunkSize) {
+                        const chunk = {};
+                        const keysChunk = fileKeys.slice(i, i + chunkSize);
+                        keysChunk.forEach(k => { chunk[k] = files[k]; });
+                        
+                        const isFirstChunk = (i === 0);
+                        
+                        await fetch('/api/sync_state', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({
+                                files: chunk,
+                                partial: !isFirstChunk,
+                                is_new_project: isFirstChunk
+                            })
+                        });
+                        
+                        const percent = 40 + Math.round(((i + keysChunk.length) / fileKeys.length) * 40);
+                        
+                        if(progPercent) progPercent.textContent = percent + '%';
+                        if(progText) progText.textContent = `Syncing... ${percent}%`;
+                        if (typeof updateProgressCircle === 'function') updateProgressCircle(percent, `Syncing... ${percent}%`);
+                    }
+                    
+                    if(progText) progText.textContent = "Loading UI Preview...";
+                    if(progPercent) progPercent.textContent = "90%";
+                    if(typeof updateProgressCircle === 'function') updateProgressCircle(90, "Loading UI Preview...");
+
+                    let startPage = null;
+                    const allFiles = Object.keys(generatedFiles);
+                    
+                    if (allFiles.includes('index.html')) startPage = 'index.html';
+                    else if (allFiles.includes('index.php')) startPage = 'index.php';
+                    else {
+                        const pages = allFiles.filter(f => f.endsWith('.html') || f.endsWith('.php'));
+                        if (pages.length > 0) {
+                            startPage = pages.find(f => f.toLowerCase().endsWith('index.html')) || 
+                                        pages.find(f => f.toLowerCase().endsWith('index.php')) || 
+                                        pages.find(f => f.toLowerCase().endsWith('home.html') || f.toLowerCase().endsWith('home.php')) || 
+                                        pages[0];
+                        }
+                    }
+
+                    if (!startPage) {
+                        if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                        if(progOverlay) progOverlay.style.display = 'none';
+                        alert("Error: No HTML or PHP pages found in this template!");
+                        return;
+                    }
+                    
+                    const session = getLocalSession();
+                    session.activeProject = null;
+                    localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+                    currentPreviewFile = startPage;
+                    updatePageDropdown(startPage);
+                    
+                    await loadPreview(startPage);
+                    
+                    if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                    if(progOverlay) progOverlay.style.display = 'none';
+                    
+                    updateStatus("Template loaded successfully!");
+                    window.closeElementsSlider();
+                    if(typeof enableSaveButton === 'function') enableSaveButton();
+
+                } else if (data.item.content_html) {
+                    if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                    if(progOverlay) progOverlay.style.display = 'none';
+                    if(typeof pasteSection === 'function') {
+                        const iframe = document.getElementById('preview-frame');
+                        const doc = iframe.contentDocument || iframe.contentWindow.document;
+                        doc.body.insertAdjacentHTML('beforeend', data.item.content_html);
+                        if(typeof initEditor === 'function') initEditor(iframe);
+                        window.closeElementsSlider();
+                        updateStatus("Template block inserted at bottom of page.");
+                        if(typeof enableSaveButton === 'function') enableSaveButton();
+                        if(typeof captureState === 'function') captureState();
+                    }
+                }
+            } else {
+                if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                if(progOverlay) progOverlay.style.display = 'none';
+                alert("Failed to load template: " + (data.error || "Unknown error"));
+            }
+        } catch(err) {
+            if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            if(progOverlay) progOverlay.style.display = 'none';
+            alert("Network error loading template.");
+            console.error(err);
+        }
+    };
+
+    window.captureActiveProjectThumbnail = async function() {
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe || !iframe.contentDocument || !iframe.contentDocument.body) {
+            alert("No active website loaded to capture.");
+            return;
+        }
+
+        const btn = document.getElementById('btn-thumb-use-active');
+        if (!btn) return;
+        const originalText = btn.textContent;
+        btn.textContent = "📸 Capturing...";
+        btn.disabled = true;
+
+        try {
+            if (typeof html2canvas === 'undefined') {
+                await new Promise((resolve, reject) => {
+                    const script = document.createElement('script');
+                    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
+            }
+
+            const doc = iframe.contentDocument;
+            const canvas = await html2canvas(doc.body, {
+                useCORS: true,
+                allowTaint: true,
+                scale: 0.5,
+                logging: false,
+                width: 1200,
+                height: 800,
+                windowWidth: 1200,
+                windowHeight: 800
+            });
+
+            canvas.toBlob((blob) => {
+                window.activeProjectThumbnailBlob = blob;
+                const previewUrl = URL.createObjectURL(blob);
+                
+                const previewDiv = document.getElementById('template-thumb-preview');
+                if (previewDiv) {
+                    previewDiv.innerHTML = `<img src="${previewUrl}" style="width:100%; height:100%; object-fit:cover;">`;
+                }
+                
+                const fileInput = document.getElementById('new-template-image');
+                if (fileInput) fileInput.value = '';
+                
+                btn.textContent = "✅ Captured!";
+                setTimeout(() => {
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }, 2000);
+            }, 'image/jpeg', 0.8);
+
+        } catch (err) {
+            console.error("Capture Error:", err);
+            alert("Failed to capture screenshot. Check console for details.");
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    };
+
+    window.saveNewTemplate = async function() {
+        const btn = document.getElementById('btn-save-template');
+        const nameInput = document.getElementById('new-template-name');
+        const catInput = document.getElementById('new-template-category');
+        const htmlInput = document.getElementById('new-template-html');
+        const projectFolderInput = document.getElementById('new-template-project-folder');
+        const fileInput = document.getElementById('new-template-image');
+        
+        const progressContainer = document.getElementById('template-save-progress-container');
+        const progressStatus = document.getElementById('template-save-status');
+        const progressPercent = document.getElementById('template-save-percent');
+        const progressBar = document.getElementById('template-save-bar');
+
+        if(!nameInput || !catInput || !htmlInput) return;
+
+        const name = nameInput.value.trim();
+        const categoryId = catInput.value;
+        const htmlContent = htmlInput.value.trim();
+        
+        if (!name || !categoryId) {
+            alert("Name and Category are required!");
+            return;
+        }
+
+        if(btn) {
+            btn.disabled = true;
+            btn.textContent = "Processing...";
+        }
+
+        if(progressContainer) progressContainer.style.display = 'block';
+        if(progressStatus) progressStatus.textContent = 'Reading files...';
+        if(progressBar) progressBar.style.width = '10%';
+        if(progressPercent) progressPercent.textContent = '10%';
+
+        let projectDataJson = "";
+        
+        if (window.activeProjectForTemplate) {
+            // --- BUG FIX: PREVENT MOBILE VIEW DISTORTION / QUIRKS MODE ---
+            // Ensure DOCTYPE and Viewport tags are explicitly saved to the database
+            let sanitizedFiles = {};
+            for (let key in window.activeProjectForTemplate) {
+                let content = window.activeProjectForTemplate[key];
+                if (key.endsWith('.html') || key.endsWith('.php')) {
+                    if (!content.trim().toLowerCase().startsWith('<!doctype')) {
+                        content = '<!DOCTYPE html>\n' + content;
+                    }
+                    if (!content.includes('name="viewport"')) {
+                        if (content.includes('<head>')) {
+                            content = content.replace('<head>', '<head>\n    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">');
+                        } else {
+                            content = content.replace('<html', '<html\n><head><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"></head>');
+                        }
+                    }
+                }
+                sanitizedFiles[key] = content;
+            }
+            projectDataJson = JSON.stringify(sanitizedFiles);
+            // -------------------------------------------------------------
+        } else if (projectFolderInput && projectFolderInput.files.length > 0) {
+            const pendingFiles = {};
+            const files = Array.from(projectFolderInput.files);
+            for (let i = 0; i < files.length; i++) {
+                let file = files[i];
+                let relativePath = file.webkitRelativePath || file.name;
+                if (relativePath.includes('/')) relativePath = relativePath.substring(relativePath.indexOf('/') + 1);
+                
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+                const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+                
+                if (textExtensions.includes(ext)) {
+                    let fileText = await file.text();
+                    
+                    // Sanitize uploaded files too
+                    if (ext === '.html' || ext === '.php') {
+                        if (!fileText.trim().toLowerCase().startsWith('<!doctype')) {
+                            fileText = '<!DOCTYPE html>\n' + fileText;
+                        }
+                        if (!fileText.includes('name="viewport"')) {
+                            if (fileText.includes('<head>')) {
+                                fileText = fileText.replace('<head>', '<head>\n    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">');
+                            }
+                        }
+                    }
+                    pendingFiles[relativePath] = fileText;
+                } else {
+                    const base64Data = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(file);
+                    });
+                    pendingFiles[relativePath] = base64Data;
+                }
+                
+                let p = 10 + Math.floor((i / files.length) * 30);
+                if(progressBar) progressBar.style.width = p + '%';
+                if(progressPercent) progressPercent.textContent = p + '%';
+            }
+            projectDataJson = JSON.stringify(pendingFiles);
+        }
+
+        if (!htmlContent && !projectDataJson) {
+            alert("Please provide either Single Element HTML or use a Full Project (Upload/Active).");
+            if(btn) { btn.disabled = false; btn.textContent = "Save Template"; }
+            if(progressContainer) progressContainer.style.display = 'none';
+            return;
+        }
+
+        if(progressStatus) progressStatus.textContent = 'Preparing payload...';
+
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('category_id', categoryId);
+        formData.append('content_html', htmlContent);
+        
+        if (projectDataJson) {
+            const blob = new Blob([projectDataJson], {type: 'application/json'});
+            formData.append('project_data_file', blob, 'project.json');
+        }
+        
+        let idInput = document.getElementById('edit-template-id');
+        if (idInput && idInput.value) {
+            formData.append('id', idInput.value);
+        }
+        
+        if (window.activeProjectThumbnailBlob) {
+            formData.append('image', window.activeProjectThumbnailBlob, 'thumbnail.jpg');
+        } else if (fileInput && fileInput.files[0]) {
+            formData.append('image', fileInput.files[0]);
+        }
+
+        if(progressStatus) progressStatus.textContent = 'Uploading to server...';
+        if(btn) btn.textContent = "Uploading...";
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/admin/templates/items', true);
+        
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percentComplete = 40 + Math.floor((e.loaded / e.total) * 59);
+                if(progressBar) progressBar.style.width = percentComplete + '%';
+                if(progressPercent) progressPercent.textContent = percentComplete + '%';
+            }
+        };
+        
+        xhr.onload = function() {
+            if (xhr.status >= 200 && xhr.status < 300) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if (data.success) {
+                        if(progressBar) progressBar.style.width = '100%';
+                        if(progressPercent) progressPercent.textContent = '100%';
+                        if(progressStatus) progressStatus.textContent = 'Complete!';
+                        
+                        setTimeout(() => {
+                            alert("✅ Template saved successfully!");
+                            const modal = document.getElementById('admin-template-modal');
+                            if (modal) modal.style.display = 'none';
+                            
+                            window.activeProjectForTemplate = null;
+                            window.activeProjectThumbnailBlob = null; 
+                            const previewDiv = document.getElementById('template-thumb-preview');
+                            if (previewDiv) previewDiv.innerHTML = '<span style="color:#aaa; font-size:10px;">None</span>';
+
+                            if(idInput) idInput.value = ''; 
+                            if(progressContainer) progressContainer.style.display = 'none';
+                            
+                            window.sidebarCache = { categories: null, templates: {} }; // Clear Cache on update
+                            if(typeof window.loadSidebarCategories === 'function') window.loadSidebarCategories(); 
+                        }, 500);
+                    } else {
+                        alert("❌ Error saving template: " + data.error);
+                        if(progressContainer) progressContainer.style.display = 'none';
+                    }
+                } catch(err) {
+                    alert("❌ Server returned invalid response.");
+                    if(progressContainer) progressContainer.style.display = 'none';
+                }
+            } else {
+                let errMsg = "Network error saving template. Code: " + xhr.status;
+                try {
+                    const res = JSON.parse(xhr.responseText);
+                    if (res.error) errMsg = "Error: " + res.error;
+                } catch(e) {}
+                alert("❌ " + errMsg);
+                if(progressContainer) progressContainer.style.display = 'none';
+            }
+            if(btn) { btn.disabled = false; btn.textContent = "Save Template"; }
+        };
+        
+        xhr.onerror = function() {
+            alert("❌ Network error saving template. Check server connection or file size limit.");
+            if(progressContainer) progressContainer.style.display = 'none';
+            if(btn) { btn.disabled = false; btn.textContent = "Save Template"; }
+        };
+        
+        xhr.send(formData);
+    };
+</script>

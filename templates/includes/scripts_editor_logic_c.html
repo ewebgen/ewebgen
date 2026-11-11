@@ -1,0 +1,816 @@
+<script>
+    // =====================================================================
+    // GOALS 1 - 6: DYNAMIC MODALS, LAYOUT SELECTOR & INLINE WIDGETS
+    // =====================================================================
+
+    document.addEventListener("DOMContentLoaded", () => {
+        injectCustomModals();
+    });
+
+    window.closeAllEditorPopups = function() {
+        const plusPopup = document.getElementById('plus-action-popup');
+        const inlineWidgetMenu = document.getElementById('inline-widget-menu');
+        if (plusPopup) plusPopup.style.display = 'none';
+        if (inlineWidgetMenu) inlineWidgetMenu.style.display = 'none';
+    };
+
+    function injectCustomModals() {
+        // 1. The Small "Plus Action" Popup
+        const plusPopup = document.createElement('div');
+        plusPopup.id = 'plus-action-popup';
+        plusPopup.style.cssText = 'display:none; position:fixed; background:#fff; border:1px solid #ccc; box-shadow:0 4px 15px rgba(0,0,0,0.2); border-radius:6px; z-index:10005; width:220px; flex-direction:column; overflow:hidden; font-family:sans-serif;';
+        plusPopup.innerHTML = `
+            <div style="background:#f8f9fa; padding:8px 12px; font-size:11px; font-weight:bold; color:#666; border-bottom:1px solid #eee;">INSERT OPTIONS</div>
+            <button onclick="handlePlusAction('elements')" style="background:white; border:none; padding:10px 15px; text-align:left; cursor:pointer; font-size:14px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:8px;">
+                <span style="color:#007bff;">🧩</span> Elements / Structure
+            </button>
+            <button onclick="handlePlusAction('add_widget_btn')" style="background:white; border:none; padding:10px 15px; text-align:left; cursor:pointer; font-size:14px; border-bottom:1px solid #eee; display:flex; align-items:center; gap:8px;">
+                <span style="color:#17a2b8;">➕</span> + Add Widget Button
+            </button>
+            <button onclick="handlePlusAction('saved')" style="background:white; border:none; padding:10px 15px; text-align:left; cursor:pointer; font-size:14px; display:flex; align-items:center; gap:8px;">
+                <span style="color:#28a745;">💾</span> Saved Section
+            </button>
+        `;
+        document.body.appendChild(plusPopup);
+
+        // 2. Layout Selector Modal
+        const layoutSelectorModal = document.createElement('div');
+        layoutSelectorModal.id = 'layout-selector-modal';
+        layoutSelectorModal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10010; justify-content:center; align-items:center; backdrop-filter:blur(3px);';
+        layoutSelectorModal.innerHTML = `
+            <div style="background:white; padding:30px; border-radius:8px; width:500px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+                <h3 style="margin-top:0; color:#333; margin-bottom:20px;">Select Structure</h3>
+                <div style="display:flex; flex-direction:column; justify-content:space-between; gap:15px;"> 
+                    <div onclick="insertLayout(1)" style="flex:1; padding:20px; border:2px dashed #007bff; border-radius:8px; cursor:pointer; transition:background 0.2s;">
+                        <div style="width:100%; height:40px; background:#e9ecef; margin-bottom:10px;"></div>
+                        <b>1 Column</b>
+                    </div>
+                    <div onclick="insertLayout(2)" style="flex:1; padding:20px; border:2px dashed #007bff; border-radius:8px; cursor:pointer; transition:background 0.2s;">
+                        <div style="display:flex; gap:5px; height:40px; margin-bottom:10px;"><div style="flex:1; background:#e9ecef;"></div><div style="flex:1; background:#e9ecef;"></div></div>
+                        <b>2 Columns</b>
+                    </div>
+                    <div onclick="insertLayout(3)" style="flex:1; padding:20px; border:2px dashed #007bff; border-radius:8px; cursor:pointer; transition:background 0.2s;">
+                        <div style="display:flex; gap:5px; height:40px; margin-bottom:10px;"><div style="flex:1; background:#e9ecef;"></div><div style="flex:1; background:#e9ecef;"></div><div style="flex:1; background:#e9ecef;"></div></div>
+                        <b>3 Columns</b>
+                    </div>
+                </div>
+                <button onclick="document.getElementById('layout-selector-modal').style.display='none'" style="margin-top:20px; padding:8px 20px; border:none; background:#ccc; border-radius:4px; cursor:pointer;">Cancel</button>
+            </div>
+        `;
+        document.body.appendChild(layoutSelectorModal);
+
+        // 3. Inline Widget Insertion Menu (Kept for legacy compatibility)
+        const inlineWidgetMenu = document.createElement('div');
+        inlineWidgetMenu.id = 'inline-widget-menu';
+        inlineWidgetMenu.style.cssText = 'display:none; position:fixed; background:white; border:1px solid #ccc; box-shadow:0 4px 10px rgba(0,0,0,0.2); border-radius:4px; z-index:10020; overflow:hidden; flex-direction:column; width:180px;';
+        inlineWidgetMenu.innerHTML = `
+            <div style="background:#f8f9fa; padding:8px 12px; font-size:11px; font-weight:bold; color:#666; border-bottom:1px solid #eee;">CHOOSE WIDGET</div>
+            <button onclick="insertInlineWidget('heading')" style="padding:10px; border:none; border-bottom:1px solid #eee; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">A Heading</button>
+            <button onclick="insertInlineWidget('text')" style="padding:10px; border:none; border-bottom:1px solid #eee; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">📝 Text</button>
+            <button onclick="insertInlineWidget('image')" style="padding:10px; border:none; border-bottom:1px solid #eee; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">🖼️ Image</button>
+            <button onclick="insertInlineWidget('video')" style="padding:10px; border:none; border-bottom:1px solid #eee; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">🎥 Video</button>
+            <button onclick="insertInlineWidget('button')" style="padding:10px; border:none; border-bottom:1px solid #eee; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">🔘 Button</button>
+            <button onclick="insertInlineWidget('divider')" style="padding:10px; border:none; border-bottom:1px solid #eee; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">➖ Divider</button>
+            <button onclick="insertInlineWidget('carousel')" style="padding:10px; border:none; background:white; text-align:left; cursor:pointer; font-weight:bold; transition:background 0.2s;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='white'">🎠 Image Carousel</button>
+        `;
+        document.body.appendChild(inlineWidgetMenu);
+
+        // --- Resizable & Browse Video Config Modal ---
+        const videoModal = document.createElement('div');
+        videoModal.id = 'video-config-modal';
+        videoModal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10030; justify-content:center; align-items:center; backdrop-filter:blur(3px);';
+        videoModal.innerHTML = `
+            <div style="background:white; padding:25px; border-radius:8px; width:450px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+                <h3 style="margin-top:0; color:#333;">🎥 Add Video</h3>
+                
+                <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">Video Type</label>
+                <select id="video-type-select" class="auth-input" onchange="window.toggleVideoInputUI()" style="width:100%; margin-bottom:15px; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                    <option value="youtube">YouTube Video</option>
+                    <option value="other">Other (.mp4 / Browse File)</option>
+                </select>
+                
+                <div id="video-url-container">
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">YouTube URL</label>
+                    <input type="text" id="video-url-input" class="auth-input" placeholder="e.g. https://www.youtube.com/watch?v=..." style="width:100%; margin-bottom:20px; padding:10px; border:1px solid #ccc; border-radius:4px;">
+                </div>
+                
+                <div id="video-browse-container" style="display:none; margin-bottom:20px;">
+                    <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">Select Video</label>
+                    <input type="file" id="video-file-input" accept="video/*" style="display:none;" onchange="window.handleLocalBrowse(this, 'video-url-hidden', true)">
+                    <input type="hidden" id="video-url-hidden">
+                    <button onclick="document.getElementById('video-file-input').click()" style="background:#28a745; color:white; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer; width:100%;">📁 Browse local Video</button>
+                    <p id="video-browse-status" style="font-size:12px; color:#666; margin-top:5px;">No video selected.</p>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:10px;">
+                    <button onclick="document.getElementById('video-config-modal').style.display='none'" style="background:#6c757d; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button onclick="executeInsertVideo()" style="background:#007bff; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">Insert Video</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(videoModal);
+
+        // --- Resizable & Browse Image Carousel Config Modal ---
+        const carouselModal = document.createElement('div');
+        carouselModal.id = 'carousel-config-modal';
+        carouselModal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10030; justify-content:center; align-items:center; backdrop-filter:blur(3px);';
+        carouselModal.innerHTML = `
+            <div style="background:white; padding:25px; border-radius:8px; width:550px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+                <h3 style="margin-top:0; color:#333;">🎠 Configure Image Carousel</h3>
+                <p style="font-size:13px; color:#666; margin-bottom:15px;">Browse files or paste URLs to create your sliding carousel.</p>
+                
+                <div id="carousel-images-container" style="flex:1; overflow-y:auto; margin-bottom:15px; padding-right:5px; display:flex; flex-direction:column; gap:10px;">
+                    </div>
+                
+                <button onclick="addCarouselImageField()" style="margin-bottom:20px; background:#17a2b8; color:white; border:none; padding:10px; border-radius:4px; cursor:pointer; font-weight:bold; width:fit-content;">+ Add Another Image</button>
+                
+                <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid #eee; padding-top:15px;">
+                    <button onclick="document.getElementById('carousel-config-modal').style.display='none'" style="background:#6c757d; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button onclick="executeInsertCarousel()" style="background:#007bff; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">Create Carousel</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(carouselModal);
+
+        // Click outside handler
+        document.addEventListener('click', (e) => {
+            const plusPopup = document.getElementById('plus-action-popup');
+            const inlineWidgetMenu = document.getElementById('inline-widget-menu');
+            
+            if (plusPopup && plusPopup.style.display !== 'none' && !plusPopup.contains(e.target) && !e.target.closest('.add-section-btn') && !e.target.closest('.left-add-plus-btn')) {
+                plusPopup.style.display = 'none';
+            }
+            if (inlineWidgetMenu && inlineWidgetMenu.style.display !== 'none' && !inlineWidgetMenu.contains(e.target) && !e.target.closest('.inline-add-widget-btn')) {
+                inlineWidgetMenu.style.display = 'none';
+            }
+        });
+
+        // 4. The "Save Section" Modal
+        const saveModal = document.createElement('div');
+        saveModal.id = 'save-section-modal';
+        saveModal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10010; justify-content:center; align-items:center; backdrop-filter:blur(3px);';
+        saveModal.innerHTML = `
+            <div style="background:white; padding:25px; border-radius:8px; width:400px; box-shadow:0 10px 30px rgba(0,0,0,0.3);">
+                <h3 style="margin-top:0; color:#333;">💾 Save Section</h3>
+                <p style="font-size:13px; color:#666; margin-bottom:20px;">Save this specific section for future use.</p>
+                <label style="font-weight:bold; font-size:13px; display:block; margin-bottom:5px;">Section Name</label>
+                <input type="text" id="save-sec-name" class="auth-input" placeholder="e.g., Hero Header Variant B" style="width:100%; margin-bottom:15px; padding:8px; border:1px solid #ccc; border-radius:4px;">
+                <div id="admin-save-global-wrap" style="display:none; margin-bottom:15px; background:#e8f4fd; padding:10px; border-radius:5px; border:1px solid #b8daff;">
+                    <label style="cursor:pointer; font-size:13px; font-weight:bold; color:#0056b3; display:flex; align-items:center;">
+                        <input type="checkbox" id="save-sec-global" style="margin-right:8px; width:16px; height:16px;"> Save as Public / Global Section
+                    </label>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:10px;">
+                    <button onclick="document.getElementById('save-section-modal').style.display='none'" style="background:#6c757d; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">Cancel</button>
+                    <button onclick="executeSaveSection()" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold;">Save Section</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(saveModal);
+
+        // 5. The "Insert Saved Section" Modal 
+        const insertModal = document.createElement('div');
+        insertModal.id = 'insert-saved-modal';
+        insertModal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:10010; justify-content:center; align-items:center; backdrop-filter:blur(3px);';
+        insertModal.innerHTML = `
+            <div style="background:white; border-radius:8px; width:800px; height:70vh; display:flex; flex-direction:column; box-shadow:0 10px 30px rgba(0,0,0,0.3); overflow:hidden;">
+                <div style="display:flex; justify-content:space-between; align-items:center; padding:15px 20px; border-bottom:1px solid #eee; background:#f8f9fa;">
+                    <h3 style="margin:0; color:#333;">💾 Insert Saved Items</h3>
+                    <button onclick="document.getElementById('insert-saved-modal').style.display='none'" style="background:transparent; border:none; font-size:20px; cursor:pointer; color:#999;">&times;</button>
+                </div>
+                
+                <div style="display:flex; flex:1; overflow:hidden;">
+                    <div style="width: 230px; background:#f4f6f8; border-right:1px solid #ddd; padding:15px; display:flex; flex-direction:column; gap:10px;">
+                        <button onclick="switchInsertTab('my-sections', this)" class="insert-tab-btn active" style="padding:12px; background:#007bff; color:white; border:none; border-radius:4px; cursor:pointer; font-weight:bold; text-align:left;">👤 My Saved Sections</button>
+                        <button onclick="switchInsertTab('public-sections', this)" class="insert-tab-btn" style="padding:12px; background:transparent; color:#333; border:1px solid transparent; border-radius:4px; cursor:pointer; font-weight:bold; text-align:left;">🌍 Public Sections</button>
+                         
+                    </div>
+
+                    <div style="flex:1; padding:20px; overflow-y:auto; background:#fff;">
+                        <div id="insert-my-sections" class="insert-tab-content" style="display:flex; flex-wrap:wrap; gap:15px; align-content:flex-start;"></div>
+                        <div id="insert-public-sections" class="insert-tab-content" style="display:none; flex-wrap:wrap; gap:15px; align-content:flex-start;"></div>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(insertModal);
+    }
+
+    // --- Local File Browse Handler ---
+    window.handleLocalBrowse = function(fileInput, targetInputId, isVideo = false) {
+        const file = fileInput.files[0];
+        if(file) {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const url = e.target.result;
+                if(targetInputId) {
+                    document.getElementById(targetInputId).value = url;
+                    if(isVideo) document.getElementById('video-browse-status').textContent = "✅ Video loaded ready for insert.";
+                } else {
+                    fileInput.previousElementSibling.value = url; // Set value in Carousel row
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    window.toggleVideoInputUI = function() {
+        const type = document.getElementById('video-type-select').value;
+        if (type === 'youtube') {
+            document.getElementById('video-url-container').style.display = 'block';
+            document.getElementById('video-browse-container').style.display = 'none';
+        } else {
+            document.getElementById('video-url-container').style.display = 'none';
+            document.getElementById('video-browse-container').style.display = 'block';
+        }
+    };
+
+    window.openSectionPlusPopup = function(element, x, y) {
+        window.__insertTarget = element;
+        const popup = document.getElementById('plus-action-popup');
+        if (y + 120 > window.innerHeight) y = window.innerHeight - 130;
+        popup.style.left = x + 'px';
+        popup.style.top = y + 'px';
+        popup.style.display = 'flex';
+    };
+
+    // --- NEW: Handle widget drawer integration for buttons ---
+    window.triggerWidgetDrawerForTarget = function(btnElement) {
+        // Clear any empty data attributes
+        const container = btnElement.closest('.eweb-column, .col, .eweb-block, .eweb-section') || btnElement.parentNode;
+        if (container && container.removeAttribute) {
+            container.removeAttribute('data-empty');
+        }
+
+        // Setup the target references for the Elements Drawer
+        window.__activeAddWidgetBtn = btnElement; 
+        window.__inlineWidgetTargetColumn = container;
+        window.__insertTarget = btnElement.parentNode;
+        window.__widgetToReplace = btnElement; 
+        
+        // Trigger the Elements drawer to open
+        if (typeof window.parent.openWidgetDrawer === 'function') {
+            window.parent.openWidgetDrawer();
+        } else if (typeof openWidgetDrawer === 'function') {
+            openWidgetDrawer();
+        }
+    };
+
+    window.handlePlusAction = function(actionType) {
+        document.getElementById('plus-action-popup').style.display = 'none';
+        
+        if (actionType === 'elements') {
+            document.getElementById('layout-selector-modal').style.display = 'flex';
+        } else if (actionType === 'add_widget_btn') {
+            const widgetBtnHtml = `<div style="width:100%; display:block; clear:both; text-align:center; margin:15px 0;"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; position:relative; z-index: 100;" contenteditable="false" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === 'function') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === 'function') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div>`;
+            injectHtmlIntoTarget(widgetBtnHtml);
+        } else if (actionType === 'saved') {
+            loadSavedSectionsUI();
+            document.getElementById('insert-saved-modal').style.display = 'flex';
+        }
+    };
+
+    // FIX: Removed inline dashed borders from the generated layouts so they vanish on live page.
+    // ADDED: Re-routed new layout buttons to the Widget Drawer
+    window.insertLayout = function(cols) {
+        let content = '';
+        if (cols === 1) content = '<section class="eweb-section py-5" style="min-height: 150px; padding: 20px; position: relative;"><div class="container eweb-container"><div class="row eweb-row" style="display: flex; width: 100%;"><div class="col-12 eweb-column" style="flex: 1; min-height: 100px; padding: 10px; box-sizing: border-box; display:flex; align-items:center; justify-content:center; flex-direction:column; transition:background 0.2s;" data-empty="true"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin-top: 15px; display: block; width: fit-content; text-align: center;" contenteditable="false" onmousedown="event.preventDefault();" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === \'function\') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === \'function\') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div></div></div><div class="section-resize-handle" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 8px; background: rgba(0,0,0,0.1); cursor: ns-resize;"></div></section>';
+        if (cols === 2) content = '<section class="eweb-section py-5" style="min-height: 150px; padding: 20px; position: relative;"><div class="container eweb-container"><div class="row eweb-row" style="display: flex; flex-direction: row; flex-wrap: nowrap !important; width: 100%; margin: 0; gap: 10px;"><div class="eweb-column col-6" style="flex: 0 0 calc(50% - 5px); max-width: calc(50% - 5px); min-height: 100px; padding: 10px; box-sizing: border-box; display:flex; align-items:center; justify-content:center; flex-direction:column; transition:background 0.2s;" data-empty="true"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin-top: 15px; display: block; width: fit-content; text-align: center;" contenteditable="false" onmousedown="event.preventDefault();" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === \'function\') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === \'function\') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div><div class="eweb-column col-6" style="flex: 0 0 calc(50% - 5px); max-width: calc(50% - 5px); min-height: 100px; padding: 10px; box-sizing: border-box; display:flex; align-items:center; justify-content:center; flex-direction:column; transition:background 0.2s;" data-empty="true"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin-top: 15px; display: block; width: fit-content; text-align: center;" contenteditable="false" onmousedown="event.preventDefault();" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === \'function\') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === \'function\') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div></div></div><div class="section-resize-handle" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 8px; background: rgba(0,0,0,0.1); cursor: ns-resize;"></div></section>';
+        if (cols === 3) content = '<section class="eweb-section py-5" style="min-height: 150px; padding: 20px; position: relative;"><div class="container eweb-container"><div class="row eweb-row" style="display: flex; flex-direction: row; flex-wrap: nowrap !important; width: 100%; margin: 0; gap: 10px;"><div class="eweb-column col-4" style="flex: 0 0 calc(33.333% - 6.66px); max-width: calc(33.333% - 6.66px); min-height: 100px; padding: 10px; box-sizing: border-box; display:flex; align-items:center; justify-content:center; flex-direction:column; transition:background 0.2s;" data-empty="true"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin-top: 15px; display: block; width: fit-content; text-align: center;" contenteditable="false" onmousedown="event.preventDefault();" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === \'function\') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === \'function\') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div><div class="eweb-column col-4" style="flex: 0 0 calc(33.333% - 6.66px); max-width: calc(33.333% - 6.66px); min-height: 100px; padding: 10px; box-sizing: border-box; display:flex; align-items:center; justify-content:center; flex-direction:column; transition:background 0.2s;" data-empty="true"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin-top: 15px; display: block; width: fit-content; text-align: center;" contenteditable="false" onmousedown="event.preventDefault();" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === \'function\') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === \'function\') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div><div class="eweb-column col-4" style="flex: 0 0 calc(33.333% - 6.66px); max-width: calc(33.333% - 6.66px); min-height: 100px; padding: 10px; box-sizing: border-box; display:flex; align-items:center; justify-content:center; flex-direction:column; transition:background 0.2s;" data-empty="true"><button class="inline-add-widget-btn" style="padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; user-select:none; margin-top: 15px; display: block; width: fit-content; text-align: center;" contenteditable="false" onmousedown="event.preventDefault();" onclick="event.preventDefault(); event.stopPropagation(); if(typeof window.parent.triggerWidgetDrawerForTarget === \'function\') window.parent.triggerWidgetDrawerForTarget(this); else if(typeof triggerWidgetDrawerForTarget === \'function\') triggerWidgetDrawerForTarget(this);">+ Add Widget</button></div></div></div><div class="section-resize-handle" style="position: absolute; bottom: 0; left: 0; width: 100%; height: 8px; background: rgba(0,0,0,0.1); cursor: ns-resize;"></div></section>';
+        
+        injectHtmlIntoTarget(content);
+        document.getElementById('layout-selector-modal').style.display = 'none';
+    };
+
+    window.openInlineWidgetMenu = function(btnElement) {
+        window.__activeAddWidgetBtn = btnElement; // Store exact button clicked
+        window.__inlineWidgetTargetColumn = btnElement.closest('.eweb-column') || btnElement.closest('.col') || btnElement.parentElement;
+        const menu = document.getElementById('inline-widget-menu');
+        
+        const rect = btnElement.getBoundingClientRect();
+        const iframeRect = document.getElementById('preview-frame').getBoundingClientRect();
+        
+        let top = iframeRect.top + rect.bottom + 5;
+        let left = iframeRect.left + rect.left;
+        
+        if (top + 300 > window.innerHeight) {
+            top = iframeRect.top + rect.top - 305; 
+        }
+        
+        menu.style.left = left + 'px';
+        menu.style.top = top + 'px';
+        menu.style.display = 'flex';
+    };
+
+    // --- Carousel Fields Generator ---
+    window.addCarouselImageField = function(val = '') {
+        const container = document.getElementById('carousel-images-container');
+        const div = document.createElement('div');
+        div.style.cssText = 'display:flex; gap:10px; align-items:center; margin-bottom:5px;';
+        div.innerHTML = `
+            <input type="text" class="auth-input carousel-img-url" placeholder="Image URL (Or click Browse)" value="${val}" style="flex:1; padding:10px; border:1px solid #ccc; border-radius:4px;">
+            <input type="file" accept="image/*" style="display:none;" onchange="window.handleLocalBrowse(this, null, false)">
+            <button onclick="this.previousElementSibling.click()" style="background:#28a745; color:white; border:none; padding:10px 15px; cursor:pointer; border-radius:4px; font-weight:bold;">📁 Browse</button>
+            <button onclick="this.parentElement.remove()" style="background:#dc3545; color:white; border:none; padding:10px 15px; cursor:pointer; border-radius:4px; font-weight:bold;" title="Remove">X</button>
+        `;
+        container.appendChild(div);
+    };
+
+    // --- FIX: Expose functions to open the modals for EXISTING widgets to enable editing ---
+    window.openEditVideoModal = function(widget, currentUrl, isYouTube) {
+        window.__activeEditWidget = widget;
+        const typeSelect = document.getElementById('video-type-select');
+        const urlInput = document.getElementById('video-url-input');
+        const hiddenInput = document.getElementById('video-url-hidden');
+        
+        if (isYouTube) {
+            typeSelect.value = 'youtube';
+            urlInput.value = currentUrl;
+            hiddenInput.value = '';
+            document.getElementById('video-browse-status').textContent = "No video selected.";
+        } else {
+            typeSelect.value = 'other';
+            hiddenInput.value = currentUrl;
+            urlInput.value = '';
+            document.getElementById('video-browse-status').textContent = "✅ Existing video loaded.";
+        }
+        
+        window.toggleVideoInputUI();
+        
+        const modal = document.getElementById('video-config-modal');
+        modal.querySelector('h3').textContent = '🎥 Edit Video';
+        const btn = modal.querySelector('button[onclick="executeInsertVideo()"]');
+        if(btn) btn.textContent = 'Update Video';
+        
+        modal.style.display = 'flex';
+    };
+
+    window.openEditCarouselModal = function(widget, urls) {
+        window.__activeEditWidget = widget;
+        const container = document.getElementById('carousel-images-container');
+        container.innerHTML = '';
+        
+        if (urls && urls.length > 0) {
+            urls.forEach(url => window.addCarouselImageField(url));
+        } else {
+            window.addCarouselImageField('');
+            window.addCarouselImageField('');
+        }
+        
+        const modal = document.getElementById('carousel-config-modal');
+        modal.querySelector('h3').textContent = '🎠 Edit Image Carousel';
+        const btn = modal.querySelector('button[onclick="executeInsertCarousel()"]');
+        if(btn) btn.textContent = 'Update Carousel';
+        
+        modal.style.display = 'flex';
+    };
+
+
+    window.insertInlineWidget = function(type) {
+        document.getElementById('inline-widget-menu').style.display = 'none';
+
+        if (type === 'video') {
+            window.__activeEditWidget = null; // Ensure fresh state
+            document.getElementById('video-url-input').value = '';
+            document.getElementById('video-url-hidden').value = '';
+            document.getElementById('video-browse-status').textContent = "No video selected.";
+            document.getElementById('video-type-select').value = 'youtube';
+            window.toggleVideoInputUI();
+            
+            const modal = document.getElementById('video-config-modal');
+            modal.querySelector('h3').textContent = '🎥 Add Video';
+            const btn = modal.querySelector('button[onclick="executeInsertVideo()"]');
+            if(btn) btn.textContent = 'Insert Video';
+            
+            modal.style.display = 'flex';
+            return;
+        }
+
+        if (type === 'carousel') {
+            window.__activeEditWidget = null; // Ensure fresh state
+            document.getElementById('carousel-images-container').innerHTML = '';
+            addCarouselImageField('');
+            addCarouselImageField(''); 
+            
+            const modal = document.getElementById('carousel-config-modal');
+            modal.querySelector('h3').textContent = '🎠 Configure Image Carousel';
+            const btn = modal.querySelector('button[onclick="executeInsertCarousel()"]');
+            if(btn) btn.textContent = 'Create Carousel';
+
+            modal.style.display = 'flex';
+            return;
+        }
+
+        let content = '';
+        if (type === 'heading') content = '<h2 class="eweb-widget eweb-heading" style="padding:10px; margin-bottom:15px; width:100%;">New Heading</h2>';
+        if (type === 'text') content = '<div class="eweb-widget eweb-text" style="padding:10px; margin-bottom:15px; width:100%;"><p>New Text</p></div>';
+        if (type === 'image') content = '<div class="eweb-widget eweb-image-widget text-center" style="padding:10px; margin-bottom:15px; width:100%;"><img src="https://images.unsplash.com/photo-1611162617474-5b21e879e113?ixlib=rb-4.0.3&auto=format&fit=crop&w=600&q=80" style="max-width:100%;" alt="Image"></div>';
+        if (type === 'button') content = '<div class="eweb-widget eweb-button-widget text-center" style="padding:10px; margin-bottom:15px; width:100%;"><a href="#" class="btn btn-primary" onclick="event.preventDefault()">Click Me</a></div>';
+        if (type === 'divider') content = '<div class="eweb-widget eweb-divider" style="padding:10px; margin-bottom:15px; width:100%;"><hr style="border-top: 2px solid #ccc; margin: 20px 0;"></div>';
+        
+        finalizeInlineWidgetInsertion(content);
+    };
+
+    // --- Execute Video Insertion ---
+    window.executeInsertVideo = function() {
+        const type = document.getElementById('video-type-select').value;
+        let content = '';
+        
+        if (type === 'youtube') {
+            let url = document.getElementById('video-url-input').value.trim();
+            if(!url) { alert("Please enter a valid YouTube URL."); return; }
+            let iframeSrc = url;
+            if(url.includes('watch?v=')) {
+                const videoId = url.split('watch?v=')[1].split('&')[0];
+                iframeSrc = `https://www.youtube.com/embed/${videoId}`;
+            } else if (url.includes('youtu.be/')) {
+                const videoId = url.split('youtu.be/')[1].split('?')[0];
+                iframeSrc = `https://www.youtube.com/embed/${videoId}`;
+            }
+            content = `<div class="eweb-widget eweb-video-widget resizable-widget" style="padding:0; margin-bottom:15px; width:100%; height:400px; resize:both; overflow:hidden; position:relative;"><iframe src="${iframeSrc}" style="width:100%; height:100%; border:none; pointer-events:auto;" allowfullscreen contenteditable="false"></iframe></div>`;
+        } else {
+            let url = document.getElementById('video-url-hidden').value.trim();
+            if(!url) { alert("Please browse and select a video."); return; }
+            content = `<div class="eweb-widget eweb-video-widget resizable-widget" style="padding:0; margin-bottom:15px; width:100%; height:400px; resize:both; overflow:hidden; position:relative;"><video src="${url}" controls style="width:100%; height:100%; object-fit: cover;" contenteditable="false"></video></div>`;
+        }
+        
+        document.getElementById('video-config-modal').style.display = 'none';
+        finalizeInlineWidgetInsertion(content);
+    };
+
+    // --- Execute Carousel Insertion ---
+    window.executeInsertCarousel = function() {
+        const inputs = document.querySelectorAll('.carousel-img-url');
+        const urls = [];
+        inputs.forEach(inp => { if(inp.value.trim()) urls.push(inp.value.trim()); });
+        
+        if(urls.length === 0) { alert("Please provide at least one image URL."); return; }
+        
+        const carouselId = 'carousel-' + Date.now();
+        let indicatorsHtml = '';
+        let itemsHtml = '';
+        
+        urls.forEach((url, index) => {
+            const active = index === 0 ? 'active' : '';
+            indicatorsHtml += `<button type="button" data-bs-target="#${carouselId}" data-bs-slide-to="${index}" class="${active}" aria-current="${index===0?'true':'false'}"></button>`;
+            itemsHtml += `
+                <div class="carousel-item ${active}" style="height:100%; transition: transform 0.6s ease-in-out;">
+                    <img src="${url}" class="d-block w-100" style="object-fit:cover; height:100%; pointer-events:none;" contenteditable="false">
+                </div>
+            `;
+        });
+        
+        const cssFix = `<style>
+            #${carouselId} .carousel-item { display: none; float: left; width: 100%; margin-right: -100%; backface-visibility: hidden; }
+            #${carouselId} .carousel-item.active { display: block; }
+            #${carouselId} .carousel-control-prev, #${carouselId} .carousel-control-next { position: absolute; top: 0; bottom: 0; z-index: 10; display: flex; align-items: center; justify-content: center; width: 15%; padding: 0; color: #fff; text-align: center; background: none; border: 0; cursor: pointer; }
+            #${carouselId} .carousel-control-prev { left: 0; }
+            #${carouselId} .carousel-control-next { right: 0; }
+            #${carouselId} .carousel-indicators { position: absolute; right: 0; bottom: 0; left: 0; z-index: 15; display: flex; justify-content: center; padding: 0; margin-bottom: 1rem; list-style: none; }
+        </style>`;
+        
+        const prevScript = `const c=this.closest('.carousel'); const i=Array.from(c.querySelectorAll('.carousel-item')); let a=i.findIndex(x=>x.classList.contains('active')); if(a===-1)a=0; i[a].classList.remove('active'); i[(a-1+i.length)%i.length].classList.add('active');`;
+        const nextScript = `const c=this.closest('.carousel'); const i=Array.from(c.querySelectorAll('.carousel-item')); let a=i.findIndex(x=>x.classList.contains('active')); if(a===-1)a=0; i[a].classList.remove('active'); i[(a+1)%i.length].classList.add('active');`;
+
+        const content = `
+        <div class="eweb-widget eweb-carousel-widget resizable-widget" style="padding:0; margin-bottom:15px; width:100%; height:400px; resize:both; overflow:hidden; position:relative;">
+            ${cssFix}
+            <div id="${carouselId}" class="carousel slide" data-bs-ride="carousel" style="width:100%; height:100%;">
+                <div class="carousel-indicators" style="z-index: 15;">${indicatorsHtml}</div>
+                <div class="carousel-inner" style="width:100%; height:100%;">${itemsHtml}</div>
+                <button class="carousel-control-prev" type="button" data-bs-target="#${carouselId}" data-bs-slide="prev" style="z-index: 20;" onclick="${prevScript}">
+                    <span class="carousel-control-prev-icon" aria-hidden="true" style="background-color: rgba(0,0,0,0.6); border-radius: 50%; width: 2.5rem; height: 2.5rem; display:inline-block;"></span>
+                </button>
+                <button class="carousel-control-next" type="button" data-bs-target="#${carouselId}" data-bs-slide="next" style="z-index: 20;" onclick="${nextScript}">
+                    <span class="carousel-control-next-icon" aria-hidden="true" style="background-color: rgba(0,0,0,0.6); border-radius: 50%; width: 2.5rem; height: 2.5rem; display:inline-block;"></span>
+                </button>
+            </div>
+        </div>`;
+        
+        document.getElementById('carousel-config-modal').style.display = 'none';
+        finalizeInlineWidgetInsertion(content);
+    };
+
+    // --- FIX: Smart Replacement vs Insertion logic ---
+    window.finalizeInlineWidgetInsertion = function(content) {
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        
+        // FIX 1 & 2: Protect against capturing during load
+        if (!window.isSwitchingPage && (!window.parent || !window.parent.isSwitchingPage)) {
+            if(typeof captureState === 'function') captureState();
+        }
+
+        const temp = doc.createElement('div');
+        temp.innerHTML = content.trim();
+        const fragment = doc.createDocumentFragment();
+        while(temp.firstChild) { fragment.appendChild(temp.firstChild); }
+
+        if (window.__activeEditWidget) {
+            // REPLACE EXISTING WIDGET
+            window.__activeEditWidget.parentNode.insertBefore(fragment, window.__activeEditWidget);
+            window.__activeEditWidget.remove();
+            window.__activeEditWidget = null; // Clear state
+        } else if (window.__activeAddWidgetBtn) {
+            // INSERT NEW (Via Button)
+            const addBtn = window.__activeAddWidgetBtn;
+            const container = addBtn.closest('.eweb-column, .col, .eweb-block, .eweb-section') || addBtn.parentNode;
+            
+            if (container && container.removeAttribute) {
+                container.removeAttribute('data-empty');
+            }
+            addBtn.parentNode.insertBefore(fragment, addBtn);
+        } else if (window.__inlineWidgetTargetColumn) { 
+            // INSERT NEW (Via Column target fallback)
+            if (window.__inlineWidgetTargetColumn.removeAttribute) {
+                window.__inlineWidgetTargetColumn.removeAttribute('data-empty');
+            }
+            
+            const addBtn = window.__inlineWidgetTargetColumn.querySelector('.inline-add-widget-btn');
+            if (addBtn) {
+                window.__inlineWidgetTargetColumn.insertBefore(fragment, addBtn);
+            } else {
+                window.__inlineWidgetTargetColumn.appendChild(fragment);
+                const newBtn = doc.createElement('button');
+                newBtn.className = 'inline-add-widget-btn';
+                newBtn.style.cssText = 'padding:8px 16px; background:#007bff; color:white; border:none; border-radius:4px; font-weight:bold; cursor:pointer; pointer-events:auto; margin-top: 15px; display: block; width: 100%; text-align: center;';
+                newBtn.innerHTML = '+ Add Widget';
+                newBtn.contentEditable = 'false';
+                newBtn.onclick = (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    if (typeof window.parent.triggerWidgetDrawerForTarget === 'function') window.parent.triggerWidgetDrawerForTarget(newBtn);
+                    else if (typeof triggerWidgetDrawerForTarget === 'function') triggerWidgetDrawerForTarget(newBtn);
+                };
+                window.__inlineWidgetTargetColumn.appendChild(newBtn);
+            }
+        }
+        
+        if(typeof initEditor === 'function') initEditor(iframe);
+        if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false;
+        
+        // FIX 1 & 2: Protect against capturing during load
+        if (!window.isSwitchingPage && (!window.parent || !window.parent.isSwitchingPage)) {
+            if(typeof captureState === 'function') captureState();
+        }
+        
+        window.__inlineWidgetTargetColumn = null;
+        window.__activeAddWidgetBtn = null;
+    };
+
+    window.openSaveSectionModal = function(element) {
+        window.__elementToSave = element;
+        const modal = document.getElementById('save-section-modal');
+        document.getElementById('save-sec-name').value = '';
+        
+        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin') {
+            document.getElementById('admin-save-global-wrap').style.display = 'block';
+            document.getElementById('save-sec-global').checked = false;
+        } else {
+            document.getElementById('admin-save-global-wrap').style.display = 'none';
+        }
+        
+        modal.style.display = 'flex';
+    };
+
+    window.executeSaveSection = function() {
+        const name = document.getElementById('save-sec-name').value.trim();
+        if (!name) { alert("Please provide a name for this section."); return; }
+        if (!window.__elementToSave) { alert("Error: Element lost focus."); return; }
+
+        const clone = window.__elementToSave.cloneNode(true);
+        clone.querySelectorAll('.section-action-bar, .column-action-bar, .widget-action-bar, .bg-control-container, .left-add-plus-btn, .section-resize-handle, .eweb-drop-indicator, .inline-add-widget-btn').forEach(el => el.remove());
+        
+        clone.querySelectorAll('.image-wrapper-editable').forEach(wrapper => {
+            const img = wrapper.querySelector('img');
+            if (img) wrapper.parentNode.replaceChild(img, wrapper);
+        });
+        
+        const isGlobal = document.getElementById('save-sec-global') && document.getElementById('save-sec-global').checked;
+        let htmlContent = clone.outerHTML;
+
+        let bundledCSS = "";
+        if (typeof generatedFiles !== 'undefined' && generatedFiles && generatedFiles['styles.css']) {
+            bundledCSS += generatedFiles['styles.css'] + "\n";
+        }
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe) {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            if (doc) {
+                doc.querySelectorAll('style').forEach(st => {
+                    if (!st.id || (!st.id.includes('editor') && !st.id.includes('live-styles') && !st.id.includes('dark-mode'))) {
+                        bundledCSS += st.innerHTML + "\n";
+                    }
+                });
+            }
+        }
+        
+        if (bundledCSS.trim() !== "") {
+            htmlContent = `<style class="eweb-bundled-style">\n${bundledCSS}\n</style>\n` + htmlContent;
+        }
+        
+        let bundledJS = "";
+        if (typeof generatedFiles !== 'undefined' && generatedFiles && generatedFiles['script.js']) {
+            bundledJS += generatedFiles['script.js'] + "\n";
+        }
+        if (bundledJS.trim() !== "") {
+            htmlContent += `\n<script class="eweb-bundled-script">\n${bundledJS}\n<\/script>`;
+        }
+
+        if (isGlobal) {
+            const formData = new FormData();
+            formData.append('name', name);
+            formData.append('category_id', 'null'); 
+            formData.append('content_html', htmlContent);
+
+            fetch('/api/admin/templates/items', { method: 'POST', body: formData })
+            .then(r=>r.json()).then(data => {
+                if(data.success) { alert("✅ Public Section Saved!"); document.getElementById('save-section-modal').style.display = 'none'; } 
+                else { alert("Error: " + data.error); }
+            }).catch(e => { alert("Network error saving public section."); console.error(e); });
+        } else {
+            const payload = { name: name, content_html: htmlContent };
+            fetch('/api/user/saved_sections', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) })
+            .then(r=>r.json()).then(data => {
+                if(data.success) { alert("✅ Section Saved to your account!"); document.getElementById('save-section-modal').style.display = 'none'; } 
+                else { alert("Error: " + data.error); }
+            }).catch(e => { alert("Network error saving section."); console.error(e); });
+        }
+    };
+
+    window.switchInsertTab = function(tabId, btn) {
+        document.querySelectorAll('.insert-tab-btn').forEach(b => {
+            b.classList.remove('active');
+            b.style.background = 'transparent'; b.style.color = '#333';
+        });
+        btn.classList.add('active');
+        btn.style.background = '#007bff'; btn.style.color = 'white';
+        
+        document.querySelectorAll('.insert-tab-content').forEach(c => c.style.display = 'none');
+        document.getElementById('insert-' + tabId).style.display = 'flex';
+    };
+
+    window.loadSavedSectionsUI = function() {
+        const myContainer = document.getElementById('insert-my-sections');
+        myContainer.innerHTML = '<p style="color:#999; text-align:center; width:100%; margin-top:30px;">Loading your saved sections...</p>';
+        
+        fetch('/api/user/saved_sections').then(r=>r.json()).then(data => {
+            myContainer.innerHTML = '';
+            if(data.success && data.sections && data.sections.length > 0) {
+                data.sections.forEach(sec => {
+                    const card = document.createElement('div');
+                    card.style.cssText = 'width:calc(50% - 8px); background:#fdfdfd; border:1px solid #ddd; border-radius:6px; padding:15px; box-shadow:0 2px 4px rgba(0,0,0,0.05); cursor:pointer; transition:transform 0.2s; position:relative;';
+                    card.innerHTML = `
+                        <h4 style="margin:0 0 5px 0; color:#007bff; font-size:15px; padding-right:20px;">${sec.name}</h4>
+                        <p style="margin:0; font-size:11px; color:#888;">Saved: ${sec.date}</p>
+                        <button class="delete-my-sec-btn" style="position:absolute; top:10px; right:10px; background:transparent; color:#dc3545; border:none; cursor:pointer;" title="Delete">🗑️</button>
+                    `;
+                    card.onclick = (e) => {
+                        if(e.target.classList.contains('delete-my-sec-btn')) {
+                            if(confirm("Delete this saved section permanently?")) {
+                                fetch('/api/user/saved_sections/' + sec.id, {method: 'DELETE'})
+                                .then(r=>r.json()).then(d => { if(d.success) loadSavedSectionsUI(); else alert("Error: " + d.error); });
+                            }
+                            return;
+                        }
+                        injectHtmlIntoTarget(sec.content_html);
+                    };
+                    myContainer.appendChild(card);
+                });
+            } else {
+                myContainer.innerHTML = '<p style="color:#999; text-align:center; width:100%; margin-top:30px;">You haven\'t saved any personal sections yet.</p>';
+            }
+        }).catch(err => {
+            myContainer.innerHTML = '<p style="color:#dc3545; text-align:center; width:100%; margin-top:30px;">Failed to load personal sections.</p>';
+        });
+
+        const pubContainer = document.getElementById('insert-public-sections');
+        pubContainer.innerHTML = '<p style="color:#999; text-align:center; width:100%;">Loading public sections...</p>';
+        
+        fetch('/api/templates/items').then(r=>r.json()).then(data => {
+            pubContainer.innerHTML = '';
+            let foundPublic = false;
+            
+            if(Array.isArray(data)) {
+                data.forEach(tpl => {
+                    if (tpl.content_html) { 
+                        foundPublic = true;
+                        const card = document.createElement('div');
+                        card.style.cssText = 'width:calc(50% - 8px); background:#fdfdfd; border:1px solid #ddd; border-radius:6px; padding:15px; box-shadow:0 2px 4px rgba(0,0,0,0.05); cursor:pointer; position:relative;';
+                        
+                        let adminDeleteBtn = '';
+                        if (typeof currentUser !== 'undefined' && currentUser && currentUser.role === 'admin') {
+                            adminDeleteBtn = `<button class="delete-pub-sec-btn" style="position:absolute; top:10px; right:10px; background:transparent; color:#dc3545; border:none; cursor:pointer;" title="Delete Public Section">🗑️</button>`;
+                        }
+
+                        card.innerHTML = `
+                            <h4 style="margin:0 0 5px 0; color:#28a745; font-size:15px; padding-right:20px;">${tpl.name}</h4>
+                            <p style="margin:0; font-size:11px; color:#888;">Public Section</p>
+                            ${adminDeleteBtn}
+                        `;
+                        
+                        card.onclick = (e) => { 
+                            if(e.target.classList.contains('delete-pub-sec-btn')) {
+                                if(confirm("Delete this public section permanently?")) {
+                                    fetch('/api/admin/templates/items/' + tpl.id, {method: 'DELETE'})
+                                    .then(r=>r.json()).then(d => { 
+                                        if(d.success || d.message) loadSavedSectionsUI(); 
+                                        else alert("Error: " + (d.error || "Failed to delete")); 
+                                    }).catch(err => {
+                                        console.error(err);
+                                        alert("Network error deleting section.");
+                                    });
+                                }
+                                return;
+                            }
+                            injectHtmlIntoTarget(tpl.content_html); 
+                        };
+                        pubContainer.appendChild(card);
+                    }
+                });
+            }
+            if(!foundPublic) pubContainer.innerHTML = '<p style="color:#999; text-align:center; width:100%; margin-top:30px;">No public sections available.</p>';
+        }).catch(err => {
+            pubContainer.innerHTML = '<p style="color:#dc3545; text-align:center; width:100%;">Failed to load public sections.</p>';
+        });
+    };
+
+    window.injectHtmlIntoTarget = function(html) {
+        if (!window.__insertTarget) {
+            alert("Lost insertion target focus.");
+            return;
+        }
+        
+        // FIX 1 & 2: Protect against capturing during load
+        if (!window.isSwitchingPage && (!window.parent || !window.parent.isSwitchingPage)) {
+            if(typeof captureState === 'function') captureState();
+        }
+        
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        
+        const temp = doc.createElement('div');
+        temp.innerHTML = html.trim();
+        
+        let target = window.__insertTarget;
+        let position = window.__insertPosition || 'afterend'; 
+        
+        const isTargetInsideColumn = target.closest('.col, .col-md-4, .col-md-6, .eweb-column');
+        const isInsertingSection = temp.firstChild && temp.firstChild.tagName === 'SECTION';
+
+        if (isInsertingSection && isTargetInsideColumn) {
+            const parentSection = target.closest('section');
+            if (parentSection) {
+                target = parentSection; 
+            }
+        }
+
+        Array.from(temp.children).forEach(child => {
+            if(child.tagName === 'SECTION') {
+                child.style.width = '100%';
+                
+                // =========================================================
+                // FIX: STOP TRAPPING ABSOLUTE IMAGES IN NEWLY INSERTED CONTAINERS
+                // =========================================================
+                let safeToMakeRelative = true;
+                const children = child.querySelectorAll(':scope > img, :scope > .image-wrapper-editable > img');
+                for (let i = 0; i < children.length; i++) {
+                    const style = doc.defaultView.getComputedStyle(children[i]);
+                    if (style.position === 'absolute' || style.position === 'fixed') {
+                        safeToMakeRelative = false;
+                        break;
+                    }
+                }
+                if (safeToMakeRelative) {
+                    child.style.position = 'relative';
+                }
+            }
+        });
+        
+        const fragment = doc.createDocumentFragment();
+        while(temp.firstChild) { fragment.appendChild(temp.firstChild); }
+        
+        if (position === 'beforebegin') {
+            target.parentNode.insertBefore(fragment, target);
+        } else if (position === 'afterbegin') {
+            target.insertBefore(fragment, target.firstChild);
+        } else if (position === 'beforeend') {
+            target.appendChild(fragment);
+        } else {
+            target.parentNode.insertBefore(fragment, target.nextSibling);
+        }
+        
+        if(typeof initEditor === 'function') initEditor(iframe);
+        if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false;
+        
+        // FIX 1 & 2: Protect against capturing during load
+        if (!window.isSwitchingPage && (!window.parent || !window.parent.isSwitchingPage)) {
+            if(typeof captureState === 'function') captureState();
+        }
+        
+        document.getElementById('insert-saved-modal').style.display = 'none';
+        window.__insertTarget = null;
+        window.__insertPosition = null; 
+        if (typeof updateStatus === 'function') updateStatus("✅ Element inserted successfully.");
+    }
+</script>

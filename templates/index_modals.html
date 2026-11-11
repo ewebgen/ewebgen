@@ -1,0 +1,1051 @@
+{% include 'includes/scripts_core_part1.html' %}
+    {% include 'includes/scripts_core_part2.html' %}
+    {% include 'includes/scripts_core_part3.html' %}
+    {% include 'includes/scripts_editor_part1.html' %}
+    {% include 'includes/scripts_editor_part2.html' %}
+    {% include 'includes/scripts_editor_part3.html' %}
+    {% include 'includes/scripts_editor_part4.html' %}
+    {% include 'includes/scripts_project_part1.html' %}
+    {% include 'includes/scripts_project_part2.html' %}
+    {% include 'includes/scripts_client_updater.html' %}
+    {% include 'includes/scripts_globals_auth.html' %}
+    {% include 'includes/scripts_core_logic.html' %}
+    {% include 'includes/scripts_editor_logic.html' %}
+    {% include 'includes/scripts_editor_logic_part2_a.html' %}
+    {% include 'includes/scripts_editor_logic_part2_b.html' %}
+    {% include 'includes/scripts_editor_logic_part2_c.html' %}
+    {% include 'includes/scripts_project_ui.html' %}
+    {% include 'includes/scripts_auth_part1.html' %}
+    {% include 'includes/scripts_auth_part2.html' %}
+    {% include 'includes/scripts_auth_part3.html' %}
+    {% include 'includes/scripts_auth_part4.html' %}
+{% include 'includes/modals_find_replace.html' %}
+{% include 'includes/workspace_sterilizer.html' %}
+    <style>
+        #font-toolbar {
+            position: fixed !important;
+            flex-direction: row !important;
+            width: max-content !important;
+            max-width: 95vw !important;
+            padding: 8px 15px !important;
+            border-radius: 8px !important;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
+            z-index: 10005 !important;
+            overflow: visible !important;
+        }
+
+        #font-toolbar-content {
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            padding: 0 !important;
+            align-items: center !important;
+            gap: 10px !important;
+        }
+
+        .font-tool-group {
+            flex-wrap: nowrap !important;
+        }
+
+        #color-palette-container {
+            position: absolute !important;
+            top: 100% !important;
+            left: 50% !important;
+            transform: translateX(-50%) !important;
+            margin-top: 10px !important;
+            z-index: 10006 !important;
+        }
+
+        .close-font-toolbar-btn {
+            background: transparent !important;
+            border: none !important;
+            color: #dc3545 !important;
+            font-size: 24px !important;
+            line-height: 1 !important;
+            font-weight: bold !important;
+            cursor: pointer !important;
+            margin-left: 10px !important;
+            padding: 0 5px !important;
+        }
+        .close-font-toolbar-btn:hover {
+            color: #a71d2a !important;
+        }
+
+        #control-bar {
+            display: flex;
+            align-items: center;
+            flex-wrap: nowrap !important;
+            overflow-x: auto;
+            position: relative;
+        }
+        
+        #control-bar > *:not(.custom-dropdown-container), .responsive-control-item {
+            flex-shrink: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        /* FIX 1: Sticky Profile Container */
+        #profile-container {
+            position: sticky !important;
+            right: 0 !important;
+             
+            z-index: 10001 !important;
+            padding-left: 10px;
+            display: flex;
+            align-items: center;
+        }
+        
+        /* Fallback background if inherit fails */
+        #control-bar #profile-container {
+           /* background-color: #f8f9fa; */
+           /* box-shadow: -5px 0 10px rgba(0,0,0,0.05); Slight shadow to indicate it's floating above scroll */
+        }
+        body.dark-mode #control-bar #profile-container {
+            background-color: #212529;
+            box-shadow: -5px 0 10px rgba(0,0,0,0.3);
+        }
+
+        @media screen and (max-width: 950px) {
+            
+            .auth-page-wrapper { flex-direction: column !important; height: 100vh !important; max-height: 100vh !important; border-radius: 0 !important; margin: 0 !important; max-width: 100% !important; overflow: hidden !important; }
+            .auth-left-pane { display: none !important; } 
+            .auth-right-pane { flex: 1 1 100vh !important; padding: 20px !important; overflow-y: auto !important; border-radius: 0 !important; margin-top: 0 !important; background: white !important; z-index: 10 !important; width: 100% !important; box-sizing: border-box !important; }
+            
+            .auth-modal { padding: 10px !important; box-sizing: border-box; align-items: center !important; overflow: hidden !important; }
+            .auth-modal > .auth-box { width: 100% !important; max-width: 100% !important; padding: 15px !important; box-sizing: border-box; max-height: 95vh !important; overflow-y: auto !important; margin: auto !important; border-radius: 12px !important; }
+            
+            #elements-slider, #ui-elements-slider { width: 85vw !important; max-width: 350px !important; }
+            .slider-split-layout { flex-direction: column !important; }
+            .slider-left-pane { width: 100% !important; border-right: none !important; border-bottom: 1px solid #444; display: flex; flex-direction: row !important; overflow-x: auto; white-space: nowrap; height: auto !important; }
+            .slider-right-pane { width: 100% !important; height: 100% !important; overflow-y: auto !important; }
+            .el-cat-btn { display: inline-block !important; border-bottom: none !important; border-right: 1px solid #444; }
+
+            #control-bar {
+                position: fixed !important;
+                top: 0; left: 0; right: 0;
+                z-index: 10000 !important;
+                background: #f8f9fa;
+                box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+                transition: transform 0.3s ease;
+                padding: 5px 10px !important;
+                overflow-x: auto !important;
+                overflow-y: visible !important; 
+                white-space: nowrap !important;
+                -webkit-overflow-scrolling: touch;
+                display: flex !important;
+                justify-content: flex-start !important;
+            }
+            #control-bar.autohidden {
+                transform: translateY(-105%) !important;
+            }
+
+            #project-menu, #editor-more-dropdown {
+                position: fixed !important;
+                top: 60px !important;
+                left: 10px !important;
+                right: auto !important;
+                width: 90vw !important;
+                max-width: 300px !important;
+                max-height: 60vh !important;
+                overflow-y: auto !important;
+                z-index: 100000 !important;
+                box-shadow: 0 5px 25px rgba(0,0,0,0.3) !important;
+            }
+
+            #admin-dashboard-modal { padding: 5px !important; align-items: flex-start !important; overflow-y: auto !important; }
+            #admin-dashboard-modal .auth-box { width: 100% !important; max-width: 100% !important; margin: 0 !important; padding: 10px !important; border-radius: 5px !important; max-height: none !important; }
+            .admin-main-content, .admin-table-container, .table-wrapper, table { 
+                display: block !important; 
+                width: 100% !important; 
+                overflow-x: auto !important; 
+                -webkit-overflow-scrolling: touch; 
+            }
+            table { min-width: 600px !important; } 
+
+            #deploy-modal .auth-box { width: 95vw !important; max-height: 90vh !important; overflow-y: auto !important; margin: auto !important; }
+            #deploy-modal pre, #deploy-modal code { white-space: pre-wrap !important; word-wrap: break-word !important; }
+
+            #mobile-menu-pull {
+                display: flex !important;
+                position: fixed !important;
+                top: 0; left: 50%; transform: translateX(-50%);
+                z-index: 9999 !important;
+                background: #007bff; color: white;
+                padding: 5px 15px; border-radius: 0 0 10px 10px;
+                font-weight: bold; font-size: 12px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+                transition: top 0.3s ease;
+                cursor: pointer;
+            }
+            #control-bar:not(.autohidden) ~ #mobile-menu-pull {
+                top: 45px !important; 
+            }
+            #preview-container { padding-top: 0 !important; }
+
+            #action-buttons-right { padding-right: 0px; } 
+            
+            /* Enhanced Mobile Sticky Profile */
+            #profile-container { position: sticky !important; right: 0px !important; top: auto !important; z-index: 10001 !important; margin-left: auto; }
+            
+            #left-panel { 
+                width: 350px !important; 
+                max-width: 90vw !important; 
+                height: 60vh !important; 
+                max-height: 60vh !important; 
+                top: auto !important; 
+                bottom: 0 !important; 
+                left: 50% !important; 
+                transform: translateX(-50%) !important;
+                border-radius: 20px 20px 0 0 !important; 
+                box-shadow: 0 -5px 20px rgba(0,0,0,0.4) !important;
+                transition: transform 0.3s ease, bottom 0.3s ease;
+                z-index: 9000 !important;
+            }
+            body.view-minimized #left-panel { transform: translate(-50%, 100%) !important; opacity: 0; pointer-events: none; }
+            body.view-minimized #mobile-chat-fab { display: flex !important; }
+        }
+
+        @media screen and (max-width: 950px) and (orientation: portrait) {
+            body.is-logged-in #landscape-prompt {
+                display: flex !important;
+            }
+        }
+    </style>
+    
+    <script>
+        window.enterMobileWorkspace = function() {
+            let docEl = document.documentElement;
+            if (docEl.requestFullscreen) docEl.requestFullscreen().catch(e=>console.log(e));
+            if (screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(e=>console.log(e));
+            document.getElementById('mobile-start-overlay').style.display = 'none';
+            window.fullscreenPromptShown = true;
+        };
+
+        window.openChatMobile = function() {
+            if(typeof setChatMode === 'function') setChatMode('default');
+            else { document.body.classList.remove('view-minimized'); }
+        };
+
+        window.setViewportView = function(mode) {
+            const iframe = document.getElementById('preview-frame');
+            if(!iframe) return;
+            
+            const btns = {
+                desktop: document.getElementById('btn-view-desktop'),
+                tablet: document.getElementById('btn-view-tablet'),
+                mobile: document.getElementById('btn-view-mobile')
+            };
+            
+            Object.values(btns).forEach(b => { 
+                if(b) { b.style.background = 'transparent'; b.style.color = '#ccc'; }
+            });
+            
+            if (mode === 'desktop') {
+                iframe.style.setProperty('min-width', '100%', 'important'); 
+                iframe.style.setProperty('width', '100%', 'important'); 
+                iframe.style.setProperty('max-width', 'none', 'important'); 
+                if(btns.desktop) { btns.desktop.style.background = '#007bff'; btns.desktop.style.color = 'white'; }
+            } else if (mode === 'tablet') {
+                iframe.style.setProperty('min-width', '768px', 'important');
+                iframe.style.setProperty('width', '768px', 'important');
+                iframe.style.setProperty('max-width', '768px', 'important');
+                if(btns.tablet) { btns.tablet.style.background = '#007bff'; btns.tablet.style.color = 'white'; }
+            } else if (mode === 'mobile') {
+                iframe.style.setProperty('min-width', '375px', 'important');
+                iframe.style.setProperty('width', '375px', 'important');
+                iframe.style.setProperty('max-width', '375px', 'important');
+                if(btns.mobile) { btns.mobile.style.background = '#007bff'; btns.mobile.style.color = 'white'; }
+            }
+            
+            if (iframe.contentDocument && typeof window.enforceResponsive === 'function') {
+                window.enforceResponsive(iframe.contentDocument);
+            }
+        };
+
+        document.addEventListener("DOMContentLoaded", () => {
+            
+            setInterval(() => {
+                const authModal = document.getElementById('auth-modal');
+                if (authModal && authModal.style.display === 'none') {
+                    if (!document.body.classList.contains('is-logged-in')) {
+                        document.body.classList.add('is-logged-in');
+                        if (window.innerWidth < 950) {
+                            const startOverlay = document.getElementById('mobile-start-overlay');
+                            if (startOverlay && !window.fullscreenPromptShown) {
+                                startOverlay.style.display = 'flex';
+                            }
+                        }
+                    }
+                } else {
+                    document.body.classList.remove('is-logged-in');
+                }
+            }, 1000);
+
+            let touchStartY = 0;
+            document.addEventListener('touchstart', e => { 
+                touchStartY = e.touches[0].clientY; 
+            }, {passive: true});
+            
+            document.addEventListener('touchend', e => {
+                if(window.innerWidth > 950) return;
+                let touchEndY = e.changedTouches[0].clientY;
+                const controlBar = document.getElementById('control-bar');
+                if(!controlBar) return;
+                
+                if (touchEndY - touchStartY > 40 && touchStartY < 100) { 
+                    controlBar.classList.remove('autohidden');
+                    document.getElementById('mobile-menu-pull').innerHTML = '▲ Hide Menu';
+                } 
+                else if (touchStartY - touchEndY > 40 && touchStartY < 200) { 
+                    controlBar.classList.add('autohidden');
+                    document.getElementById('mobile-menu-pull').innerHTML = '▼ Show Menu';
+                }
+            }, {passive: true});
+
+            const checkToolbarInterval = setInterval(() => {
+                const toolbarContent = document.getElementById('font-toolbar-content');
+                // FIX: the toolbar markup already has its own close (✕) button - only add one if it is missing
+                if (toolbarContent && toolbarContent.querySelector('.close-font-toolbar-btn')) { clearInterval(checkToolbarInterval); return; }
+                if (toolbarContent && !document.getElementById('close-font-btn-auto')) {
+                    const closeBtn = document.createElement('button');
+                    closeBtn.id = 'close-font-btn-auto';
+                    closeBtn.className = 'close-font-toolbar-btn';
+                    closeBtn.innerHTML = '&times;';
+                    closeBtn.title = 'Close Toolbar';
+                    closeBtn.onclick = (e) => {
+                        e.preventDefault();
+                        document.getElementById('font-toolbar').style.display = 'none';
+                        const iframe = document.getElementById('preview-frame');
+                        if (iframe && iframe.contentDocument) {
+                            iframe.contentDocument.getSelection().removeAllRanges();
+                        }
+                    };
+                    toolbarContent.appendChild(closeBtn);
+                    clearInterval(checkToolbarInterval);
+                }
+            }, 500);
+
+            const iframe = document.getElementById('preview-frame');
+            if(iframe) {
+                iframe.addEventListener('load', () => {
+                    if(iframe.contentDocument) {
+                        iframe.contentDocument.addEventListener('selectionchange', () => {
+                            const sel = iframe.contentDocument.getSelection();
+                            if (sel && sel.rangeCount > 0 && !sel.isCollapsed) {
+                                window.lastValidRange = sel.getRangeAt(0).cloneRange();
+                            }
+                        });
+
+                        iframe.contentDocument.addEventListener('click', () => {
+                            const parentMenu = document.getElementById('custom-context-menu');
+                            if (parentMenu) parentMenu.style.display = 'none';
+                        });
+                        
+                        if (typeof window.enforceResponsive === 'function') {
+                            window.enforceResponsive(iframe.contentDocument);
+                        }
+                        
+                        if (window.innerWidth <= 950) {
+                            if(typeof setChatMode === 'function') setChatMode('minimized');
+                            const controlBar = document.getElementById('control-bar');
+                            if(controlBar) controlBar.classList.add('autohidden');
+                        }
+                    }
+                });
+            }
+            
+            const logoCheckInterval = setInterval(() => {
+                if (typeof appConfigData !== 'undefined' && appConfigData.logo_url) {
+                    const mainLogo = document.getElementById('main-app-logo');
+                    const logoContainer = document.getElementById('top-left-logo-area');
+                    if (mainLogo && logoContainer) {
+                        mainLogo.src = appConfigData.logo_url;
+                        logoContainer.style.display = 'flex';
+                    }
+                    clearInterval(logoCheckInterval);
+                }
+                
+                if (typeof appConfigData !== 'undefined' && appConfigData.show_powered_by !== undefined) {
+                    const footer = document.getElementById('powered-by-footer');
+                    if (footer) {
+                        footer.style.display = appConfigData.show_powered_by ? 'block' : 'none';
+                    }
+                }
+            }, 500);
+            
+            setTimeout(() => clearInterval(logoCheckInterval), 10000);
+        });
+    </script>
+
+    <div id="my-history-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+        <div class="auth-box" style="width:800px; max-width:90%; max-height:80vh; display:flex; flex-direction:column; padding:0; overflow:hidden; text-align:left; background:#fff;">
+            <div style="padding:20px; background:#f8f9fa; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; color:#333;">📜 My Activity History</h3>
+                <button onclick="document.getElementById('my-history-modal').style.display='none'" style="background:none; border:none; font-size:20px; cursor:pointer; color:#333;">✕</button>
+            </div>
+            <div style="padding:20px; overflow-y:auto; flex-grow:1;">
+                <table class="user-table" style="width:100%; text-align:left; border-collapse:collapse; color:#333;">
+                    <thead><tr style="background:#f1f3f5;"><th style="padding:10px;">Date</th><th>Action</th><th>Description</th><th>Load</th></tr></thead>
+                    <tbody id="my-history-body">
+                        <tr><td colspan="4" style="text-align:center; padding:20px;">Loading history...</td></tr>
+                    </tbody>
+                </table>
+                <div id="my-history-pagination" style="display:flex; justify-content:center; flex-wrap:wrap; gap:5px; margin-top:15px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="my-orders-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+        <div class="auth-box" style="width:800px; max-width:90%; max-height:80vh; display:flex; flex-direction:column; padding:0; overflow:hidden; text-align:left; background:#fff;">
+            <div style="padding:20px; background:#f8f9fa; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; color:#333;">📦 My Orders & Subscriptions</h3>
+                <button onclick="document.getElementById('my-orders-modal').style.display='none'" style="background:none; border:none; font-size:20px; cursor:pointer; color:#333;">✕</button>
+            </div>
+            <div style="padding:20px; overflow-y:auto; flex-grow:1;">
+                <table class="user-table" style="width:100%; text-align:left; border-collapse:collapse; color:#333;">
+                    <thead><tr style="background:#f1f3f5;"><th style="padding:10px;">ID</th><th>Product</th><th>Price</th><th>Status</th><th>Expiry</th><th>Actions</th></tr></thead>
+                    <tbody id="my-orders-body">
+                        <tr><td colspan="6" style="text-align:center; padding:20px;">Loading orders...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-video-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+        <div class="auth-box" style="width:500px; max-width:90%; background:#fff; padding:20px; border-radius:8px; text-align:left;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                <h3 style="margin:0; color:#333;">🔗 Edit Video URL</h3>
+                <button onclick="document.getElementById('edit-video-modal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#666;">&times;</button>
+            </div>
+            <div style="margin-bottom:15px;">
+                <label style="font-weight:bold; color:#555; font-size:14px; margin-bottom:5px; display:block;">Video Source URL (YouTube, Vimeo, MP4)</label>
+                <input type="text" id="edit-video-url-input" class="auth-input" placeholder="https://..." style="width:100%; padding:10px; font-size:14px;">
+            </div>
+            <div style="text-align:right;">
+                <button class="auth-btn" style="width:auto; padding:10px 20px; background:#007bff;" onclick="saveVideoChanges()">Apply Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="edit-carousel-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+        <div class="auth-box" style="width:600px; max-width:90%; max-height:80vh; display:flex; flex-direction:column; background:#fff; padding:0; border-radius:8px; overflow:hidden; text-align:left;">
+            <div style="padding:20px; background:#f8f9fa; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="margin:0; color:#333;">🎠 Edit Carousel Images</h3>
+                <button onclick="document.getElementById('edit-carousel-modal').style.display='none'" style="background:none; border:none; font-size:24px; cursor:pointer; color:#666;">&times;</button>
+            </div>
+            <div style="padding:20px; overflow-y:auto; flex-grow:1;">
+                <p style="font-size:13px; color:#666; margin-bottom:15px;">Manage the images inside your carousel below. You can paste new image URLs or use the Media Manager.</p>
+                <div id="carousel-images-list" style="display:flex; flex-direction:column; gap:10px; margin-bottom:15px;">
+                    </div>
+                <button class="auth-btn" style="width:100%; background:#28a745; padding:8px; font-size:14px;" onclick="addCarouselImageRow('')">+ Add New Image Row</button>
+            </div>
+            <div style="padding:15px; border-top:1px solid #ddd; background:#f8f9fa; text-align:right; display:flex; justify-content:space-between;">
+                <button class="auth-btn" style="width:auto; padding:8px 15px; background:#17a2b8;" onclick="document.getElementById('edit-carousel-modal').style.display='none'; if(typeof openImageManager==='function') openImageManager();">🖼️ Open Media Manager</button>
+                <button class="auth-btn" style="width:auto; padding:8px 25px; background:#007bff;" onclick="saveCarouselChanges()">💾 Save Carousel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // UI INJECTION LOGIC
+        // ==========================================
+        document.addEventListener("DOMContentLoaded", () => {
+            
+            setInterval(() => {
+                const profileMenu = document.getElementById('profile-menu');
+                
+                // Inject My Orders
+                if (profileMenu && !document.getElementById('my-orders-btn-injected')) {
+                    const ordersBtn = document.createElement('div');
+                    ordersBtn.id = 'my-orders-btn-injected';
+                    ordersBtn.className = 'profile-item'; 
+                    ordersBtn.innerHTML = '📦 My Orders';
+                    
+                    ordersBtn.style.padding = '10px 15px';
+                    ordersBtn.style.cursor = 'pointer';
+                    ordersBtn.style.borderBottom = '1px solid #eee';
+                    ordersBtn.style.display = 'block';
+                    ordersBtn.style.color = '#333';
+                    ordersBtn.style.fontSize = '14px';
+                    
+                    ordersBtn.onclick = (e) => { e.stopPropagation(); openMyOrders(); };
+                    ordersBtn.onmouseover = () => ordersBtn.style.backgroundColor = '#f8f9fa';
+                    ordersBtn.onmouseout = () => ordersBtn.style.backgroundColor = 'transparent';
+                    
+                    if (profileMenu.children.length > 1) {
+                        profileMenu.insertBefore(ordersBtn, profileMenu.children[1]);
+                    } else {
+                        profileMenu.appendChild(ordersBtn);
+                    }
+                }
+
+                // Inject My History directly below Orders
+                if (profileMenu && !document.getElementById('my-history-btn-injected')) {
+                    const historyBtn = document.createElement('div');
+                    historyBtn.id = 'my-history-btn-injected';
+                    historyBtn.className = 'profile-item'; 
+                    historyBtn.innerHTML = '📜 My History';
+                    
+                    historyBtn.style.padding = '10px 15px';
+                    historyBtn.style.cursor = 'pointer';
+                    historyBtn.style.borderBottom = '1px solid #eee';
+                    historyBtn.style.display = 'block';
+                    historyBtn.style.color = '#333';
+                    historyBtn.style.fontSize = '14px';
+                    
+                    historyBtn.onclick = (e) => { e.stopPropagation(); openMyHistory(); };
+                    historyBtn.onmouseover = () => historyBtn.style.backgroundColor = '#f8f9fa';
+                    historyBtn.onmouseout = () => historyBtn.style.backgroundColor = 'transparent';
+                    
+                    const ordersBtnRef = document.getElementById('my-orders-btn-injected');
+                    if (ordersBtnRef && ordersBtnRef.nextSibling) {
+                        profileMenu.insertBefore(historyBtn, ordersBtnRef.nextSibling);
+                    } else {
+                        profileMenu.appendChild(historyBtn);
+                    }
+                }
+            }, 1000);
+
+            setInterval(() => {
+                const aiInputs = document.querySelectorAll('input[id*="api_key"], input[id*="openai"], input[id*="gemini"], input[id*="claude"]');
+                aiInputs.forEach(input => {
+                    input.removeAttribute('disabled');
+                    input.removeAttribute('readonly');
+                });
+            }, 2000);
+
+            setInterval(() => {
+                const adminNav = document.querySelector('.admin-nav');
+                const adminContent = document.querySelector('.admin-content');
+                
+                if (adminNav && adminContent && !document.getElementById('sub-commerce')) {
+                    const navHtml = `
+                        <div class="admin-nav-group" style="margin-top:10px;">
+                            <div class="admin-nav-item-header active" onclick="toggleAdminMenu('sub-commerce', this)" style="display:flex; justify-content:space-between; align-items:center;">
+                                <span>💳 Commerce & Orders</span>
+                                <span id="arrow-sub-commerce">▼</span>
+                            </div>
+                            <div id="sub-commerce" class="admin-sub-nav" style="display:block; background-color: #34495e; border-left: 3px solid #ccc;">
+                                <div class="admin-nav-item" onclick="switchAdminTab('tab-admin-orders', this)" style="padding-left: 30px; font-size: 0.95em;">Manage Orders</div>
+                                <div class="admin-nav-item" onclick="switchAdminTab('tab-admin-txns', this)" style="padding-left: 30px; font-size: 0.95em;">Transactions & Refunds</div>
+                            </div>
+                        </div>
+                    `;
+                    adminNav.insertAdjacentHTML('beforeend', navHtml);
+
+                    const tabsHtml = `
+                        <div id="tab-admin-orders" class="admin-tab-content" style="display:none;">
+                            <div class="admin-panel">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                    <h3 style="margin:0;">📦 Manage All Orders</h3>
+                                    <button onclick="loadAdminOrders()" class="auth-btn" style="width:auto; margin:0; padding:8px 15px;">Refresh Data</button>
+                                </div>
+                                <div style="overflow-x:auto;">
+                                    <table class="user-table">
+                                        <thead><tr><th>ID</th><th>User</th><th>Product</th><th>Price</th><th>Status</th><th>Expiry</th><th>Actions</th></tr></thead>
+                                        <tbody id="admin-orders-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="tab-admin-txns" class="admin-tab-content" style="display:none;">
+                            <div class="admin-panel">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                                    <h3 style="margin:0;">💸 Transactions & Refunds</h3>
+                                    <button onclick="loadAdminTxns()" class="auth-btn" style="width:auto; margin:0; padding:8px 15px;">Refresh Data</button>
+                                </div>
+                                <div style="overflow-x:auto;">
+                                    <table class="user-table">
+                                        <thead><tr><th>Txn ID</th><th>User</th><th>Gateway</th><th>Amount</th><th>Status</th><th>Date</th><th>Action</th></tr></thead>
+                                        <tbody id="admin-txns-body"></tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                    adminContent.insertAdjacentHTML('beforeend', tabsHtml);
+                    
+                    const oldOpenAdmin = window.openAdminDashboard;
+                    if(typeof oldOpenAdmin === 'function') {
+                        window.openAdminDashboard = function() {
+                            oldOpenAdmin();
+                            loadAdminOrders();
+                            loadAdminTxns();
+                        };
+                    }
+                }
+            }, 1000);
+            
+            setInterval(() => {
+                const imgMgrModal = document.getElementById('image-manager-modal');
+                if (imgMgrModal) {
+                    const h3Title = imgMgrModal.querySelector('h3');
+                    if (h3Title && h3Title.textContent.includes('Image Manager')) {
+                        h3Title.innerHTML = '🖼️ Media Manager';
+                    }
+                    
+                    const subTabsContainer = imgMgrModal.querySelector('.sub-img-tabs');
+                    if (subTabsContainer && !document.getElementById('sub-tab-my-videos')) {
+                        subTabsContainer.insertAdjacentHTML('beforeend', `
+                            <div class="sub-img-tab" id="sub-tab-my-videos" onclick="switchGallerySubTab('my-videos')">🎥 My Videos</div>
+                        `);
+                        
+                        const galleryTabContent = document.getElementById('img-tab-gallery');
+                        if (galleryTabContent && !document.getElementById('gallery-sub-my-videos')) {
+                            galleryTabContent.insertAdjacentHTML('beforeend', `
+                                <div id="gallery-sub-my-videos" style="display:none;">
+                                    <div style="margin-bottom:15px; display:flex; justify-content:space-between; align-items:center;">
+                                        <h4 style="margin:0; font-size:1em;">Uploaded Videos</h4>
+                                        <button class="auth-btn" style="width:auto; margin:0; padding:8px 15px; font-size:0.9em; background:#007bff;" onclick="document.getElementById('local-img-upload').click()">⬆️ Upload Video</button>
+                                    </div>
+                                    <div id="gallery-video-grid" class="img-grid"><div style="text-align:center; color:#999; padding:20px; grid-column:1/-1;">Loading videos...</div></div>
+                                </div>
+                            `);
+                        }
+                    }
+                }
+            }, 500);
+        });
+
+        // ==========================================
+        // EDIT VIDEO & CAROUSEL MODAL FUNCTIONS
+        // ==========================================
+        let activeVideoWidget = null;
+        let activeCarouselWidget = null;
+
+        window.openEditVideoModal = function(widgetElement, currentUrl, isYouTube) {
+            activeVideoWidget = widgetElement;
+            const modal = document.getElementById('edit-video-modal');
+            const input = document.getElementById('edit-video-url-input');
+            if (modal && input) {
+                input.value = currentUrl || '';
+                modal.style.display = 'flex';
+            }
+        };
+
+        window.saveVideoChanges = function() {
+            const input = document.getElementById('edit-video-url-input');
+            if (activeVideoWidget && input) {
+                const newUrl = input.value.trim();
+                if (newUrl) {
+                    const videoTag = activeVideoWidget.querySelector('video');
+                    const iframeTag = activeVideoWidget.querySelector('iframe');
+                    
+                    if(videoTag && newUrl.match(/\.(mp4|webm|ogg|mov)$/i)) {
+                        videoTag.src = newUrl;
+                    } else if (iframeTag) {
+                        iframeTag.src = newUrl;
+                    } else if (videoTag && newUrl.includes('youtube') || newUrl.includes('vimeo')) {
+                        const newIframe = document.createElement('iframe');
+                        newIframe.src = newUrl;
+                        newIframe.className = videoTag.className;
+                        newIframe.style.cssText = videoTag.style.cssText;
+                        newIframe.width = "100%"; newIframe.height = "100%";
+                        newIframe.setAttribute("frameborder", "0");
+                        newIframe.setAttribute("allow", "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture");
+                        newIframe.setAttribute("allowfullscreen", "");
+                        activeVideoWidget.replaceChild(newIframe, videoTag);
+                    } else if (iframeTag && newUrl.match(/\.(mp4|webm|ogg|mov)$/i)) {
+                        const newVid = document.createElement('video');
+                        newVid.src = newUrl;
+                        newVid.controls = true;
+                        newVid.className = iframeTag.className;
+                        newVid.style.cssText = iframeTag.style.cssText;
+                        newVid.style.width = "100%";
+                        activeVideoWidget.replaceChild(newVid, iframeTag);
+                    }
+                    
+                    if(typeof captureState === 'function') captureState();
+                    if(typeof enableSaveButton === 'function') enableSaveButton();
+                }
+            }
+            document.getElementById('edit-video-modal').style.display = 'none';
+        };
+
+        window.openEditCarouselModal = function(carouselElement, urlsArray) {
+            activeCarouselWidget = carouselElement;
+            const modal = document.getElementById('edit-carousel-modal');
+            const list = document.getElementById('carousel-images-list');
+            
+            if (modal && list) {
+                list.innerHTML = '';
+                if (urlsArray && urlsArray.length > 0) {
+                    urlsArray.forEach(url => window.addCarouselImageRow(url));
+                } else {
+                    window.addCarouselImageRow(''); 
+                }
+                modal.style.display = 'flex';
+            }
+        };
+
+        window.addCarouselImageRow = function(url) {
+            const list = document.getElementById('carousel-images-list');
+            if (!list) return;
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; gap:10px; align-items:center;';
+            row.innerHTML = `
+                <img src="${url || 'https://placehold.co/50x50?text=IMG'}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ccc;" onerror="this.src='https://placehold.co/50x50?text=ERR'">
+                <input type="text" class="auth-input carousel-url-input" value="${url}" placeholder="https://... (Image URL)" style="flex-grow:1; margin:0; padding:8px; font-size:13px;" oninput="this.previousElementSibling.src = this.value">
+                <button onclick="this.parentElement.remove()" style="background:#dc3545; color:white; border:none; width:35px; height:35px; border-radius:4px; cursor:pointer;" title="Remove Image">✕</button>
+            `;
+            list.appendChild(row);
+        };
+
+        window.saveCarouselChanges = function() {
+            if (!activeCarouselWidget) {
+                document.getElementById('edit-carousel-modal').style.display = 'none';
+                return;
+            }
+            
+            const inputs = document.querySelectorAll('.carousel-url-input');
+            const urls = [];
+            inputs.forEach(input => {
+                const val = input.value.trim();
+                if (val) urls.push(val);
+            });
+            
+            if (urls.length === 0) {
+                alert("You must have at least one image in the carousel.");
+                return;
+            }
+
+            const iframe = document.getElementById('preview-frame');
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            const inner = activeCarouselWidget.querySelector('.carousel-inner');
+            const indicators = activeCarouselWidget.querySelector('.carousel-indicators');
+            const carouselId = activeCarouselWidget.id || 'carousel-' + Math.floor(Math.random() * 10000);
+            activeCarouselWidget.id = carouselId;
+
+            if (inner) {
+                inner.innerHTML = '';
+                urls.forEach((url, idx) => {
+                    const item = doc.createElement('div');
+                    item.className = `carousel-item ${idx === 0 ? 'active' : ''}`;
+                    item.innerHTML = `<img src="${url}" class="d-block w-100" alt="Slide ${idx+1}">`;
+                    inner.appendChild(item);
+                });
+            }
+            
+            if (indicators) {
+                indicators.innerHTML = '';
+                urls.forEach((url, idx) => {
+                    const ind = doc.createElement('button');
+                    ind.type = 'button';
+                    ind.setAttribute('data-bs-target', '#' + carouselId);
+                    ind.setAttribute('data-bs-slide-to', idx.toString());
+                    if (idx === 0) ind.className = 'active';
+                    indicators.appendChild(ind);
+                });
+            }
+
+            if(typeof captureState === 'function') captureState();
+            if(typeof enableSaveButton === 'function') enableSaveButton();
+            if(typeof updateStatus === 'function') updateStatus("✅ Carousel updated.");
+            document.getElementById('edit-carousel-modal').style.display = 'none';
+        };
+
+        // ==========================================
+        // GOAL 1 & 2: USER HISTORY LOGIC (With 10 Day Filter & Pagination)
+        // ==========================================
+        let globalHistoryData = [];
+        let currentHistoryPage = 1;
+        const HISTORY_PER_PAGE = 20;
+
+        window.renderHistoryPage = function() {
+            const tbody = document.getElementById('my-history-body');
+            const pagination = document.getElementById('my-history-pagination');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            if (!globalHistoryData || globalHistoryData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#666; font-style:italic;">No activity recorded yet.</td></tr>';
+                if(pagination) pagination.innerHTML = '';
+                return;
+            }
+
+            // Slice the data for the current page
+            const startIndex = (currentHistoryPage - 1) * HISTORY_PER_PAGE;
+            const endIndex = Math.min(startIndex + HISTORY_PER_PAGE, globalHistoryData.length);
+            const pageData = globalHistoryData.slice(startIndex, endIndex);
+
+            pageData.forEach(h => {
+                let linkHtml = '<span style="color:#aaa;">-</span>';
+                if (h.reference_id && (h.action_type === 'website_generated' || h.action_type === 'project_saved')) {
+                    linkHtml = `<button onclick="loadHistoryProject('${h.reference_id}')" style="background:#007bff; color:white; border:none; padding:6px 12px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold; white-space:nowrap;">📂 Load</button>`;
+                } else if (h.action_type === 'website_generated') {
+                    linkHtml = '<span style="color:#999; font-size:12px;">Files unavailable</span>';
+                }
+                
+                let icon = '📝';
+                if(h.action_type === 'website_generated') icon = '🌐';
+                else if(h.action_type === 'image_generated') icon = '🖼️';
+                
+                tbody.innerHTML += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:10px; font-size:12px; color:#666;">${h.date}</td>
+                        <td><strong>${icon} ${h.action_type.replace('_', ' ').toUpperCase()}</strong></td>
+                        <td>${h.description}</td>
+                        <td>${linkHtml}</td>
+                    </tr>
+                `;
+            });
+
+            // Render pagination controls
+            if (pagination) {
+                pagination.innerHTML = '';
+                const totalPages = Math.ceil(globalHistoryData.length / HISTORY_PER_PAGE);
+
+                if (totalPages > 1) {
+                    for (let i = 1; i <= totalPages; i++) {
+                        const btn = document.createElement('button');
+                        btn.style.padding = '5px 10px';
+                        btn.style.margin = '2px';
+                        btn.style.border = 'none';
+                        btn.style.borderRadius = '3px';
+                        btn.style.cursor = 'pointer';
+                        btn.style.fontWeight = 'bold';
+                        
+                        if (i === currentHistoryPage) {
+                            btn.style.background = '#007bff';
+                            btn.style.color = 'white';
+                        } else {
+                            btn.style.background = '#e9ecef';
+                            btn.style.color = '#333';
+                        }
+                        
+                        btn.textContent = i;
+                        btn.onclick = () => {
+                            currentHistoryPage = i;
+                            window.renderHistoryPage();
+                        };
+                        pagination.appendChild(btn);
+                    }
+                }
+            }
+        };
+
+        function openMyHistory() {
+            const profileMenu = document.getElementById('profile-menu');
+            if (profileMenu) profileMenu.style.display = 'none';
+            
+            document.getElementById('my-history-modal').style.display = 'flex';
+            const tbody = document.getElementById('my-history-body');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Loading history...</td></tr>';
+            
+            const pagination = document.getElementById('my-history-pagination');
+            if(pagination) pagination.innerHTML = '';
+            
+            fetch('/api/user/history')
+            .then(r=>r.json()).then(data => {
+                if(data.success) {
+                    // --- GOAL 2 FIX: Relax the 10-day filter so generated websites always show ---
+                    globalHistoryData = (data.history || []).filter(h => {
+                        return h.action_type === 'website_generated' || h.action_type === 'image_generated';
+                    });
+                    
+                    currentHistoryPage = 1;
+                    window.renderHistoryPage();
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:red;">Failed to load history.</td></tr>';
+                }
+            }).catch(() => {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:red;">Network error. Could not load history.</td></tr>';
+            });
+        }
+
+        // Restores the unsaved ZIP archive back into the active workspace
+        function loadHistoryProject(ref_id) {
+            if(!confirm("Loading this historical generated website will overwrite your current workspace. Unsaved changes will be lost. Continue?")) return;
+            
+            document.getElementById('my-history-modal').style.display = 'none';
+            if(typeof showProgressOverlay === 'function') showProgressOverlay("Loading old website...");
+            
+            fetch('/api/user/history/load/' + ref_id, { method: 'POST' })
+            .then(r=>r.json()).then(data => {
+                if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                if(data.success) {
+                    if(typeof updateStatus === 'function') updateStatus("✅ " + data.message);
+                    
+                    if(typeof generatedFiles !== 'undefined') {
+                        generatedFiles = data.files;
+                        currentPreviewFile = data.current_page || 'index.html';
+                        if(typeof loadPreview === 'function') loadPreview(currentPreviewFile);
+                        if(typeof updatePreviewControls === 'function') updatePreviewControls();
+                    }
+                } else {
+                    alert("Error: " + data.error);
+                }
+            }).catch(e => {
+                if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                alert("Network error loading website.");
+            });
+        }
+
+        // ==========================================
+        // USER ORDER FUNCTIONS
+        // ==========================================
+        function openMyOrders() {
+            const profileMenu = document.getElementById('profile-menu');
+            if (profileMenu) profileMenu.style.display = 'none';
+            
+            document.getElementById('my-orders-modal').style.display = 'flex';
+            const tbody = document.getElementById('my-orders-body');
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px;">Loading orders...</td></tr>';
+            
+            fetch('/api/user/orders')
+            .then(r=>r.json()).then(data => {
+                if(data.success) {
+                    tbody.innerHTML = '';
+                    
+                    if(data.orders.length === 0) {
+                        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#666; font-style:italic;">You have not placed any orders yet.</td></tr>';
+                        return;
+                    }
+                    
+                    data.orders.forEach(o => {
+                        // --- GOAL 4 FIX: Dynamically check expiry on frontend as well ---
+                        if (o.status === 'active' && o.expiry_date && o.expiry_date !== "Lifetime") {
+                            const expDate = new Date(o.expiry_date);
+                            if (expDate < new Date()) {
+                                o.status = 'expired';
+                            }
+                        }
+
+                        let btnHtml = '';
+                        if(o.status === 'active') {
+                            btnHtml = `<button onclick="cancelUserOrder(${o.id})" style="background:#dc3545; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">Cancel</button>`;
+                        } else if (o.status === 'expired' || o.status === 'cancelled') {
+                            btnHtml = `<button onclick="document.getElementById('my-orders-modal').style.display='none'; if(typeof openPlanSelectionModal === 'function') openPlanSelectionModal();" style="background:#28a745; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">Renew</button>`;
+                        }
+                        
+                        let badge = `<span class="badge badge-success" style="padding:4px 8px; border-radius:12px; background:#e8f5e9; color:#1b5e20; font-size:12px; font-weight:bold;">Active</span>`;
+                        if(o.status==='cancelled') badge = `<span class="badge badge-danger" style="padding:4px 8px; border-radius:12px; background:#ffebee; color:#b71c1c; font-size:12px; font-weight:bold;">Cancelled</span>`;
+                        if(o.status==='expired') badge = `<span class="badge badge-secondary" style="padding:4px 8px; border-radius:12px; background:#f5f5f5; color:#616161; font-size:12px; font-weight:bold;">Expired</span>`;
+                        
+                        tbody.innerHTML += `
+                            <tr style="border-bottom:1px solid #eee;">
+                                <td style="padding:10px;">#${o.id}</td>
+                                <td><strong>${o.product_name}</strong></td>
+                                <td>${o.price} ${o.currency}</td>
+                                <td>${badge}</td>
+                                <td>${o.expiry_date}</td>
+                                <td>${btnHtml}</td>
+                            </tr>
+                        `;
+                    });
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:red;">Failed to load orders.</td></tr>';
+                }
+            }).catch(() => {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:red;">Network error. Could not load orders.</td></tr>';
+            });
+        }
+
+        function cancelUserOrder(id) {
+            if(!confirm("Are you sure you want to cancel this order?")) return;
+            fetch(`/api/user/orders/${id}/cancel`, { method: 'POST' })
+            .then(r=>r.json()).then(d => {
+                if(d.success) { alert("Order cancelled."); openMyOrders(); }
+                else alert(d.error);
+            });
+        }
+
+        // ==========================================
+        // ADMIN FUNCTIONS
+        // ==========================================
+        function loadAdminOrders() {
+            const tbody = document.getElementById('admin-orders-body');
+            if(!tbody) return;
+            fetch('/api/admin/orders').then(r=>r.json()).then(data => {
+                if(data.success) {
+                    tbody.innerHTML = '';
+                    data.orders.forEach(o => {
+                        let badge = `<span class="badge badge-success" style="padding:4px 8px; border-radius:12px; background:#e8f5e9; color:#1b5e20; font-size:12px; font-weight:bold;">Active</span>`;
+                        if(o.status==='cancelled') badge = `<span class="badge badge-danger" style="padding:4px 8px; border-radius:12px; background:#ffebee; color:#b71c1c; font-size:12px; font-weight:bold;">Cancelled</span>`;
+                        if(o.status==='expired') badge = `<span class="badge badge-secondary" style="padding:4px 8px; border-radius:12px; background:#f5f5f5; color:#616161; font-size:12px; font-weight:bold;">Expired</span>`;
+                        
+                        let acts = `
+                            <select onchange="modifyAdminOrder(${o.id}, this.value)" style="padding:3px; font-size:12px; border-radius:3px;">
+                                <option value="">Modify Status...</option>
+                                <option value="active">Set Active</option>
+                                <option value="cancelled">Cancel Order</option>
+                                <option value="expired">Set Expired</option>
+                            </select>
+                        `;
+                        
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>#${o.id}</td>
+                                <td>${o.user_email}<br><small style="color:#888;">${o.user_country}</small></td>
+                                <td>${o.product_name}</td>
+                                <td>${o.price} ${o.currency}</td>
+                                <td>${badge}</td>
+                                <td>${o.expiry_date}</td>
+                                <td>${acts}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            });
+        }
+
+        function modifyAdminOrder(id, status) {
+            if(!status) return;
+            if(!confirm(`Change order #${id} to ${status.toUpperCase()}?`)) return;
+            fetch(`/api/admin/orders/${id}/modify`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({status: status})
+            }).then(r=>r.json()).then(d => {
+                if(d.success) { alert("Order updated."); loadAdminOrders(); }
+                else alert("Error: " + d.error);
+            });
+        }
+
+        function refundAdminTxn(id, amount, currency, gateway) {
+            const where = gateway === 'paypal' ? 'through PayPal' : '(recorded manually - refund the customer in your gateway dashboard)';
+            const input = prompt(`Refund transaction #${id} ${where}.\n\nAmount to refund in ${currency} (max ${amount}).\nLeave as is for a FULL refund:`, amount);
+            if (input === null) return;
+            const value = parseFloat(input);
+            if (isNaN(value) || value <= 0 || value > amount) { alert('Please enter an amount between 0 and ' + amount + '.'); return; }
+            const body = value >= amount ? { type: 'full' } : { type: 'partial', amount: value };
+            fetch(`/api/admin/transactions/${id}/refund`, {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+            }).then(r => r.json()).then(d => {
+                alert(d.success ? ('✅ ' + d.message) : ('❌ ' + (d.error || 'Refund failed')));
+                loadAdminTxns();
+            }).catch(() => alert('Network error.'));
+        }
+
+        function loadAdminTxns() {
+            const tbody = document.getElementById('admin-txns-body');
+            if(!tbody) return;
+            fetch('/api/transactions').then(r=>r.json()).then(data => {
+                if(data.success) {
+                    tbody.innerHTML = '';
+                    data.transactions.forEach(t => {
+                        let statusColor = t.status === 'success' ? '#28a745' : (t.status === 'failed' ? '#dc3545' : '#ffc107');
+                        if (t.status === 'refunded') statusColor = '#6f42c1';
+                        if (t.status === 'partially_refunded') statusColor = '#6f42c1';
+                        const ref = t.paypal_capture_id ? `<div style="font-size:11px;color:#888;">Capture ${t.paypal_capture_id}${t.paypal_refund_id ? '<br>Refund ' + t.paypal_refund_id : ''}</div>` : '';
+                        const action = t.status === 'success'
+                            ? `<button class="auth-btn" style="width:auto;margin:0;padding:5px 10px;font-size:12px;background:#6f42c1;" onclick="refundAdminTxn(${t.id}, ${t.amount}, '${t.currency}', '${t.gateway_code}')">Refund</button>`
+                            : '';
+
+                        tbody.innerHTML += `
+                            <tr>
+                                <td>#${t.id}</td>
+                                <td>${t.user}</td>
+                                <td>${t.gateway}</td>
+                                <td>${t.amount} ${t.currency}</td>
+                                <td style="color:${statusColor}; font-weight:bold;">${t.status.replace('_', ' ').toUpperCase()}${ref}</td>
+                                <td>${t.date}</td>
+                                <td>${action}</td>
+                            </tr>
+                        `;
+                    });
+                }
+            });
+        }
+    </script>

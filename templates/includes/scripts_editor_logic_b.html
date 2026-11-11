@@ -1,0 +1,1221 @@
+<script>
+    function initEditor(iframe) {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!iframeDoc.body) { iframe.onload = () => initEditor(iframe); return; }
+        enableEditing(iframeDoc);
+        
+        if (document.body.classList.contains('dark-mode')) { iframeDoc.body.style.outline = '1px dashed #66ccff'; } 
+        else { iframeDoc.body.style.outline = '1px dashed #007bff'; }
+        
+        if (typeof editorObserver !== 'undefined' && editorObserver) {
+            editorObserver.disconnect();
+        }
+
+        editorObserver = new MutationObserver((mutations) => {
+            if (typeof isRestoring !== 'undefined' && isRestoring) return; 
+            
+            let shouldCapture = false;
+            mutations.forEach(m => {
+                if (m.type === 'attributes' && m.attributeName === 'class') {
+                    const classes = m.target.className || '';
+                    if (typeof classes === 'string' && (classes.includes('section-hover') || classes.includes('subsection-hover') || classes.includes('eweb-is-dragging'))) {
+                        return;
+                    }
+                }
+
+                if (m.target && m.target.classList) {
+                    if (m.target.classList.contains('bg-edit-container') || 
+                        m.target.classList.contains('section-action-bar') ||
+                        m.target.classList.contains('resize-handle') ||
+                        m.target.classList.contains('add-section-btn') ||
+                        m.target.classList.contains('section-resize-handle') ||
+                        m.target.classList.contains('column-resize-handle') ||
+                        m.target.id === 'custom-context-menu' ||
+                        m.target.id === 'gradient-popup') {
+                        return;
+                    }
+                }
+                shouldCapture = true;
+            });
+            
+            if (shouldCapture) {
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => { 
+                    if(typeof window.captureState === 'function') window.captureState(); 
+                }, 800);
+                if(typeof enableSaveButton === 'function') enableSaveButton();
+                
+                reformatEditorUI(iframeDoc); 
+            }
+        });
+        
+        editorObserver.observe(iframeDoc.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'src', 'href', 'class'] });
+
+        reformatEditorUI(iframeDoc);
+
+        iframeDoc.body.addEventListener('dblclick', (e) => {
+            // FIX: Prevent image double-clicks from opening the right-side settings panel
+            const imageWidget = e.target.closest('img, .image-wrapper-editable, .eweb-image-widget');
+            if (imageWidget) {
+                e.preventDefault();
+                e.stopPropagation();
+                // Stops the double-click event from reaching the Section parent
+                return;
+            }
+
+            const widget = e.target.closest('.eweb-section, .eweb-video-widget, .eweb-button-widget, .eweb-text-widget, .eweb-freeform-block, .eweb-carousel-widget, .carousel');
+            if (widget) {
+                e.preventDefault();
+                e.stopPropagation();
+                let type = 'text';
+                if (widget.classList.contains('eweb-section')) type = 'section';
+                
+                if (typeof window.parent.openElementSettings === 'function') {
+                    window.parent.openElementSettings(widget, type);
+                } else if (typeof openElementSettings === 'function') {
+                    openElementSettings(widget, type);
+                }
+            }
+        });
+
+        const clearDimming = () => {
+            setTimeout(() => {
+                iframeDoc.querySelectorAll('.eweb-is-dragging, [style*="opacity: 0.4"], [style*="opacity: 0.5"]').forEach(el => {
+                    el.style.opacity = '1';
+                    el.classList.remove('eweb-is-dragging');
+                    el.removeAttribute('draggable');
+                });
+                iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom, .drag-over-left, .drag-over-right, .drag-over-center').forEach(el => {
+                    el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-left', 'drag-over-right', 'drag-over-center');
+                });
+            }, 50);
+        };
+
+        iframeDoc.body.addEventListener('drop', clearDimming);
+        iframeDoc.body.addEventListener('dragend', clearDimming);
+        iframeDoc.body.addEventListener('mouseup', clearDimming);
+        iframeDoc.body.addEventListener('mouseleave', clearDimming);
+
+        iframeDoc.body.addEventListener('keydown', (e) => {
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                const sel = iframeDoc.getSelection();
+                if (!sel.rangeCount) return;
+                const focusNode = sel.focusNode;
+                let target = null;
+                if(!sel.isCollapsed) return;
+                if (focusNode) {
+                    if(focusNode.nodeType === 1 && focusNode.classList.contains('image-wrapper-editable')) target = focusNode;
+                    else if (focusNode.parentElement && focusNode.parentElement.classList.contains('image-wrapper-editable')) target = focusNode.parentElement;
+                }
+                if (target) {
+                    e.preventDefault();
+                    if(typeof captureState === 'function') captureState(); 
+                    target.remove();
+                    document.getElementById('save-btn').disabled = false;
+                    if(typeof captureState === 'function') captureState(); 
+                    updateStatus("🗑️ Image deleted.");
+                }
+            }
+        });
+        
+        if (!iframeDoc.getElementById('editor-styles')) {
+            const editorStyle = iframeDoc.createElement('style');
+            editorStyle.id = 'editor-styles';
+            editorStyle.textContent = `
+                .image-wrapper-editable { display: inline-block; position: relative; transition: outline 0.2s; }
+                .image-wrapper-editable:hover { outline: 2px dashed #007bff; }
+                .resize-handle { width: 12px; height: 12px; background: #007bff; border: 1px solid white; position: absolute; bottom: -6px; right: -6px; cursor: se-resize; z-index: 10010; display: none; border-radius: 50%; }
+                .image-wrapper-editable:hover .resize-handle { display: block; }
+                
+                .subsection-hover { outline: 2px dashed #0d6efd !important; position: relative; outline-offset: -2px; }
+                .section-hover { outline: 2px dashed #0d6efd !important; position: relative; outline-offset: -2px; }
+                
+                .subsection-hover > .section-action-bar.reformatted, .section-hover > .section-action-bar.reformatted { display: flex !important; }
+
+                #custom-context-menu { position: fixed; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 10px rgba(0,0,0,0.2); z-index: 2147483647; display: none; flex-direction: column; min-width: 180px; border-radius: 5px; overflow: hidden; font-family: sans-serif; }
+                #custom-context-menu button { background: white; border: none; text-align: left; padding: 8px 15px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #eee; color: #333; display: flex; align-items: center; gap: 8px; width: 100%; transition: background 0.1s; }
+                #custom-context-menu button:hover { background: #f0f0f0; }
+                #custom-context-menu button:last-child { border-bottom: none; }
+                #custom-context-menu .menu-header { font-size: 11px; text-transform: uppercase; color: #777; padding: 5px 10px; background: #f9f9f9; font-weight: bold; cursor: default; }
+
+                .section-action-bar.reformatted { position: absolute; top: 0px; right: 0px; background: #333; border-radius: 0 0 0 4px; padding: 0; display: none; z-index: 10005; align-items: stretch; box-shadow: 0 2px 5px rgba(0,0,0,0.3); font-family: sans-serif; height: 28px; }
+                
+                .action-dropdown-container { position: relative; display: flex; align-items: stretch; }
+                .action-dropdown-toggle { background: #444; border: none; color: white; padding: 0 10px; cursor: pointer; border-radius: 0; border-left: 1px solid #555; }
+                .action-dropdown-toggle:hover { background: #555; }
+                
+                .action-dropdown-menu { position: absolute; top: 100%; right: 0; background: white; border: 1px solid #ccc; box-shadow: 0 4px 8px rgba(0,0,0,0.2); border-radius: 4px 0 4px 4px; display: none; flex-direction: column; min-width: 150px; z-index: 10006; }
+                .action-dropdown-menu button { background: none; border: none; padding: 8px 12px; text-align: left; cursor: pointer; color: #333; font-size: 13px; width: 100%; white-space: nowrap; border-bottom: 1px solid #eee;}
+                .action-dropdown-menu button:hover { background: #f0f0f0; color: #0d6efd; }
+
+                .add-section-btn { position: absolute; left: 15px; bottom: -14px; width: 28px; height: 28px; background: #007bff; color: white; border: none; border-radius: 50%; font-size: 18px; line-height: 1; cursor: pointer; display: none; z-index: 10010; box-shadow: 0 2px 5px rgba(0,0,0,0.3); align-items:center; justify-content:center; padding-bottom:3px; }
+                .add-section-btn:hover { background: #0056b3; transform: scale(1.1); }
+                .section-hover > .add-section-btn { display: flex; }
+
+                .section-resize-handle { position: absolute; bottom: 0; right: 0; width: 15px; height: 15px; cursor: nwse-resize; display: none; background: linear-gradient(135deg, transparent 50%, #007bff 50%); z-index: 10010; }
+                .section-hover > .section-resize-handle, .subsection-hover > .section-resize-handle, .eweb-carousel-widget:hover > .section-resize-handle { display: block; }
+
+                .column-resize-handle { position: absolute; top: 0; right: -5px; width: 10px; height: 100%; cursor: ew-resize; display: none; background: rgba(0, 123, 255, 0.5); z-index: 10010; transition: background 0.2s; }
+                .column-resize-handle:hover { background: #007bff; }
+                .eweb-column:hover > .column-resize-handle, .col:hover > .column-resize-handle, .col-12:hover > .column-resize-handle, .col-md-6:hover > .column-resize-handle, .col-md-4:hover > .column-resize-handle { display: block; }
+
+                .drag-over-top { box-shadow: inset 0 4px 0 #007bff !important; }
+                .drag-over-bottom { box-shadow: inset 0 -4px 0 #007bff !important; }
+                .drag-over-left { box-shadow: inset 4px 0 0 #007bff !important; }
+                .drag-over-right { box-shadow: inset -4px 0 0 #007bff !important; }
+                .drag-over-center { box-shadow: inset 0 0 0 4px rgba(0, 123, 255, 0.5) !important; background: rgba(0, 123, 255, 0.05) !important; }
+                
+                .add-section-btn, .left-add-plus-btn, .inline-add-widget-btn { background-color: #007bff !important; color: white !important; }
+            `;
+            iframeDoc.head.appendChild(editorStyle);
+        }
+
+        // ==========================================
+        // ROBUST IMAGE WRAPPER INJECTION
+        // ==========================================
+        iframeDoc.querySelectorAll('img').forEach(img => {
+            if (img.closest('.carousel')) return;
+            let wrapper = img.closest('.image-wrapper-editable');
+            
+            const computedStyle = iframe.contentWindow.getComputedStyle(img);
+            const isAbsolute = (computedStyle.position === 'absolute' || computedStyle.position === 'fixed');
+            const isFullWidth = (computedStyle.width === '100%' || computedStyle.width === '100vw' || img.classList.contains('w-100'));
+            
+            if (!wrapper) {
+                wrapper = iframeDoc.createElement('div');
+                wrapper.className = 'image-wrapper-editable';
+                
+                if (isAbsolute || isFullWidth) {
+                    wrapper.style.position = 'static';
+                    wrapper.style.display = 'inline';
+                } else {
+                    wrapper.style.position = 'relative'; 
+                    wrapper.style.display = img.style.display || 'inline-block';
+                    wrapper.style.lineHeight = '0';
+                }
+                
+                wrapper.style.textAlign = computedStyle.textAlign;
+                img.parentNode.insertBefore(wrapper, img);
+                wrapper.appendChild(img);
+            } else {
+                // IMPORTANT FIX: Ensure existing wrappers are also corrected!
+                if (isAbsolute || isFullWidth) {
+                    wrapper.style.position = 'static';
+                    wrapper.style.display = 'inline';
+                }
+            }
+            
+            wrapper.contentEditable = 'false';
+
+            if (!isAbsolute && !isFullWidth && !wrapper.querySelector('.resize-handle')) {
+                const resizeHandle = iframeDoc.createElement('div');
+                resizeHandle.className = 'resize-handle';
+                wrapper.appendChild(resizeHandle);
+                if(typeof makeImageResizable === 'function') makeImageResizable(img, resizeHandle, wrapper, iframeDoc);
+            }
+        });
+
+        iframeDoc.querySelectorAll('.eweb-carousel-widget').forEach(widget => {
+            if (!widget.querySelector('.section-resize-handle')) {
+                const resizeHandle = iframeDoc.createElement('div');
+                resizeHandle.className = 'section-resize-handle';
+                resizeHandle.title = "Drag to resize carousel";
+                resizeHandle.contentEditable = 'false';
+                widget.appendChild(resizeHandle);
+                
+                resizeHandle.addEventListener('mousedown', function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    if(typeof captureState === 'function') captureState(); 
+                    const startX = e.clientX; 
+                    const startY = e.clientY;
+                    const startWidth = widget.clientWidth; 
+                    const startHeight = widget.clientHeight;
+                    
+                    function doDrag(dragEvent) {
+                        const newWidth = startWidth + (dragEvent.clientX - startX);
+                        const newHeight = startHeight + (dragEvent.clientY - startY);
+                        widget.style.width = `${newWidth}px`; 
+                        widget.style.height = `${newHeight}px`; 
+                    }
+                    function stopDrag() { 
+                        iframeDoc.removeEventListener('mousemove', doDrag); 
+                        iframeDoc.removeEventListener('mouseup', stopDrag); 
+                        if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false; 
+                        if(typeof captureState === 'function') captureState(); 
+                    }
+                    iframeDoc.addEventListener('mousemove', doDrag); 
+                    iframeDoc.addEventListener('mouseup', stopDrag);
+                });
+            }
+        });
+
+        const columns = iframeDoc.querySelectorAll('.col, .col-12, .col-md-6, .col-md-4, .eweb-column');
+        columns.forEach(col => {
+            if (!col.querySelector('.column-resize-handle')) {
+                const colResize = iframeDoc.createElement('div');
+                colResize.className = 'column-resize-handle';
+                colResize.title = "Drag to resize column width";
+                colResize.contentEditable = 'false';
+                col.appendChild(colResize);
+                
+                if (iframe.contentWindow.getComputedStyle(col).position === 'static') {
+                    col.style.position = 'relative';
+                }
+                
+                colResize.addEventListener('mousedown', function(e) {
+                    e.preventDefault(); e.stopPropagation();
+                    if(typeof captureState === 'function') captureState();
+                    const startX = e.clientX;
+                    const startWidth = col.getBoundingClientRect().width;
+                    const parentElement = col.parentElement;
+                    const parentWidth = parentElement ? parentElement.getBoundingClientRect().width : col.ownerDocument.body.clientWidth;
+                    
+                    function doDrag(dragEvent) {
+                        const newWidth = startWidth + (dragEvent.clientX - startX);
+                        const percentage = (newWidth / parentWidth) * 100;
+                        if (percentage >= 5 && percentage <= 100) {
+                            col.style.flex = `0 0 ${percentage}%`;
+                            col.style.maxWidth = `${percentage}%`;
+                            col.style.width = `${percentage}%`;
+                        }
+                    }
+                    function stopDrag() { 
+                        iframeDoc.removeEventListener('mousemove', doDrag); 
+                        iframeDoc.removeEventListener('mouseup', stopDrag); 
+                        if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false; 
+                        if(typeof captureState === 'function') captureState(); 
+                    }
+                    iframeDoc.addEventListener('mousemove', doDrag); 
+                    iframeDoc.addEventListener('mouseup', stopDrag);
+                });
+            }
+        });
+
+        const bindActionBar = (element, type, className, html, bgColor) => {
+            if(element.querySelector(`.${className}`)) return;
+            const bar = iframeDoc.createElement('div');
+            bar.className = className;
+            bar.contentEditable = 'false';
+            bar.innerHTML = html;
+            element.insertBefore(bar, element.firstChild);
+
+            const delBtn = bar.querySelector('.del-btn');
+            if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); element.remove(); if(typeof enableSaveButton === 'function') enableSaveButton(); };
+            
+            const dupBtn = bar.querySelector('.dup-btn');
+            if (dupBtn) dupBtn.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); const clone = element.cloneNode(true); clone.querySelectorAll(`.${className}`).forEach(c => c.remove()); element.parentNode.insertBefore(clone, element.nextSibling); if (typeof window.initEditor === 'function') window.initEditor(iframe); if(typeof enableSaveButton === 'function') enableSaveButton(); };
+            
+            const setBtn = bar.querySelector('.set-btn');
+            if (setBtn) setBtn.onclick = (e) => { 
+                e.stopPropagation(); 
+                if(typeof window.captureState === 'function') window.captureState(); window.currentBgElementToReplace = element; 
+                let bgInput = document.getElementById('dynamic-bg-color-picker');
+                if(!bgInput) {
+                    bgInput = document.createElement('input'); bgInput.type = 'color'; bgInput.id = 'dynamic-bg-color-picker'; bgInput.style.position = 'absolute'; bgInput.style.opacity = '0'; bgInput.style.pointerEvents = 'none'; document.body.appendChild(bgInput);
+                    bgInput.addEventListener('input', (ev) => { if (window.currentBgElementToReplace) window.currentBgElementToReplace.style.backgroundColor = ev.target.value; });
+                    bgInput.addEventListener('change', (ev) => { if (window.currentBgElementToReplace) { window.currentBgElementToReplace.style.backgroundColor = ev.target.value; if(typeof updateStatus === 'function') updateStatus('Background color updated.'); if(typeof enableSaveButton === 'function') enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); window.currentBgElementToReplace = null; } });
+                }
+                const currentBg = window.getComputedStyle(element).backgroundColor;
+                if (currentBg && currentBg.startsWith('rgb')) bgInput.value = rgb2hex(currentBg);
+                try { bgInput.showPicker(); } catch(ex) { bgInput.click(); }
+            };
+
+            const saveSecBtn = bar.querySelector('.save-sec-btn');
+            if (saveSecBtn) saveSecBtn.onclick = (e) => {
+                e.stopPropagation();
+                if(typeof window.openSaveSectionModal === 'function') window.openSaveSectionModal(element);
+            };
+
+            const editVidBtn = bar.querySelector('.edit-vid-btn');
+            if (editVidBtn) {
+                editVidBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const targetVid = element.querySelector('video, iframe') || element;
+                    if (targetVid) {
+                        const isYouTube = targetVid.tagName === 'IFRAME';
+                        if (typeof window.parent.openEditVideoModal === 'function') {
+                            window.parent.openEditVideoModal(element, targetVid.src, isYouTube);
+                        } else if (typeof openEditVideoModal === 'function') {
+                            openEditVideoModal(element, targetVid.src, isYouTube);
+                        } else {
+                            const newUrl = prompt("Enter new Video URL:", targetVid.src);
+                            if (newUrl) {
+                                targetVid.src = newUrl;
+                                if(typeof window.captureState === 'function') window.captureState();
+                                if(typeof enableSaveButton === 'function') enableSaveButton();
+                            }
+                        }
+                    }
+                };
+            }
+        };
+
+        const sections = iframeDoc.querySelectorAll('section, header, footer, main, article, .card, .col, .container, .row, .grid-item, .eweb-section, .eweb-block');
+        sections.forEach(sec => {
+            if(sec.classList.contains('image-wrapper-editable')) return;
+            
+            const isMainSection = ['SECTION', 'HEADER', 'FOOTER', 'MAIN', 'ARTICLE'].includes(sec.tagName.toUpperCase()) || sec.classList.contains('eweb-section');
+
+            if(isMainSection && !sec.querySelector('.add-section-btn')) {
+                const addBtn = iframeDoc.createElement('button');
+                addBtn.className = 'add-section-btn';
+                addBtn.innerHTML = '+';
+                addBtn.title = "Add New Section Here";
+                addBtn.contentEditable = 'false';
+                addBtn.style.backgroundColor = '#007bff';
+                addBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    window.__insertTarget = sec; 
+                    if(typeof window.openSectionPlusPopup === 'function') {
+                        const rect = addBtn.getBoundingClientRect();
+                        const iframeRect = iframe.getBoundingClientRect();
+                        const x = iframeRect.left + rect.left + 30; 
+                        const y = iframeRect.top + rect.top - 80;   
+                        window.openSectionPlusPopup(sec, x, y);
+                    } else if (typeof window.parent.openSectionPlusPopup === 'function') {
+                        const rect = addBtn.getBoundingClientRect();
+                        const iframeRect = iframe.getBoundingClientRect();
+                        const x = iframeRect.left + rect.left + 30; 
+                        const y = iframeRect.top + rect.top - 80;   
+                        window.parent.openSectionPlusPopup(sec, x, y);
+                    }
+                };
+                sec.appendChild(addBtn);
+            }
+
+            if(!sec.querySelector('.section-resize-handle')) {
+                const secResize = iframeDoc.createElement('div');
+                secResize.className = 'section-resize-handle';
+                secResize.title = "Drag to stretch section";
+                secResize.contentEditable = 'false';
+                sec.appendChild(secResize);
+                if(typeof makeSectionResizable === 'function') makeSectionResizable(sec, secResize, iframeDoc);
+            }
+
+            if (!sec._dragBound) {
+                sec.addEventListener('dragstart', (e) => {
+                    if (sec.getAttribute('draggable') !== 'true') {
+                        e.preventDefault(); 
+                        return;
+                    }
+                    e.dataTransfer.effectAllowed = 'move';
+                    iframeDoc.defaultView.__draggedSection = sec;
+                    e.dataTransfer.setData('text/plain', '__internal_section_drag__');
+                    setTimeout(() => {
+                        sec.style.opacity = '0.4'; 
+                        sec.classList.add('eweb-is-dragging');
+                    }, 0);
+                });
+                
+                sec.addEventListener('dragend', (e) => {
+                    sec.style.opacity = '1';
+                    sec.classList.remove('eweb-is-dragging');
+                    sec.removeAttribute('draggable');
+                    iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom, .drag-over-left, .drag-over-right, .drag-over-center').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-left', 'drag-over-right', 'drag-over-center'));
+                    iframeDoc.defaultView.__draggedSection = null;
+                });
+                sec._dragBound = true;
+            }
+        });
+
+        iframeDoc.querySelectorAll('.image-wrapper-editable, .bg-edit-container, .section-action-bar, .add-section-btn, .section-resize-handle').forEach(w => w.contentEditable = 'false');
+        
+        iframeDoc.addEventListener('click', (e) => { 
+            if (typeof window.parent.closeAllEditorPopups === 'function') {
+                window.parent.closeAllEditorPopups();
+            } else if (typeof closeAllEditorPopups === 'function') {
+                closeAllEditorPopups();
+            }
+
+            iframeDoc.querySelectorAll('.action-dropdown-menu').forEach(m => m.style.display = 'none');
+            const cm = iframeDoc.getElementById('custom-context-menu'); if(cm) cm.style.display = 'none'; 
+            const gp = iframeDoc.getElementById('gradient-popup'); if(gp) gp.style.display = 'none';
+
+            const plusPopup = document.getElementById('plus-action-popup') || (window.parent && window.parent.document.getElementById('plus-action-popup'));
+            if (plusPopup) plusPopup.style.display = 'none';
+
+            const addWidgetBtn = e.target.closest('.inline-add-widget-btn');
+            if (addWidgetBtn) {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                if (typeof window.parent.triggerWidgetDrawerForTarget === 'function') {
+                    window.parent.triggerWidgetDrawerForTarget(addWidgetBtn);
+                } else if (typeof triggerWidgetDrawerForTarget === 'function') {
+                    triggerWidgetDrawerForTarget(addWidgetBtn);
+                }
+            }
+
+            if (e.target) {
+                const highlightFn = window.parent.highlightCodeFromPreview || window.highlightCodeFromPreview;
+                if (typeof highlightFn === 'function') {
+                    let payload = {
+                        id: e.target.id || '',
+                        className: e.target.className || '',
+                        text: e.target.innerText || ''
+                    };
+                    if (e.target.tagName === 'IMG') {
+                        payload.src = e.target.getAttribute('src');
+                        payload.type = 'image';
+                    }
+                    highlightFn(payload);
+                }
+            }
+        });
+        
+        iframeDoc.addEventListener('contextmenu', (e) => { 
+            e.preventDefault(); 
+            if(typeof showContextMenu === 'function') showContextMenu(e, e.target, iframeDoc); 
+        });
+
+        iframeDoc.addEventListener('mousedown', function(e) {
+            const dragHandle = e.target.closest('.drag-handle, .section-action-bar span');
+            if (dragHandle) {
+                const sec = dragHandle.closest('section, header, footer, main, article, .eweb-section, .eweb-block');
+                if (sec) {
+                    sec.setAttribute('draggable', 'true');
+                }
+            }
+        });
+        
+        iframeDoc.addEventListener('mouseup', function(e) {
+            const dragHandle = e.target.closest('.drag-handle, .section-action-bar span');
+            if (dragHandle) {
+                const sec = dragHandle.closest('section, header, footer, main, article, .eweb-section, .eweb-block');
+                if (sec) {
+                    sec.removeAttribute('draggable');
+                }
+            }
+        });
+
+        iframeDoc.body.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copyMove';
+            
+            const targetSec = e.target.closest('section, header, footer, .container, .row, .col, .eweb-freeform-block');
+            if (targetSec && targetSec !== iframeDoc.defaultView.__draggedSection) {
+                iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom, .drag-over-left, .drag-over-right, .drag-over-center').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-left', 'drag-over-right', 'drag-over-center'));
+                
+                if (targetSec.classList.contains('eweb-freeform-block')) {
+                    targetSec.classList.add('drag-over-center');
+                    return;
+                }
+
+                const rect = targetSec.getBoundingClientRect();
+                const isColumn = targetSec.classList.contains('col') || targetSec.classList.contains('eweb-column') || targetSec.tagName === 'DIV';
+                
+                if (isColumn) {
+                    const relX = e.clientX - rect.left;
+                    if (relX < rect.width / 2) targetSec.classList.add('drag-over-left');
+                    else targetSec.classList.add('drag-over-right');
+                } else {
+                    const relY = e.clientY - rect.top;
+                    if (relY < rect.height / 2) targetSec.classList.add('drag-over-top');
+                    else targetSec.classList.add('drag-over-bottom');
+                }
+            }
+        });
+
+        iframeDoc.body.addEventListener('dragleave', (e) => {
+            const targetSec = e.target.closest('section, header, footer, .container, .row, .col, .eweb-freeform-block');
+            if (targetSec) {
+                targetSec.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-left', 'drag-over-right', 'drag-over-center');
+            }
+        });
+
+        iframeDoc.body.addEventListener('drop', (e) => {
+            e.preventDefault();
+            iframeDoc.querySelectorAll('.drag-over-top, .drag-over-bottom, .drag-over-left, .drag-over-right, .drag-over-center').forEach(el => el.classList.remove('drag-over-top', 'drag-over-bottom', 'drag-over-left', 'drag-over-right', 'drag-over-center'));
+            
+            const targetSec = e.target.closest('section, header, footer, .container, .row, .col, .eweb-freeform-block');
+            const draggedType = e.dataTransfer.getData('text/plain');
+            let ewebgenType = e.dataTransfer.getData('application/ewebgen-element'); 
+            
+            if (!ewebgenType && draggedType && draggedType.trim().startsWith('<')) { ewebgenType = draggedType; }
+            
+            let isInsertTop = false, isInsertLeft = false, isCenter = false;
+            let isColumn = false;
+
+            if (targetSec) {
+                if (targetSec.classList.contains('eweb-freeform-block')) {
+                    isCenter = true;
+                } else {
+                    const rect = targetSec.getBoundingClientRect();
+                    isColumn = targetSec.classList.contains('col') || targetSec.classList.contains('eweb-column') || targetSec.tagName === 'DIV';
+                    if (isColumn) {
+                        const relX = e.clientX - rect.left;
+                        isInsertLeft = relX < rect.width / 2;
+                    } else {
+                        const relY = e.clientY - rect.top;
+                        isInsertTop = relY < rect.height / 2;
+                    }
+                }
+            }
+
+            if (draggedType === '__internal_section_drag__' && iframeDoc.defaultView.__draggedSection) {
+                if(typeof captureState === 'function') captureState();
+                const draggedSec = iframeDoc.defaultView.__draggedSection;
+                
+                if (targetSec && targetSec !== draggedSec) {
+                    if (isCenter) {
+                        targetSec.appendChild(draggedSec);
+                    } else if (isColumn) {
+                        if (isInsertLeft) targetSec.parentNode.insertBefore(draggedSec, targetSec);
+                        else targetSec.parentNode.insertBefore(draggedSec, targetSec.nextSibling);
+                    } else {
+                        if (isInsertTop) targetSec.parentNode.insertBefore(draggedSec, targetSec);
+                        else targetSec.parentNode.insertBefore(draggedSec, targetSec.nextSibling);
+                    }
+                } else if (!targetSec) {
+                    iframeDoc.body.appendChild(draggedSec);
+                }
+                
+                draggedSec.style.opacity = '1';
+                draggedSec.classList.remove('eweb-is-dragging');
+                draggedSec.removeAttribute('draggable');
+                iframeDoc.defaultView.__draggedSection = null;
+                
+                if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false;
+                if(typeof captureState === 'function') captureState();
+            } 
+            else if (ewebgenType) {
+                if(typeof captureState === 'function') captureState();
+                const temp = iframeDoc.createElement('div');
+                temp.innerHTML = ewebgenType;
+                
+                const fragment = iframeDoc.createDocumentFragment();
+                while(temp.firstChild) { fragment.appendChild(temp.firstChild); }
+
+                if (window.__insertTarget) {
+                    window.__insertTarget.parentNode.insertBefore(fragment, window.__insertTarget.nextSibling);
+                } else if (targetSec) {
+                    if (targetSec.getAttribute('data-empty') === 'true') {
+                        targetSec.innerHTML = '';
+                        targetSec.removeAttribute('data-empty');
+                        targetSec.appendChild(fragment);
+                    } else if (isCenter) {
+                        targetSec.appendChild(fragment);
+                    } else if (isColumn) {
+                        if (isInsertLeft) targetSec.parentNode.insertBefore(fragment, targetSec);
+                        else targetSec.parentNode.insertBefore(fragment, targetSec.nextSibling);
+                    } else {
+                        if (isInsertTop) targetSec.parentNode.insertBefore(fragment, targetSec);
+                        else targetSec.parentNode.insertBefore(fragment, targetSec.nextSibling);
+                    }
+                } else {
+                    iframeDoc.body.appendChild(fragment);
+                }
+                
+                initEditor(iframe);
+                if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false;
+                if(typeof captureState === 'function') captureState();
+            }
+            
+            window.__insertTarget = null; 
+        });
+    }
+
+    function makeSectionResizable(sec, handle, doc) {
+        handle.addEventListener('mousedown', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            if(typeof captureState === 'function') captureState();
+            const startY = e.clientY;
+            const startHeight = sec.clientHeight;
+
+            function doDrag(dragEvent) {
+                const newHeight = startHeight + (dragEvent.clientY - startY);
+                sec.style.minHeight = `${newHeight}px`;
+            }
+            function stopDrag() { 
+                doc.removeEventListener('mousemove', doDrag); 
+                doc.removeEventListener('mouseup', stopDrag); 
+                if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false; 
+                if(typeof captureState === 'function') captureState(); 
+            }
+            doc.addEventListener('mousemove', doDrag); doc.addEventListener('mouseup', stopDrag);
+        });
+    }
+
+    function makeImageResizable(img, handle, wrapper, doc) {
+        handle.addEventListener('mousedown', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            if(typeof captureState === 'function') captureState(); 
+            const startX = e.clientX; const startY = e.clientY;
+            const startWidth = img.clientWidth; const startHeight = img.clientHeight;
+            function doDrag(dragEvent) {
+                const newWidth = startWidth + (dragEvent.clientX - startX);
+                const newHeight = startHeight + (dragEvent.clientY - startY);
+                img.style.width = `${newWidth}px`; img.style.height = `${newHeight}px`; img.style.maxWidth = 'none'; 
+            }
+            function stopDrag() { doc.removeEventListener('mousemove', doDrag); doc.removeEventListener('mouseup', stopDrag); if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false; if(typeof captureState === 'function') captureState(); }
+            doc.addEventListener('mousemove', doDrag); doc.addEventListener('mouseup', stopDrag);
+        });
+    }
+    
+    function rgb2hex(rgb) {
+        if (!rgb || rgb === 'rgba(0, 0, 0, 0)' || rgb === 'transparent') return '#ffffff';
+        if (/^#[0-9A-F]{6}$/i.test(rgb)) return rgb;
+        let match = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+        if (!match) match = rgb.match(/^rgba\((\d+),\s*(\d+),\s*(\d+),\s*[\d.]+\)$/);
+        function hex(x) { return ("0" + parseInt(x).toString(16)).slice(-2); }
+        return match ? "#" + hex(match[1]) + hex(match[2]) + hex(match[3]) : "#ffffff";
+    }
+
+    let activeSettingsElement = null;
+
+    window.openElementSettings = function(element, type) {
+        if(typeof captureState === 'function') captureState();
+        activeSettingsElement = element;
+        
+        let settingsModal = document.getElementById('eweb-settings-modal');
+        
+        if (!settingsModal) {
+            settingsModal = document.createElement('div');
+            settingsModal.id = 'eweb-settings-modal';
+            settingsModal.style.cssText = 'position:fixed; top:0; right:0; width:350px; height:100%; background:#fff; box-shadow:-5px 0 25px rgba(0,0,0,0.2); z-index:99999; display:flex; flex-direction:column; transform:translateX(100%); transition:transform 0.3s ease;';
+            
+            settingsModal.innerHTML = `
+                <div style="background:#f8f9fa; padding:15px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+                    <h5 style="margin:0; font-weight:bold; color:#333;" id="eweb-settings-title">Widget Settings</h5>
+                    <button onclick="closeElementSettings()" style="background:none; border:none; font-size:20px; cursor:pointer; color:#666;">&times;</button>
+                </div>
+                <div id="eweb-settings-body" style="padding:20px; flex-grow:1; overflow-y:auto;">
+                    </div>
+                <div style="padding:15px; border-top:1px solid #ddd; background:#f8f9fa; text-align:right;">
+                    <button onclick="applyElementSettings()" class="btn btn-primary w-100" style="border-radius:5px;">Apply Changes</button>
+                </div>
+            `;
+            document.body.appendChild(settingsModal);
+        }
+
+        const body = document.getElementById('eweb-settings-body');
+        const title = document.getElementById('eweb-settings-title');
+        body.innerHTML = ''; 
+
+        if (type === 'section' || type === 'column') {
+            title.innerText = type === 'section' ? 'Section Settings' : 'Column Settings';
+            const currentPadding = element.style.padding || '20px';
+            const currentMinHeight = element.style.minHeight || 'auto';
+            
+            const computedStyle = window.getComputedStyle(element);
+            const currentBgColor = rgb2hex(element.style.backgroundColor || computedStyle.backgroundColor);
+            const currentTextColor = rgb2hex(element.style.color || computedStyle.color);
+            
+            let currentBgImage = element.style.backgroundImage || computedStyle.backgroundImage || '';
+            if (currentBgImage && currentBgImage !== 'none' && !currentBgImage.includes('gradient')) { 
+                currentBgImage = currentBgImage.replace(/^url\(['"]?/, '').replace(/['"]?\)$/, ''); 
+            } else { 
+                currentBgImage = ''; 
+            }
+            
+            body.innerHTML = `
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Padding</label>
+                    <input type="text" id="set-padding" class="form-control form-control-sm" value="${currentPadding}" placeholder="e.g., 20px 10px">
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Minimum Height</label>
+                    <input type="text" id="set-min-height" class="form-control form-control-sm" value="${currentMinHeight}" placeholder="e.g., 200px or 50vh">
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Vertical Alignment</label>
+                    <select id="set-align-items" class="form-select form-select-sm">
+                        <option value="">Default (Top)</option>
+                        <option value="center">Center</option>
+                        <option value="flex-end">Bottom</option>
+                    </select>
+                </div>
+                
+                <hr style="margin:15px 0;">
+                <h6 style="font-size:13px; font-weight:bold; margin-bottom:10px; color:#333;">🎨 Visual & Background Settings</h6>
+                
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Text Color</label>
+                    <input type="color" id="set-text-color" class="form-control form-control-color w-100" value="${currentTextColor}" title="Overrides default bootstrap text colors">
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Background Color</label>
+                    <input type="color" id="set-bg-color" class="form-control form-control-color w-100" value="${currentBgColor}">
+                </div>
+                
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Background Image URL</label>
+                    <input type="text" id="set-bg-image" class="form-control form-control-sm" value="${currentBgImage}" placeholder="Leave blank for no image">
+                    <div style="display:flex; gap:10px; margin-top:8px;">
+                        <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="window.currentBgElementToReplace = activeSettingsElement; document.getElementById('image-upload-input').click();">📁 Browse System</button>
+                        <button type="button" class="btn btn-sm btn-primary w-100" onclick="triggerBgImageManagerForSection()">🖼️ Media Manager</button>
+                    </div>
+                </div>
+
+                <div class="form-group mb-3" style="background:#f9f9f9; padding:10px; border:1px solid #eee; border-radius:5px;">
+                    <label style="font-size:12px; font-weight:bold; color:#555; display:block; margin-bottom:8px;">Background Gradient (Overrides Image/Color)</label>
+                    <div style="display:flex; gap:10px; margin-bottom:8px;">
+                        <div style="flex:1;">
+                            <label style="font-size:10px; color:#777;">Color 1</label>
+                            <input type="color" id="set-bg-grad-c1" class="form-control form-control-color w-100" value="#007bff">
+                        </div>
+                        <div style="flex:1;">
+                            <label style="font-size:10px; color:#777;">Color 2</label>
+                            <input type="color" id="set-bg-grad-c2" class="form-control form-control-color w-100" value="#00d2ff">
+                        </div>
+                    </div>
+                    <label style="font-size:10px; color:#777;">Gradient Direction</label>
+                    <select id="set-bg-grad-dir" class="form-select form-select-sm">
+                        <option value="">-- No Gradient --</option>
+                        <option value="to right">Right</option>
+                        <option value="to left">Left</option>
+                        <option value="to bottom">Bottom</option>
+                        <option value="to top">Top</option>
+                        <option value="to bottom right">Bottom Right</option>
+                        <option value="to top left">Top Left</option>
+                        <option value="circle">Radial (Center)</option>
+                    </select>
+                </div>
+            `;
+        } 
+        else if (element.classList.contains('eweb-video-widget') || element.tagName === 'VIDEO' || element.tagName === 'IFRAME') {
+            title.innerText = 'Video Settings';
+            const iframe = element.querySelector('iframe');
+            const vid = element.querySelector('video');
+            const currentSrc = iframe ? iframe.src : (vid ? vid.src : (element.src || ''));
+            
+            body.innerHTML = `
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Video Source URL (YouTube, Vimeo, MP4)</label>
+                    <input type="text" id="set-video-url" class="form-control form-control-sm" value="${currentSrc}">
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Aspect Ratio</label>
+                    <select id="set-video-ratio" class="form-select form-select-sm">
+                        <option value="ratio-16x9">16:9 (Standard)</option>
+                        <option value="ratio-4x3">4:3 (Classic)</option>
+                        <option value="ratio-1x1">1:1 (Square)</option>
+                    </select>
+                </div>
+                <hr style="margin:10px 0;">
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="document.getElementById('image-upload-input').click();">📁 Browse System</button>
+                    <button type="button" class="btn btn-sm btn-primary w-100" onclick="triggerVideoManagerForWidget()">🎥 Media Manager</button>
+                </div>
+            `;
+        }
+        else if (element.classList.contains('eweb-carousel-widget') || element.classList.contains('carousel')) {
+            title.innerText = 'Carousel Settings';
+            body.innerHTML = `
+                <div class="alert alert-info" style="font-size:11px; padding:8px;">
+                    Manage your carousel slides. You can upload from your system or select from your Media Manager.
+                </div>
+                <button type="button" class="btn btn-primary btn-sm w-100 mb-2" onclick="triggerEditCarouselForWidget()">📝 Edit All Slides</button>
+                <hr style="margin:10px 0;">
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="document.getElementById('image-upload-input').click();">📁 Browse System</button>
+                    <button type="button" class="btn btn-sm btn-primary w-100" onclick="triggerCarouselManagerForWidget()">🖼️ Media Manager</button>
+                </div>
+            `;
+        }
+        else if (element.classList.contains('eweb-image-widget')) {
+            title.innerText = 'Image Settings';
+            const img = element.querySelector('img');
+            const currentSrc = img ? img.src : '';
+            const currentAlt = img ? img.alt : '';
+            
+            body.innerHTML = `
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Image Source URL</label>
+                    <input type="text" id="set-img-src" class="form-control form-control-sm" value="${currentSrc}">
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Alt Text (SEO)</label>
+                    <input type="text" id="set-img-alt" class="form-control form-control-sm" value="${currentAlt}">
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button type="button" class="btn btn-sm btn-outline-primary w-100" onclick="document.getElementById('image-upload-input').click();">📁 Browse System</button>
+                    <button type="button" class="btn btn-sm btn-primary w-100" onclick="triggerImageManagerForWidget()">🖼️ Media Manager</button>
+                </div>
+            `;
+        }
+        else if (element.classList.contains('eweb-button-widget')) {
+            title.innerText = 'Button Settings';
+            const a = element.querySelector('a') || element.querySelector('button');
+            const currentHref = a && a.tagName === 'A' ? a.getAttribute('href') : '#';
+            const currentText = a ? a.innerText : 'Click Me';
+            
+            body.innerHTML = `
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Button Text</label>
+                    <input type="text" id="set-btn-text" class="form-control form-control-sm" value="${currentText}">
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Link URL</label>
+                    <input type="text" id="set-btn-link" class="form-control form-control-sm" value="${currentHref}">
+                </div>
+            `;
+        }
+        else {
+            title.innerText = 'Typography Settings';
+            body.innerHTML = `
+                <div class="alert alert-info" style="font-size:11px; padding:8px;">
+                    <strong>Tip:</strong> Text widgets support inline editing. Double-click the text in the preview window to format!
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Text Alignment</label>
+                    <select id="set-text-align" class="form-select form-select-sm">
+                        <option value="text-left">Left</option>
+                        <option value="text-center">Center</option>
+                        <option value="text-right">Right</option>
+                    </select>
+                </div>
+                <div class="form-group mb-3">
+                    <label style="font-size:12px; font-weight:bold; color:#555;">Text Color</label>
+                    <input type="color" id="set-text-color" class="form-control form-control-color w-100" value="#333333">
+                </div>
+            `;
+        }
+
+        settingsModal.style.transform = 'translateX(0)';
+    };
+
+    window.closeElementSettings = function() {
+        const settingsModal = document.getElementById('eweb-settings-modal');
+        if (settingsModal) {
+            settingsModal.style.transform = 'translateX(100%)';
+            setTimeout(() => { activeSettingsElement = null; }, 300);
+        }
+    };
+
+    window.applyElementSettings = function() {
+        if (!activeSettingsElement) return;
+
+        const bgColor = document.getElementById('set-bg-color');
+
+        if (bgColor) {
+            const padding = document.getElementById('set-padding');
+            const minHeight = document.getElementById('set-min-height');
+            const align = document.getElementById('set-align-items');
+            
+            const bgImage = document.getElementById('set-bg-image');
+            const gradC1 = document.getElementById('set-bg-grad-c1');
+            const gradC2 = document.getElementById('set-bg-grad-c2');
+            const gradDir = document.getElementById('set-bg-grad-dir');
+            const textColor = document.getElementById('set-text-color');
+            
+            if(padding) activeSettingsElement.style.padding = padding.value;
+            if(minHeight) activeSettingsElement.style.minHeight = minHeight.value;
+            
+            if (align && align.value) {
+                const targetFlex = activeSettingsElement.classList.contains('row') ? activeSettingsElement : (activeSettingsElement.querySelector('.row') || activeSettingsElement);
+                targetFlex.style.display = 'flex'; 
+                targetFlex.style.alignItems = align.value;
+                if(targetFlex === activeSettingsElement && activeSettingsElement.tagName !== 'SECTION' && !activeSettingsElement.classList.contains('row')) {
+                    targetFlex.style.flexDirection = 'column';
+                    targetFlex.style.justifyContent = align.value === 'flex-end' ? 'flex-end' : (align.value === 'center' ? 'center' : 'flex-start');
+                }
+            }
+
+            if (textColor && textColor.value) {
+                activeSettingsElement.style.setProperty('color', textColor.value, 'important');
+                
+                const bootstrapColors = ['primary','secondary','success','danger','warning','info','light','dark','body','muted','white','black'];
+                const classesToRemove = Array.from(activeSettingsElement.classList).filter(c => c.startsWith('text-') && bootstrapColors.some(color => c.includes(color)));
+                if(classesToRemove.length > 0) activeSettingsElement.classList.remove(...classesToRemove);
+                
+                activeSettingsElement.querySelectorAll('p, h1, h2, h3, h4, h5, h6, span, div, a, li, .card, .card-body').forEach(child => {
+                    const childClasses = Array.from(child.classList).filter(c => c.startsWith('text-') && bootstrapColors.some(color => c.includes(color)));
+                    if(childClasses.length > 0) child.classList.remove(...childClasses);
+                    if (child.style.color) child.style.color = '';
+                });
+            }
+
+            const bgClasses = Array.from(activeSettingsElement.classList).filter(c => c.startsWith('bg-'));
+            if(bgClasses.length > 0) activeSettingsElement.classList.remove(...bgClasses);
+            
+            activeSettingsElement.querySelectorAll('.card, .card-body, .bg-white, .bg-light').forEach(child => {
+                const childBgClasses = Array.from(child.classList).filter(c => c.startsWith('bg-'));
+                if(childBgClasses.length > 0) child.classList.remove(...childBgClasses);
+                child.style.setProperty('background-color', 'transparent', 'important');
+            });
+
+            if (gradDir && gradDir.value) {
+                if(gradDir.value === 'circle') activeSettingsElement.style.setProperty('background-image', `radial-gradient(${gradDir.value}, ${gradC1.value}, ${gradC2.value})`, 'important');
+                else activeSettingsElement.style.setProperty('background-image', `linear-gradient(${gradDir.value}, ${gradC1.value}, ${gradC2.value})`, 'important');
+                activeSettingsElement.style.setProperty('background-color', 'transparent', 'important');
+                
+            } else {
+                if (bgImage && bgImage.value.trim() !== '') {
+                    activeSettingsElement.style.setProperty('background-image', `url('${bgImage.value}')`, 'important');
+                    activeSettingsElement.style.setProperty('background-size', 'cover', 'important');
+                    activeSettingsElement.style.setProperty('background-position', 'center', 'important');
+                    activeSettingsElement.style.setProperty('background-repeat', 'no-repeat', 'important');
+                } else {
+                    activeSettingsElement.style.removeProperty('background-image');
+                }
+                
+                if (bgColor && bgColor.value) {
+                    activeSettingsElement.style.setProperty('background-color', bgColor.value, 'important');
+                }
+            }
+        }
+        else if (activeSettingsElement.classList.contains('eweb-video-widget') || activeSettingsElement.tagName === 'VIDEO' || activeSettingsElement.tagName === 'IFRAME') {
+            const url = document.getElementById('set-video-url');
+            const ratio = document.getElementById('set-video-ratio');
+            const iframe = activeSettingsElement.querySelector('iframe');
+            const video = activeSettingsElement.querySelector('video');
+            const ratioDiv = activeSettingsElement.querySelector('.ratio');
+            
+            if (url && url.value) {
+                const newUrl = url.value;
+                const isVideo = newUrl.match(/\.(mp4|webm|ogg|mov)$/i);
+                
+                if (isVideo) {
+                    if (iframe) {
+                        const newVid = document.createElement('video');
+                        newVid.src = newUrl; newVid.controls = true; newVid.style.width = '100%';
+                        newVid.className = iframe.className;
+                        iframe.parentNode.replaceChild(newVid, iframe);
+                    } else if (video) {
+                        video.src = newUrl;
+                    } else if (activeSettingsElement.tagName === 'IFRAME') {
+                         const newVid = document.createElement('video');
+                         newVid.src = newUrl; newVid.controls = true; newVid.style.width = '100%';
+                         newVid.className = activeSettingsElement.className;
+                         activeSettingsElement.parentNode.replaceChild(newVid, activeSettingsElement);
+                    } else if (activeSettingsElement.tagName === 'VIDEO') {
+                         activeSettingsElement.src = newUrl;
+                    } else {
+                        activeSettingsElement.innerHTML = `<video src="${newUrl}" controls style="width:100%;"></video>`;
+                    }
+                } else {
+                    if (video) {
+                        const newIframe = document.createElement('iframe');
+                        newIframe.src = newUrl; newIframe.width = '100%'; newIframe.height = '100%'; newIframe.frameBorder = '0'; newIframe.allowFullscreen = true;
+                        newIframe.className = video.className;
+                        video.parentNode.replaceChild(newIframe, video);
+                    } else if (iframe) {
+                        iframe.src = newUrl;
+                    } else if (activeSettingsElement.tagName === 'VIDEO') {
+                         const newIframe = document.createElement('iframe');
+                         newIframe.src = newUrl; newIframe.width = '100%'; newIframe.height = '100%'; newIframe.frameBorder = '0'; newIframe.allowFullscreen = true;
+                         newIframe.className = activeSettingsElement.className;
+                         activeSettingsElement.parentNode.replaceChild(newIframe, activeSettingsElement);
+                    } else if (activeSettingsElement.tagName === 'IFRAME') {
+                         activeSettingsElement.src = newUrl;
+                    } else {
+                        activeSettingsElement.innerHTML = `<iframe src="${newUrl}" width="100%" height="100%" frameborder="0" allowfullscreen></iframe>`;
+                    }
+                }
+            }
+            if(ratioDiv && ratio) ratioDiv.className = `ratio ${ratio.value}`;
+        }
+        else if (activeSettingsElement.classList.contains('eweb-image-widget')) {
+            const url = document.getElementById('set-img-src');
+            const alt = document.getElementById('set-img-alt');
+            const img = activeSettingsElement.querySelector('img');
+            
+            if (img) {
+                if(url) img.src = url.value;
+                if(alt) img.alt = alt.value;
+            }
+        }
+        else if (activeSettingsElement.classList.contains('eweb-button-widget')) {
+            const text = document.getElementById('set-btn-text');
+            const link = document.getElementById('set-btn-link');
+            const a = activeSettingsElement.querySelector('a') || activeSettingsElement.querySelector('button');
+            
+            if (a) {
+                if(text) a.innerText = text.value;
+                if(link && a.tagName === 'A') { a.href = link.value; a.removeAttribute('onclick'); }
+            }
+        }
+        else if (!activeSettingsElement.classList.contains('eweb-carousel-widget') && !activeSettingsElement.classList.contains('carousel')) {
+            const align = document.getElementById('set-text-align');
+            const color = document.getElementById('set-text-color');
+            
+            if (align) {
+                activeSettingsElement.classList.remove('text-left', 'text-center', 'text-right', 'text-justify');
+                activeSettingsElement.classList.add(align.value);
+            }
+            if (color) { 
+                activeSettingsElement.style.setProperty('color', color.value, 'important'); 
+            }
+        }
+
+        if(typeof enableSaveButton === 'function') enableSaveButton();
+        if(typeof captureState === 'function') captureState();
+        if(typeof updateStatus === 'function') updateStatus("✅ Widget settings applied.");
+        
+        closeElementSettings();
+    };
+
+    window.triggerBgImageManagerForSection = function() {
+        if (!activeSettingsElement) return;
+        window.currentBgElementToReplace = activeSettingsElement;
+        if(typeof openImageManager === 'function') {
+            openImageManager();
+            const originalInsert = window.insertImageInDoc;
+            window.insertImageInDoc = function(doc) {
+                if (typeof selectedImageSrc !== 'undefined' && selectedImageSrc) {
+                    document.getElementById('set-bg-image').value = selectedImageSrc;
+                    window.insertImageInDoc = originalInsert;
+                    document.getElementById('image-manager-modal').style.display = 'none';
+                }
+            };
+        }
+    };
+
+    window.triggerImageManagerForWidget = function() {
+        if (!activeSettingsElement) return;
+        const img = activeSettingsElement.querySelector('img');
+        if (img) {
+            window.currentBgElementToReplace = img;
+            if(typeof openImageManager === 'function') {
+                openImageManager();
+                const originalInsert = window.insertImageInDoc;
+                window.insertImageInDoc = function(doc) {
+                    if (typeof selectedImageSrc !== 'undefined' && selectedImageSrc) {
+                        document.getElementById('set-img-src').value = selectedImageSrc;
+                        window.insertImageInDoc = originalInsert;
+                        document.getElementById('image-manager-modal').style.display = 'none';
+                    }
+                };
+            }
+        }
+    };
+
+    window.triggerVideoManagerForWidget = function() {
+        if (!activeSettingsElement) return;
+        if(typeof openImageManager === 'function') {
+            openImageManager();
+            const originalInsert = window.insertImageInDoc;
+            window.insertImageInDoc = function(doc) {
+                if (typeof selectedImageSrc !== 'undefined' && selectedImageSrc) {
+                    const urlInput = document.getElementById('set-video-url');
+                    if (urlInput) urlInput.value = selectedImageSrc;
+                    window.insertImageInDoc = originalInsert;
+                    document.getElementById('image-manager-modal').style.display = 'none';
+                }
+            };
+        }
+    };
+
+    window.triggerCarouselManagerForWidget = function() {
+        if (!activeSettingsElement) return;
+        if(typeof openImageManager === 'function') {
+            openImageManager();
+            const originalInsert = window.insertImageInDoc;
+            window.insertImageInDoc = function(contextDoc) {
+                if (typeof selectedImageSrc !== 'undefined' && selectedImageSrc) {
+                    const inner = activeSettingsElement.querySelector('.carousel-inner');
+                    const indicators = activeSettingsElement.querySelector('.carousel-indicators');
+                    if (inner) {
+                        const isFirst = inner.children.length === 0;
+                        const item = contextDoc.createElement('div');
+                        item.className = `carousel-item ${isFirst ? 'active' : ''}`;
+                        item.innerHTML = `<img src="${selectedImageSrc}" class="d-block w-100" alt="Slide">`;
+                        inner.appendChild(item);
+                        
+                        if (indicators) {
+                            const idx = inner.children.length - 1;
+                            const ind = contextDoc.createElement('button');
+                            ind.type = 'button';
+                            ind.setAttribute('data-bs-target', '#' + (activeSettingsElement.id || ''));
+                            ind.setAttribute('data-bs-slide-to', idx.toString());
+                            if (isFirst) ind.className = 'active';
+                            indicators.appendChild(ind);
+                        }
+                        if(typeof captureState === 'function') captureState();
+                        if(typeof enableSaveButton === 'function') enableSaveButton();
+                        if(typeof updateStatus === 'function') updateStatus('Image added to Carousel.');
+                    }
+                    window.insertImageInDoc = originalInsert;
+                    document.getElementById('image-manager-modal').style.display = 'none';
+                    closeElementSettings(); 
+                }
+            };
+        }
+    };
+
+    window.triggerEditCarouselForWidget = function() {
+        if (!activeSettingsElement) return;
+        const imgs = activeSettingsElement.querySelectorAll('.carousel-inner img');
+        let urls = [];
+        imgs.forEach(img => urls.push(img.src));
+        
+        if (typeof window.parent.openEditCarouselModal === 'function') {
+            window.parent.openEditCarouselModal(activeSettingsElement, urls);
+        } else if (typeof openEditCarouselModal === 'function') {
+            openEditCarouselModal(activeSettingsElement, urls);
+        }
+        closeElementSettings();
+    };
+
+    function attachAdvancedBuilderLogic(iframeDoc) {
+        let isResizingSection = false;
+        let isDraggingBlock = false;
+        let activeElement = null;
+        let startY, startHeight, startX, startLeft, startTop;
+
+        iframeDoc.addEventListener('mousedown', function(e) {
+            if (e.target.classList.contains('section-resize-handle')) {
+                isResizingSection = true;
+                activeElement = e.target.closest('section');
+                startY = e.clientY;
+                startHeight = parseInt(window.getComputedStyle(activeElement).height, 10);
+                
+                iframeDoc.body.style.userSelect = 'none';
+                e.preventDefault();
+            }
+
+            if (e.target.classList.contains('eweb-freeform-block')) {
+                const rect = e.target.getBoundingClientRect();
+                const isClickingResizeCorner = (e.clientX > rect.right - 20 && e.clientY > rect.bottom - 20);
+                
+                if (!isClickingResizeCorner) {
+                    isDraggingBlock = true;
+                    activeElement = e.target;
+                    startX = e.clientX;
+                    startY = e.clientY;
+                    startLeft = activeElement.offsetLeft;
+                    startTop = activeElement.offsetTop;
+                    
+                    iframeDoc.body.style.userSelect = 'none';
+                    e.preventDefault();
+                }
+            }
+        });
+
+        iframeDoc.addEventListener('mousemove', function(e) {
+            if (isResizingSection && activeElement) {
+                const dy = e.clientY - startY;
+                activeElement.style.minHeight = (startHeight + dy) + 'px';
+            }
+
+            if (isDraggingBlock && activeElement) {
+                const dx = e.clientX - startX;
+                const dy = e.clientY - startY;
+                activeElement.style.left = (startLeft + dx) + 'px';
+                activeElement.style.top = (startTop + dy) + 'px';
+            }
+        });
+
+        iframeDoc.addEventListener('mouseup', function(e) {
+            if (isResizingSection || isDraggingBlock) {
+                isResizingSection = false;
+                isDraggingBlock = false;
+                activeElement = null;
+                iframeDoc.body.style.userSelect = 'auto';
+                
+                if(typeof captureState === 'function') captureState();
+                if(typeof enableSaveButton === 'function') enableSaveButton();
+            }
+        });
+    }
+
+    const originalInitEditor = window.initEditor;
+    window.initEditor = function(iframe) {
+        if (originalInitEditor) originalInitEditor(iframe);
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        
+        attachAdvancedBuilderLogic(doc);
+    };
+</script>

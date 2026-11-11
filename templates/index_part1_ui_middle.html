@@ -1,0 +1,803 @@
+<!-- EXISTING TEMPLATES SLIDER -->
+    <div id="elements-slider">
+        <div class="slider-header">
+            <h3>Use Templates</h3>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button id="admin-import-seed-btn" onclick="document.getElementById('seed-import-input').click()" style="display:none; background:#17a2b8; color:white; border:none; padding:4px 10px; border-radius:4px; font-size:12px; cursor:pointer;" title="Import update_seed.json">📥 Import</button>
+                <input type="file" id="seed-import-input" accept=".json" style="display:none" onchange="if(this.files.length > 0) handleSeedImport(this.files[0])">
+
+                <button id="admin-add-category-btn" onclick="openAddTemplateModal()" style="display:none;" title="Create new category or template">+</button>
+                <button onclick="closeElementsSlider()" style="background:transparent; border:none; color:#dc3545; font-size:18px; cursor:pointer; padding:0 5px;" title="Close Drawer">✕</button>
+            </div>
+        </div>
+        <div class="slider-body">
+            <div class="slider-split-layout">
+                <div id="slider-categories" class="slider-left-pane"></div>
+                <div id="slider-templates" class="slider-right-pane">
+                    <div style="color:#999; text-align:center; margin-top:20px;">Select a category</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- UPDATED: UI ELEMENTS SLIDER (WIDGETS, COLOURS, FONTS, LOGO) -->
+    <div id="ui-elements-slider">
+        <div class="slider-header" style="background:#f8f9fa; padding:15px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:16px; color:#333;">🧩 Elements & Styling</h3>
+            <button onclick="closeUiElementsSlider()" style="background:transparent; border:none; color:#dc3545; font-size:18px; cursor:pointer; padding:0 5px;" title="Close Drawer">✕</button>
+        </div>
+        <div class="slider-body" style="flex-grow: 1; overflow: hidden;">
+            <div class="slider-split-layout" style="height: 100%;">
+                <div class="slider-left-pane">
+                    <button class="el-cat-btn active" id="tab-btn-widgets" onclick="window.switchUiElementsTab('widgets', this)" style="padding: 15px 10px; width: 100%; text-align: left; border: none; background: #e8f4fd; color: #007bff; border-left: 4px solid #007bff; cursor: pointer; font-weight: bold; font-size:14px; transition: 0.2s;">
+                        <i class="fas fa-cubes"></i> Widgets
+                    </button>
+                    <button class="el-cat-btn" id="tab-btn-colours" onclick="window.switchUiElementsTab('colours', this)" style="padding: 15px 10px; width: 100%; text-align: left; border: none; background: transparent; color: #555; border-left: 4px solid transparent; cursor: pointer; font-weight: bold; font-size:14px; transition: 0.2s;">
+                        <i class="fas fa-palette"></i> Colours
+                    </button>
+                    <button class="el-cat-btn" id="tab-btn-fonts" onclick="window.switchUiElementsTab('fonts', this)" style="padding: 15px 10px; width: 100%; text-align: left; border: none; background: transparent; color: #555; border-left: 4px solid transparent; cursor: pointer; font-weight: bold; font-size:14px; transition: 0.2s;">
+                        <i class="fas fa-font"></i> Fonts
+                    </button>
+                    <button class="el-cat-btn" id="tab-btn-logo" onclick="window.switchUiElementsTab('logo', this)" style="padding: 15px 10px; width: 100%; text-align: left; border: none; background: transparent; color: #555; border-left: 4px solid transparent; cursor: pointer; font-weight: bold; font-size:14px; transition: 0.2s;">
+                        <i class="fas fa-image"></i> Logo
+                    </button>
+                </div>
+                
+                <div class="slider-right-pane" style="padding:0;">
+                    <!-- WIDGETS TAB -->
+                    <div id="drawer-widget-list-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 15px; align-content: start;">
+                    </div>
+                    
+                    <!-- COLOURS TAB -->
+                    <div id="drawer-colours-container" style="display: none; padding: 15px; flex-direction: column; gap: 15px; overflow-y: auto;">
+                        
+                        <div style="background:#e8f4fd; padding:10px; border-radius:6px; border:1px solid #b8daff; margin-bottom:5px;">
+                            <p style="margin:0; font-size:12px; color:#0056b3; line-height:1.4;">🎨 These settings will override the template's current colors globally.</p>
+                        </div>
+
+                        <h4 style="margin:0; color:#333; font-size:14px; border-bottom:1px solid #eee; padding-bottom:5px;">Global Theme Colors</h4>
+
+                        <div class="color-control-group" style="display:flex; flex-direction:column; gap:5px;">
+                            <label style="font-size:12px; font-weight:bold; color:#555;">Background Color</label>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <input type="color" id="global-color-bg" style="width:40px; height:35px; border:1px solid #ccc; border-radius:4px; padding:2px; cursor:pointer;" onchange="window.applyGlobalColor('bg', this.value)">
+                                <input type="text" id="global-color-bg-txt" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; font-family:monospace; font-size:12px;" onchange="document.getElementById('global-color-bg').value = this.value; window.applyGlobalColor('bg', this.value)">
+                            </div>
+                        </div>
+
+                        <div class="color-control-group" style="display:flex; flex-direction:column; gap:5px; background:#f8f9fa; padding:10px; border-radius:6px; border:1px solid #eee;">
+                            <label style="font-size:12px; font-weight:bold; color:#333;">Background Gradient</label>
+                            <div style="display:flex; gap:5px; margin-bottom:5px;">
+                                <input type="color" id="global-color-grad1" style="width:40px; height:35px; border:1px solid #ccc; border-radius:4px; padding:2px; cursor:pointer;" value="#007bff">
+                                <input type="color" id="global-color-grad2" style="width:40px; height:35px; border:1px solid #ccc; border-radius:4px; padding:2px; cursor:pointer;" value="#00d2ff">
+                                <select id="global-color-grad-dir" style="flex:1; padding:5px; border:1px solid #ccc; border-radius:4px; font-size:12px;">
+                                    <option value="to right">Right</option>
+                                    <option value="to left">Left</option>
+                                    <option value="to bottom">Bottom</option>
+                                    <option value="to top">Top</option>
+                                    <option value="135deg">135°</option>
+                                    <option value="circle">Radial</option>
+                                </select>
+                            </div>
+                            <div style="display:flex; gap:5px;">
+                                <button style="flex:1; background:#007bff; color:white; border:none; padding:8px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer;" onclick="window.applyGlobalGradient()">Apply Gradient</button>
+                                <button style="flex:1; background:#dc3545; color:white; border:none; padding:8px; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer;" onclick="window.removeGlobalGradient()">Clear</button>
+                            </div>
+                        </div>
+
+                        <h4 style="margin:10px 0 0 0; color:#333; font-size:14px; border-bottom:1px solid #eee; padding-bottom:5px;">Typography Colors</h4>
+
+                        <div class="color-control-group" style="display:flex; flex-direction:column; gap:5px;">
+                            <label style="font-size:12px; font-weight:bold; color:#555;">Text Color</label>
+                            <div style="display:flex; gap:10px; align-items:center;">
+                                <input type="color" id="global-color-text" style="width:40px; height:35px; border:1px solid #ccc; border-radius:4px; padding:2px; cursor:pointer;" onchange="window.applyGlobalColor('text', this.value)">
+                                <input type="text" id="global-color-text-txt" style="flex:1; padding:8px; border:1px solid #ccc; border-radius:4px; font-family:monospace; font-size:12px;" onchange="document.getElementById('global-color-text').value = this.value; window.applyGlobalColor('text', this.value)">
+                            </div>
+                        </div>
+                        
+                        <hr style="border:none; border-top:1px solid #eee; margin:5px 0;">
+                        <button style="background:#28a745; color:white; border:none; padding:10px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:13px;" onclick="window.syncGlobalColorsFromPreview()">🔄 Detect Current Colors</button>
+                    </div>
+
+                    <!-- FONTS TAB -->
+                    <div id="drawer-fonts-container" style="display: none; padding: 15px; flex-direction: column; gap: 15px; overflow-y: auto;">
+                        <div style="background:#e8f4fd; padding:10px; border-radius:6px; border:1px solid #b8daff; margin-bottom:5px;">
+                            <p style="margin:0; font-size:12px; color:#0056b3; line-height:1.4;">🔡 Choose a global font family to apply across all pages of this template.</p>
+                        </div>
+                        <h4 style="margin:0; color:#333; font-size:14px; border-bottom:1px solid #eee; padding-bottom:5px;">Global Typography</h4>
+                        
+                        <div class="color-control-group" style="display:flex; flex-direction:column; gap:5px;">
+                            <label style="font-size:12px; font-weight:bold; color:#555;">Primary Font</label>
+                            <select id="global-font-family" class="auth-input" style="width:100%; padding:8px; border-radius:4px; border:1px solid #ccc; font-size:13px;" onchange="window.applyGlobalFont(this.value)">
+                                <option value="'Plus Jakarta Sans', 'Inter', sans-serif">Plus Jakarta Sans (Default)</option>
+                                <option value="'Inter', sans-serif">Inter</option>
+                                <option value="'Outfit', sans-serif">Outfit</option>
+                                <option value="'Roboto', sans-serif">Roboto</option>
+                                <option value="'Open Sans', sans-serif">Open Sans</option>
+                                <option value="'Lato', sans-serif">Lato</option>
+                                <option value="'Montserrat', sans-serif">Montserrat</option>
+                                <option value="'Poppins', sans-serif">Poppins</option>
+                                <option value="'Nunito', sans-serif">Nunito</option>
+                                <option value="'Playfair Display', serif">Playfair Display (Serif)</option>
+                                <option value="'Merriweather', serif">Merriweather (Serif)</option>
+                                <option value="'Georgia', serif">Georgia (Serif)</option>
+                                <option value="'Courier New', monospace">Courier New (Monospace)</option>
+                            </select>
+                        </div>
+
+                        <!-- GOAL 1: ADD CUSTOM GOOGLE FONT -->
+                        <div style="margin-top:15px; border-top:1px solid #eee; padding-top:15px;">
+                            <label style="font-size:12px; font-weight:bold; color:#555;">Add Custom Google Font</label>
+                            <div style="display:flex; gap:5px; margin-top:5px;">
+                                <input type="text" id="custom-google-font-input" class="auth-input" placeholder="e.g. 'Oswald' or 'Playfair Display'" style="margin:0; flex:1; font-size:13px; padding:8px;">
+                                <button style="background:#007bff; color:white; border:none; padding:8px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:13px;" onclick="window.addAndApplyCustomFont()">Add</button>
+                            </div>
+                            <p style="font-size:11px; color:#888; margin-top:5px;">Type the exact font name from <a href="https://fonts.google.com" target="_blank" style="color:#007bff;">Google Fonts</a>.</p>
+                        </div>
+
+                        <button style="background:#28a745; color:white; border:none; padding:10px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:13px; margin-top:10px;" onclick="window.detectCurrentFont()">🔄 Detect Current Font</button>
+                    </div>
+
+                    <!-- LOGO TAB -->
+                    <div id="drawer-logo-container" style="display: none; padding: 15px; flex-direction: column; gap: 15px; overflow-y: auto;">
+                        <div style="background:#e8f4fd; padding:10px; border-radius:6px; border:1px solid #b8daff; margin-bottom:5px;">
+                            <p style="margin:0; font-size:12px; color:#0056b3; line-height:1.4;">✨ Replace the template's logo across <b>all pages</b> instantly.</p>
+                        </div>
+
+                        <h4 style="margin:0; color:#333; font-size:14px; border-bottom:1px solid #eee; padding-bottom:5px;">Website Logo</h4>
+                        
+                        <div style="text-align:center; padding:15px; background:#f8f9fa; border:1px dashed #ccc; border-radius:6px; margin-bottom:10px;" id="global-logo-preview-box">
+                            <img id="global-logo-preview" src="https://placehold.co/200x70?text=Current+Logo" style="max-width:100%; max-height:80px; object-fit:contain;">
+                        </div>
+
+                        <p id="global-logo-status" style="font-size:12px; color:#28a745; text-align:center; margin:0; font-weight:bold;"></p>
+
+                        <!-- Option 1: Text Logo -->
+                        <div style="margin-bottom: 10px;">
+                            <label style="font-size:12px; font-weight:bold; color:#555; display:block; margin-bottom:5px;">Option 1: Text Logo</label>
+                            <div style="display:flex; gap:5px;">
+                                <input type="text" id="global-logo-text-input" class="auth-input" placeholder="e.g. MyBrand" style="margin:0; flex:1; font-size:13px; padding:8px;">
+                                <button style="background:#007bff; color:white; border:none; padding:8px 12px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:13px;" onclick="window.applyGlobalTextLogo()">Apply</button>
+                            </div>
+                        </div>
+
+                        <!-- Option 2: Image Logo -->
+                        <label style="font-size:12px; font-weight:bold; color:#555; display:block; margin-top:5px; margin-bottom:5px;">Option 2: Image Logo</label>
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <input type="file" id="global-logo-upload-input" accept="image/*" style="display:none;" onchange="window.handleGlobalLogoUpload(this)">
+                            <button style="width:100%; background:#17a2b8; color:white; border:none; padding:10px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="document.getElementById('global-logo-upload-input').click()">
+                                <span>📁</span> Upload from Computer
+                            </button>
+                            <button style="width:100%; background:#6f42c1; color:white; border:none; padding:10px; border-radius:4px; font-size:13px; font-weight:bold; cursor:pointer; display:flex; justify-content:center; align-items:center; gap:8px;" onclick="window.triggerGlobalLogoManager()">
+                                <span>🖼️</span> Choose from Media
+                            </button>
+                        </div>
+                        
+                        <button style="background:#28a745; color:white; border:none; padding:10px; border-radius:4px; font-weight:bold; cursor:pointer; font-size:13px; margin-top:10px;" onclick="window.detectCurrentLogo()">🔄 Detect Current Logo</button>
+
+                        <div id="recent-logos-container" style="display:none; margin-top:5px; padding-top:15px; border-top:1px solid #eee;">
+                            <h4 style="margin:0 0 10px 0; color:#333; font-size:13px;">Recently Used Logos</h4>
+                            <div id="recent-logos-grid" style="display:flex; gap:10px;"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- NEW: SETTINGS SLIDER (GOAL 2) -->
+    <div id="settings-slider">
+        <div class="slider-header" style="background:#f8f9fa; padding:15px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:16px; color:#333;">⚙️ Personal Settings</h3>
+            <button onclick="closeSettingsSlider()" style="background:transparent; border:none; color:#dc3545; font-size:18px; cursor:pointer; padding:0 5px;" title="Close Drawer">✕</button>
+        </div>
+        <div class="slider-body" style="flex-grow: 1; overflow: hidden;">
+            <div class="slider-split-layout" style="height: 100%;">
+                <div class="slider-left-pane">
+                    <button class="settings-tab-btn active" onclick="switchSettingsTab('eweb-tab-ga', this)"><span>📈</span> Google Analytics</button>
+                    <button class="settings-tab-btn" onclick="switchSettingsTab('eweb-tab-ai', this)"><span>🧠</span> AI Generation</button>
+                    <button class="settings-tab-btn" onclick="switchSettingsTab('eweb-tab-contact', this)"><span>📧</span> Contact & SMTP</button>
+                </div>
+                <div class="slider-right-pane">
+                    <div id="eweb-tab-ga" class="eweb-tab-content" style="display:block;">
+                        <h3 style="margin-top:0; color:#333; font-size:18px;">Google Analytics Tracking</h3>
+                        <p style="color:#666; font-size:13px; margin-bottom:15px;">Paste your entire Google Analytics or Tag Manager <code>&lt;script&gt;</code> code here. It will automatically be injected into the <code>&lt;head&gt;</code> of all your generated website pages.</p>
+                        
+                        <textarea id="eweb-ga-code" class="auth-input" style="height: 250px; font-family: monospace; font-size:12px; background:#f8f9fa;" placeholder="&#10;<script async src='https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX'></script>&#10;<script>&#10;  window.dataLayer = window.dataLayer || [];&#10;  function gtag(){dataLayer.push(arguments);}&#10;  gtag('js', new Date());&#10;  gtag('config', 'G-XXXXXXX');&#10;</script>"></textarea>
+                        
+                        <button class="auth-btn" style="width:auto; margin-top: 15px; background:#007bff; padding:10px 20px;" onclick="saveEwebSettings('analytics')">Save Analytics Code</button>
+                    </div>
+
+                    <div id="eweb-tab-ai" class="eweb-tab-content" style="display:none;">
+                        <h3 style="margin-top:0; color:#333; border-bottom:1px solid #eee; padding-bottom:10px; font-size:18px;">AI Models & Structure</h3>
+                        
+                        <div id="eweb-ai-locked" style="display:none !important; text-align:center; padding: 30px; background:#fff3cd; color:#856404; border-radius: 5px; border: 1px solid #ffeeba;">
+                            <span style="font-size: 2em; display:block; margin-bottom: 10px;">🔒</span>
+                            <strong style="font-size: 1.1em;">Feature Locked</strong>
+                            <p style="margin-top: 5px; font-size:13px;">Your current plan does not allow using personal AI API Keys or Custom Models.</p>
+                        </div>
+
+                        <div id="eweb-ai-unlocked" style="display:block;">
+                            <label style="font-weight:bold; font-size:13px; color:#333;">Active AI Provider</label>
+                            <select id="eweb-ai-provider" class="auth-input" onchange="toggleEwebAIPanels()" style="font-size:13px;">
+                                <option value="default">Default as Admin AI</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="claude">Anthropic Claude</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="grok">xAI Grok</option>
+                                <option value="meta">Meta (Groq)</option>
+                                <option value="perplexity">Perplexity</option>
+                            </select>
+
+                            <div style="display:flex; gap:15px; margin-top:15px;">
+                                <div style="flex:1;">
+                                    <label style="font-weight:bold; font-size:13px; color:#555;">API Key</label>
+                                    <div id="eweb-panel-gemini" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-gemini-key" class="auth-input" placeholder="AIzaSy..." style="font-size:13px;"></div>
+                                    <div id="eweb-panel-openai" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-openai-key" class="auth-input" placeholder="sk-..." style="font-size:13px;"></div>
+                                    <div id="eweb-panel-claude" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-claude-key" class="auth-input" placeholder="sk-ant-..." style="font-size:13px;"></div>
+                                    <div id="eweb-panel-deepseek" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-deepseek-key" class="auth-input" placeholder="sk-..." style="font-size:13px;"></div>
+                                    <div id="eweb-panel-grok" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-xai-key" class="auth-input" placeholder="xai-..." style="font-size:13px;"></div>
+                                    <div id="eweb-panel-meta" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-meta-key" class="auth-input" placeholder="gsk_..." style="font-size:13px;"></div>
+                                    <div id="eweb-panel-perplexity" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-perplexity-key" class="auth-input" placeholder="pplx-..." style="font-size:13px;"></div>
+                                </div>
+                                
+                                <div style="flex:1;">
+                                    <label style="font-weight:bold; font-size:13px; color:#555;">AI Model</label>
+                                    
+                                    <div id="eweb-model-panel-gemini" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-gemini" class="auth-input" onchange="window.toggleEwebModelInput('gemini')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                                            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                                            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-gemini" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. gemini-1.5-pro">
+                                        
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-gemini" class="auth-input" onchange="window.toggleEwebTokenInput('gemini')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-gemini" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+                                    
+                                    <div id="eweb-model-panel-openai" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-openai" class="auth-input" onchange="window.toggleEwebModelInput('openai')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="gpt-4o">gpt-4o</option>
+                                            <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                            <option value="o1-mini">o1-mini</option>
+                                            <option value="gpt-4-turbo">gpt-4-turbo</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-openai" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. gpt-4o">
+
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-openai" class="auth-input" onchange="window.toggleEwebTokenInput('openai')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-openai" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-claude" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-claude" class="auth-input" onchange="window.toggleEwebModelInput('claude')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
+                                            <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</option>
+                                            <option value="claude-3-opus-20240229">claude-3-opus-20240229</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-claude" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. claude-3-5-sonnet-v2">
+
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-claude" class="auth-input" onchange="window.toggleEwebTokenInput('claude')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-claude" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-deepseek" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-deepseek" class="auth-input" onchange="window.toggleEwebModelInput('deepseek')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="deepseek-chat">deepseek-chat</option>
+                                            <option value="deepseek-coder">deepseek-coder</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-deepseek" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. deepseek-reasoner">
+
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-deepseek" class="auth-input" onchange="window.toggleEwebTokenInput('deepseek')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-deepseek" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-grok" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-grok" class="auth-input" onchange="window.toggleEwebModelInput('grok')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="grok-4.3">grok-4.3</option>
+                                            <option value="grok-4">grok-4</option>
+                                            <option value="grok-4-fast">grok-4-fast</option>
+                                            <option value="grok-3">grok-3</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-grok" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. grok-4.3">
+
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-grok" class="auth-input" onchange="window.toggleEwebTokenInput('grok')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-grok" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-meta" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-meta" class="auth-input" onchange="window.toggleEwebModelInput('meta')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                                            <option value="meta-llama/llama-4-maverick-17b-128e-instruct">meta-llama/llama-4-maverick-17b-128e-instruct</option>
+                                            <option value="meta-llama/llama-4-scout-17b-16e-instruct">meta-llama/llama-4-scout-17b-16e-instruct</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-meta" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. llama-3.3-70b-versatile">
+
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-meta" class="auth-input" onchange="window.toggleEwebTokenInput('meta')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-meta" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-perplexity" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-perplexity" class="auth-input" onchange="window.toggleEwebModelInput('perplexity')" style="font-size:13px;">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="sonar-pro">sonar-pro</option>
+                                            <option value="sonar">sonar</option>
+                                            <option value="sonar-reasoning-pro">sonar-reasoning-pro</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-perplexity" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. sonar-reasoning">
+
+                                        <label style="font-weight:bold; font-size:13px; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-perplexity" class="auth-input" onchange="window.toggleEwebTokenInput('perplexity')" style="font-size:13px;">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-perplexity" class="auth-input" style="display:none; margin-top:5px; font-size:13px;" placeholder="e.g. 4096">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr style="border:none; border-top:1px solid #eee; margin:20px 0;">
+
+                            <h4 style="margin-top:0; color:#333; font-size:14px;">Default Pages Structure</h4>
+                            <p style="font-size:12px; color:#666;">Define which pages the AI should generate by default.</p>
+                            <select id="eweb-pages-mode" class="auth-input" onchange="window.toggleEwebPagesInput()" style="font-size:13px;">
+                                <option value="default">Default as Admin (Recommended)</option>
+                                <option value="manual">Manual (Custom Pages)</option>
+                            </select>
+                            
+                            <div id="eweb-pages-wrapper" style="display:none !important; margin-top:10px; background:#f8f9fa; padding:15px; border:1px solid #ddd; border-radius:5px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                    <strong style="color:#555; font-size:13px;">Your Pages</strong>
+                                    <button onclick="window.addEwebPageRow()" style="background:#17a2b8; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:12px; font-weight:bold;">+ Add Page</button>
+                                </div>
+                                <div id="eweb-pages-ui-list" style="max-height:200px; overflow-y:auto; padding-right:5px;"></div>
+                                <textarea id="eweb-pages-json" style="display:none !important;"></textarea>
+                            </div>
+
+                            <button class="auth-btn" style="width:auto; margin:-top: 20px; background:#28a745; padding:10px 20px;" onclick="saveEwebSettings('ai')">Save AI Settings</button>
+                        </div>
+                    </div>
+
+                    <div id="eweb-tab-contact" class="eweb-tab-content" style="display:none !important;">
+                        <h3 style="margin:0; color:#333; font-size:18px;">📧 Contact Form & SMTP</h3>
+                        <p style="color:#666; font-size:13px; margin-bottom:15px;">Configure where your website's contact form submissions are sent.</p>
+                        
+                        <label style="color:#555; font-weight:bold; font-size:13px;">Receiving Email Address</label>
+                        <input type="email" id="eweb-contact-email" class="auth-input" placeholder="e.g. hello@yourdomain.com" style="font-size:13px;">
+                        
+                        <div style="margin-top:20px; padding:15px; background:#f8f9fa; border-radius:5px; border:1px solid #ddd;">
+                            <label style="font-size:14px; font-weight:bold; color:#333; margin-bottom:10px; display:block;">Custom SMTP Credentials <span style="font-size:11px; color:#888; font-weight:normal;">(Optional - Overrides System Default)</span></label>
+                            <input type="text" id="eweb-smtp-host" class="auth-input" style="margin-top:5px; font-size:13px;" placeholder="SMTP Host (e.g., smtp.gmail.com)">
+                            <div style="display:flex; gap:10px;">
+                                <input type="text" id="eweb-smtp-port" class="auth-input" style="flex:1; font-size:13px;" placeholder="Port (e.g., 587)">
+                                <input type="text" id="eweb-smtp-user" class="auth-input" style="flex:2; font-size:13px;" placeholder="SMTP Username">
+                            </div>
+                            <input type="password" id="eweb-smtp-pass" class="auth-input" placeholder="SMTP Password" style="font-size:13px;">
+                        </div>
+                        <button class="auth-btn" style="width:auto; margin-top: 15px; background:#007bff; padding:10px 20px;" onclick="saveEwebSettings('contact')">Save Contact Settings</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- STORE SLIDER HTML -->
+    <div id="store-slider">
+        <div class="slider-header" style="background:#f8f9fa; padding:15px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:16px; color:#333;">🛒 Marketplace & Store</h3>
+            <button onclick="closeStoreSlider()" style="background:transparent; border:none; color:#dc3545; font-size:18px; cursor:pointer; padding:0 5px;" title="Close Drawer">✕</button>
+        </div>
+        <div class="slider-body" style="flex-grow: 1; overflow: hidden;">
+            <div class="slider-split-layout" style="height: 100%;">
+                <div class="slider-left-pane">
+                    <button class="store-tab-btn active" onclick="switchStoreTab('api-key', this)"><span>🔑</span> API Key</button>
+                    <button class="store-tab-btn" onclick="switchStoreTab('plugins', this)"><span>🔌</span> Plugins</button>
+                    <button class="store-tab-btn" onclick="switchStoreTab('domain', this)"><span>🌐</span> Domain</button>
+                    <button class="store-tab-btn" onclick="switchStoreTab('hosting', this)"><span>☁️</span> Hosting</button>
+                </div>
+                <div class="slider-right-pane">
+                    <div id="store-tab-api-key" class="store-tab-content" style="display:block;">
+                        <h3 style="margin-top:0; color:#333; font-size:18px;">Buy AI API Keys</h3>
+                        <p style="font-size:13px; color:#666; margin-bottom:15px;">Select an AI provider below to purchase a dedicated API key.</p>
+                        
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; padding-bottom:15px; border-bottom:1px solid #eee;">
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('Gemini', this)" style="padding:6px 12px; border:1px solid #007bff; background:#007bff; color:#fff; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">Gemini</button>
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('OpenAi', this)" style="padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">OpenAI</button>
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('Claude', this)" style="padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">Claude</button>
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('Deepseek', this)" style="padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">Deepseek</button>
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('Grok', this)" style="padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">Grok</button>
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('Meta', this)" style="padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">Meta</button>
+                            <button class="store-ai-btn" onclick="window.selectStoreAI('Perplexity', this)" style="padding:6px 12px; border:1px solid #ccc; background:#fff; color:#333; border-radius:20px; cursor:pointer; font-size:12px; font-weight:bold;">Perplexity</button>
+                        </div>
+                        
+                        <div style="background:#f8f9fa; padding:20px; border-radius:8px; border:1px solid #e2e8f0;">
+                            <h4 style="margin-top:0; font-size:15px; color:#2c3e50;">Request <span id="store-selected-ai" style="color:#007bff;">Gemini</span> API Key</h4>
+                            <label style="display:block; margin-bottom:8px; font-weight:bold; font-size:13px; color:#444;">Amount to Add ($)</label>
+                            <div style="display:flex; align-items:center; gap:10px; margin-bottom:15px;">
+                                <span style="font-size:18px; font-weight:bold; color:#555;">$</span>
+                                <input type="number" id="store-api-amount" class="auth-input" placeholder="e.g. 10" min="1" style="width:100%; margin:0;">
+                            </div>
+                            <button onclick="window.submitApiKeyRequest(event)" style="background:#28a745; color:#fff; border:none; padding:12px 15px; border-radius:6px; cursor:pointer; width:100%; font-weight:bold; font-size:14px; transition:0.2s;">Submit Purchase Request</button>
+                            <p style="font-size:11px; color:#777; margin-top:12px; line-height:1.4;">Your request will be sent to the admin. Once approved and processed, the API key will appear in your <b>My Orders</b> section and you will receive an email confirmation.</p>
+                        </div>
+                    </div>
+                    
+                    <div id="store-tab-plugins" class="store-tab-content" style="display:none;">
+                        <h3 style="margin-top:0; color:#333; font-size:18px;">Plugins Store</h3>
+                        <div style="padding:30px; text-align:center; background:#f8f9fa; border-radius:8px; border:1px dashed #ccc; margin-top:20px;">
+                            <span style="font-size:30px;">🔌</span>
+                            <p style="color:#666; font-size:14px; margin-top:10px;">Plugin marketplace is coming soon!</p>
+                        </div>
+                    </div>
+                    
+                    <div id="store-tab-domain" class="store-tab-content" style="display:none;">
+                        <h3 style="margin-top:0; color:#333; font-size:18px;">Buy a Domain</h3>
+                        <div style="padding:30px; text-align:center; background:#f8f9fa; border-radius:8px; border:1px dashed #ccc; margin-top:20px;">
+                            <span style="font-size:30px;">🌐</span>
+                            <p style="color:#666; font-size:14px; margin-top:10px;">Domain registration is coming soon!</p>
+                        </div>
+                    </div>
+                    
+                    <div id="store-tab-hosting" class="store-tab-content" style="display:none;">
+                        <h3 style="margin-top:0; color:#333; font-size:18px;">Web Hosting</h3>
+                        <div style="padding:30px; text-align:center; background:#f8f9fa; border-radius:8px; border:1px dashed #ccc; margin-top:20px;">
+                            <span style="font-size:30px;">☁️</span>
+                            <p style="color:#666; font-size:14px; margin-top:10px;">Cloud hosting plans are coming soon!</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="help-slider">
+        <div class="slider-header" style="background:#f8f9fa; padding:15px; border-bottom:1px solid #ddd; display:flex; justify-content:space-between; align-items:center;">
+            <h3 style="margin:0; font-size:16px; color:#333;">❓ Help & Support Center</h3>
+            <button onclick="closeHelpSlider()" style="background:transparent; border:none; color:#dc3545; font-size:18px; cursor:pointer; padding:0 5px;" title="Close Drawer">✕</button>
+        </div>
+        <div class="slider-body" style="flex-grow: 1; overflow: hidden;">
+            <div class="slider-split-layout" style="height: 100%;">
+                <div class="slider-left-pane">
+                    <button class="help-tab-btn active" onclick="switchHelpTab('kb', this)">
+                        <span>📚</span> Help / Q&A
+                    </button>
+                    <button class="help-tab-btn" onclick="switchHelpTab('hire', this)">
+                        <span>👨‍💻</span> Hire Developer
+                    </button>
+                    <button class="help-tab-btn" onclick="switchHelpTab('feedback', this)">
+                        <span>💬</span> Feedback
+                    </button>
+                    <button class="help-tab-btn" onclick="switchHelpTab('idea', this); window.ewebPrefillIdea && window.ewebPrefillIdea();">
+                        <span>💡</span> Submit Idea
+                    </button>
+                </div>
+                <div class="slider-right-pane">
+                    
+                    <div id="help-pane-kb" class="help-pane-content" style="display: block;">
+                        <div style="position:relative; margin-bottom:15px;">
+                            <input type="text" id="help-kb-search-input" placeholder="Search knowledge base questions..." onkeyup="filterHelpArticles()" style="width:100%; padding:10px 10px 10px 34px; border:1px solid #ccc; border-radius:6px; font-size:13px; box-sizing:border-box;">
+                            <span style="position:absolute; left:12px; top:50%; transform:translateY(-50%); color:#888;">🔍</span>
+                        </div>
+                        <div id="help-kb-list" style="display:flex; flex-direction:column; gap:10px;">
+                            <div style="text-align:center; padding:20px; color:#888;">Loading Knowledge Base...</div>
+                        </div>
+                    </div>
+
+                    <div id="help-pane-hire" class="help-pane-content" style="display: none;">
+                        <h4 style="margin-top:0; margin-bottom:5px; color:#2c3e50;">Hire Dedicated Expert Developer</h4>
+                        <p style="font-size:12px; color:#666; margin-bottom:15px; line-height:1.5;">Need bespoke widget integration, API hooks, or custom web architecture? Submit your project details below to Orgif Solutions LLP team.</p>
+                        
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <div>
+                                <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Your Name *</label>
+                                <input type="text" id="hire-req-name" class="auth-input" placeholder="John Doe" style="margin:0; width:100%;">
+                            </div>
+                            <div style="display:flex; gap:10px;">
+                                <div style="flex:1;">
+                                    <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Email Address *</label>
+                                    <input type="email" id="hire-req-email" class="auth-input" placeholder="john@example.com" style="margin:0; width:100%;">
+                                </div>
+                                <div style="flex:1;">
+                                    <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Phone Number</label>
+                                    <input type="text" id="hire-req-phone" class="auth-input" placeholder="+1 234 567 890" style="margin:0; width:100%;">
+                                </div>
+                            </div>
+                            <div>
+                                <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Country</label>
+                                <input type="text" id="hire-req-country" class="auth-input" placeholder="USA / United Kingdom / India..." style="margin:0; width:100%;">
+                            </div>
+                            <div>
+                                <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Project Description & Requirements *</label>
+                                <textarea id="hire-req-desc" rows="4" class="auth-input" placeholder="Describe what you want to build or customize..." style="margin:0; width:100%; resize:vertical; font-family:sans-serif;"></textarea>
+                            </div>
+                            <button onclick="submitHireDeveloperForm()" style="background:#007bff; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; margin-top:5px; box-shadow:0 4px 10px rgba(0,123,255,0.25);">🚀 Submit Hiring Request</button>
+                        </div>
+                    </div>
+
+                    <div id="help-pane-feedback" class="help-pane-content" style="display: none;">
+                        <h4 style="margin-top:0; margin-bottom:5px; color:#2c3e50;">We Value Your Feedback</h4>
+                        <p style="font-size:12px; color:#666; margin-bottom:15px; line-height:1.5;">Rate your experience with EWebGen builder or share feature suggestions. Replies from our admin team will appear directly inside your Messages inbox!</p>
+                        
+                        <div style="background:#fdfdfd; border:1px solid #eee; padding:15px; border-radius:8px; margin-bottom:15px; text-align:center;">
+                            <div style="font-size:13px; font-weight:bold; margin-bottom:8px; color:#444;">Overall Application Rating</div>
+                            <div class="star-rating-box">
+                                <input type="radio" id="star-5" name="app-rating" value="5" checked><label for="star-5" title="5 Stars">★</label>
+                                <input type="radio" id="star-4" name="app-rating" value="4"><label for="star-4" title="4 Stars">★</label>
+                                <input type="radio" id="star-3" name="app-rating" value="3"><label for="star-3" title="3 Stars">★</label>
+                                <input type="radio" id="star-2" name="app-rating" value="2"><label for="star-2" title="2 Stars">★</label>
+                                <input type="radio" id="star-1" name="app-rating" value="1"><label for="star-1" title="1 Star">★</label>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom:15px;">
+                            <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Your Suggestions or Comments</label>
+                            <textarea id="app-feedback-msg" rows="4" class="auth-input" placeholder="Tell us how we can improve EWebGen builder for you..." style="margin:0; width:100%; resize:vertical; font-family:sans-serif;"></textarea>
+                        </div>
+                        <button onclick="submitAppFeedbackForm()" style="background:#28a745; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; width:100%; box-shadow:0 4px 10px rgba(40,167,69,0.25);">💡 Send Feedback</button>
+                    </div>
+
+                    <div id="help-pane-idea" class="help-pane-content" style="display: none;">
+                        <h4 style="margin-top:0; margin-bottom:5px; color:#2c3e50;">💡 Submit an Idea</h4>
+                        <p style="font-size:12px; color:#666; margin-bottom:15px; line-height:1.5;">Have an idea for a new feature, template or integration? Send it straight to the eWebGen team.</p>
+                        <div style="display:flex; flex-direction:column; gap:10px;">
+                            <div>
+                                <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Idea title *</label>
+                                <input type="text" id="idea-title" class="auth-input" maxlength="200" placeholder="e.g. Add a booking calendar element" style="margin:0; width:100%;">
+                            </div>
+                            <div>
+                                <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Category</label>
+                                <select id="idea-category" class="auth-input" style="margin:0; width:100%;">
+                                    <option>Feature</option><option>Template</option><option>Element / Widget</option><option>Integration</option><option>Improvement</option><option>Other</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Describe your idea *</label>
+                                <textarea id="idea-description" rows="5" class="auth-input" placeholder="What should it do, and how would it help you?" style="margin:0; width:100%; resize:vertical; font-family:sans-serif;"></textarea>
+                            </div>
+                            <div style="display:flex; gap:10px;">
+                                <div style="flex:1;"><label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Your name</label><input type="text" id="idea-name" class="auth-input" style="margin:0; width:100%;"></div>
+                                <div style="flex:1;"><label style="font-size:12px; font-weight:bold; color:#444; display:block; margin-bottom:3px;">Email</label><input type="email" id="idea-email" class="auth-input" style="margin:0; width:100%;"></div>
+                            </div>
+                            <button id="idea-submit-btn" onclick="window.ewebSubmitIdea()" style="background:#6610f2; color:white; border:none; padding:12px; border-radius:6px; font-weight:bold; cursor:pointer; width:100%; box-shadow:0 4px 10px rgba(102,16,242,0.25);">🚀 Submit Idea</button>
+                            <div id="idea-msg" style="font-size:13px; font-weight:bold; min-height:18px;"></div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="left-panel">
+        <div class="panel-header">
+            <div style="display:flex; align-items:center; gap:8px;">
+                
+                <h1 style="margin:0; font-size:1.2em;" data-i18n="Develop Here">✨ Develop Here</h1>
+            </div>
+            <div class="window-controls">
+               <button onclick="iconifyChat()" title="Minimize Chat" style="background:none; border:none; color:#aaa; font-size:16px; cursor:pointer; padding:0; line-height:1; transition:color 0.2s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color='#aaa'">↙️</button>
+                <button class="win-btn btn-restore" onclick="setChatMode('default')" title="Default (Float)">❐</button>
+                <button class="win-btn btn-max" onclick="setChatMode('maximized')" title="Maximize (Dock)">□</button>
+                <button class="win-btn btn-close" id="close-chat-btn" onclick="closeChatBox()" title="Close Chat">✕</button>
+            </div>
+        </div>
+
+        <p>Use the chat to **generate** or **refine** the site structure, content, and style. To generate new website enter prompt starting with "Create new website..."</p>
+
+        <div id="chat-container">
+            <div id="chat-display"></div>
+            <div id="prompt-input-container">
+                <textarea id="prompt-input" placeholder="For new site enter Create new website..." data-i18n="PromptPlaceholder"></textarea>
+                <button id="voice-btn" onclick="toggleVoiceEdit(this)">🎤</button> 
+            </div>
+        </div>
+        
+        <button id="generate-btn" onclick="generateWebsite()" data-i18n="GenerateBtn">Generate/Update Website</button>
+
+        <div id="status-message" data-i18n="StatusReady">Ready for your prompt.</div>
+    </div>
+
+    <div id="right-panel">
+        <div id="control-bar">
+            
+            <select id="page-dropdown" onchange="handlePageDropdown(this.value)" disabled style="max-width: 160px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                <option value="" disabled selected data-i18n="menu_pages">Pages...</option>
+            </select>
+            
+            <div class="custom-dropdown-container">
+                <button id="project-toggle-btn" onclick="toggleProjectMenu(event)" style="max-width: 160px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;"><span class="btn-text" data-i18n="menu_projects">📂 Projects</span></button>
+                <div id="project-menu">
+                    <div class="menu-header">
+                        <span>Saved Projects</span>
+                        <button class="close-btn" onclick="closeProjectMenu()" title="Close">✕</button>
+                    </div>
+                    <div style="padding: 8px; background: #f8f9fa; border-bottom: 1px solid #eee; position: relative;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#888" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="position: absolute; left: 16px; top: 50%; transform: translateY(-50%); pointer-events: none;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                        <input type="text" id="project-search-input" placeholder="Search projects..." onkeyup="filterProjects()" style="width: 100%; padding: 6px 10px 6px 30px; border: 1px solid #ccc; border-radius: 4px; font-size: 12px; box-sizing: border-box; outline: none;">
+                    </div>
+                    <div class="project-list-content">
+                        <div style="padding:10px; color:#aaa; font-size:0.9em;">No projects saved.</div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="save-as-btn" class="responsive-control-item" disabled onclick="saveProject(true)"><span class="btn-text" data-i18n="menu_save_as">📝 Save As</span></button>
+            
+            <div class="custom-dropdown-container" style="position:relative; display:inline-flex;">
+                <button id="import-btn" class="responsive-control-item" onclick="var m = document.getElementById('import-menu-dropdown'); m.style.display = m.style.display === 'block' ? 'none' : 'block';" style="background-color: #17a2b8; color: white;"><span class="btn-text" data-i18n="menu_import">📂 Import ▼</span></button>
+                <div id="import-menu-dropdown" style="display:none; position:absolute; left:0; top:100%; min-width:180px; background:#fff; border:1px solid #ccc; box-shadow:0 4px 15px rgba(0,0,0,0.2); border-radius:5px; z-index:1000; padding:5px 0; text-align:left;">
+                    <div onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('folder-import-input').click(); this.parentElement.style.display='none';" style="padding:10px 15px; cursor:pointer; color:#333; border-bottom:1px solid #eee; transition: background 0.2s;" data-i18n="ImportFolder">📁 Import Folder</div>
+                    <div onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="document.getElementById('zip-import-input').click(); this.parentElement.style.display='none';" style="padding:10px 15px; cursor:pointer; color:#333; transition: background 0.2s;" data-i18n="ImportZip">🗜️ Import .ZIP</div>
+                </div>
+            </div>
+            <input type="file" id="folder-import-input" webkitdirectory directory multiple style="display:none" onchange="handleFolderImport(this.files)">
+            <input type="file" id="zip-import-input" accept=".zip" style="display:none" onchange="if(this.files.length > 0) handleZipImport(this.files[0])">
+            
+            <button id="save-btn" disabled onclick="saveContent()"><span class="btn-text" data-i18n="menu_save">💾 Save</span></button>
+            
+            <div id="font-btn-container">
+                <button id="font-btn" onclick="toggleFontToolbar()" title="Font Settings"><span class="btn-text" data-i18n="menu_fonts">Fonts</span></button>
+                <button id="add-img-btn" onclick="insertImageAtCursor()" title="Add Media"><span class="btn-text" data-i18n="menu_media">🖼️ Media</span></button>
+            </div>
+            
+            <!-- TOOLBAR CONTENT RENDERED DYNAMICALLY BY JAVASCRIPT -->
+            
+            <button id="voice-edit-btn" class="responsive-control-item" disabled onclick="toggleVoiceEdit(this)"><span class="btn-text" data-i18n="menu_edit">🎙️ Edit</span></button> 
+            
+            <button id="undo-btn" class="responsive-control-item" disabled onclick="undoAction()"><span class="btn-text" data-i18n="menu_undo">↩️ Undo</span></button>
+            <button id="redo-btn" class="responsive-control-item" disabled onclick="redoAction()"><span class="btn-text" data-i18n="menu_redo">↪️ Redo</span></button>
+            
+            <input type="file" id="image-upload-input" accept="image/*,video/mp4,video/webm,video/ogg,video/quicktime" style="display: none;">
+
+            <div id="action-buttons-right" style="display:flex; align-items:center;">
+                
+                <div id="viewport-toggles" style="display:inline-flex; gap:8px; margin-right:15px; border-right:1px solid #555; padding-right:15px; align-items:center;">
+                    <button id="btn-view-desktop" onclick="setViewportView('desktop')" style="background:#007bff; color:white; border:none; padding:6px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.2s;" title="Desktop View">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect><line x1="8" y1="21" x2="16" y2="21"></line><line x1="12" y1="17" x2="12" y2="21"></line></svg>
+                    </button>
+                    <button id="btn-view-tablet" onclick="setViewportView('tablet')" style="background:transparent; color:#ccc; border:none; padding:6px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.2s;" title="Tablet View">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                    </button>
+                    <button id="btn-view-mobile" onclick="setViewportView('mobile')" style="background:transparent; color:#ccc; border:none; padding:6px; border-radius:4px; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:background 0.2s;" title="Mobile View">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                    </button>
+                </div>
+
+                <div style="position:relative; display:inline-block; margin-right:10px;">
+                    <button id="notif-btn" onclick="toggleNotifications(event)" style="background:transparent; border:none; font-size:1.2em; cursor:pointer;" title="Messages">✉️</button>
+                    <div id="notif-badge" style="position:absolute; top:-2px; right:-2px; background:red; color:white; border-radius:50%; width:16px; height:16px; font-size:10px; display:none; justify-content:center; align-items:center;">0</div>
+                </div>
+
+                <button id="code-view-btn" class="responsive-control-item" onclick="toggleCodeView()" disabled style="background-color: #6610f2; color: white;"><span class="btn-text" data-i18n="menu_code">💻 Code</span></button>
+
+                <button id="open-new-window-btn" class="responsive-control-item" disabled onclick="openNewWindow()"><span class="btn-text" data-i18n="menu_preview">↗️ Preview</span></button>
+                <button id="deploy-btn" class="responsive-control-item" disabled onclick="openDeployModal()" style="background-color: #27ae60; color: white;"><span class="btn-text" data-i18n="menu_deploy">🚀 Deploy</span></button>
+                <button id="download-zip-btn" class="responsive-control-item" disabled onclick="downloadWebsite()"><span class="btn-text" data-i18n="menu_download">⬇️ Download</span></button>
+
+                <button class="top-btn" id="update-indicator-btn" onclick="openUpdateModal()" style="display:none; background:#28a745; color:white; border-radius:15px; padding:2px 10px; font-size:0.85em; margin-left:10px;">
+                    🔄 Update Available
+                </button>
+
+                <div class="custom-dropdown-container" id="editor-more-container" style="display:none; margin-right:10px;">
+                    <button id="editor-more-btn" onclick="toggleEditorMoreMenu(event)" style="background:#444; color:white; border:none; padding:6px 10px; border-radius:4px; font-weight:bold; cursor:pointer;"><span class="btn-text" data-i18n="menu_more">⋮ More</span></button>
+                    <div id="editor-more-dropdown" class="action-dropdown-menu" style="right:0; left:auto; top:100%; min-width: 180px; padding: 10px; background:#fff; border:1px solid #ccc; box-shadow:0 4px 15px rgba(0,0,0,0.2); border-radius:5px;">
+                    </div>
+                </div>
+            </div>
+
+            <div id="profile-container">
+                <div id="profile-icon" onclick="toggleProfileMenu(event)">?</div>
+                <div id="profile-menu">
+                    <div class="profile-item" id="menu-user-email" style="font-size:0.8em; color:#aaa; cursor:default;">user@email.com</div>
+                    
+                    <div class="profile-item" style="cursor:default; display:flex; justify-content:space-between; align-items:center;">
+                        <span id="lang-menu-text">🌐 Language</span>
+                        <select id="app-language-select" onchange="changeAppLanguage(this.value)" style="padding:2px 5px; border-radius:4px; border:1px solid #ccc; font-size:12px; background:#fff; color:#333; cursor:pointer;">
+                            <option value="en">English</option>
+                            <option value="es">Español</option>
+                            <option value="fr">Français</option>
+                            <option value="ar">العربية</option>
+                            <option value="zh">中文</option>
+                            <option value="ru">Русский</option>
+                            <option value="hi">हिन्दी</option>
+                        </select>
+                    </div>
+                    <div class="profile-item" onclick="showProfile()" data-i18n="MyProfile">👤 My Profile</div>
+                    <div class="profile-item" id="dm-profile-item" onclick="toggleDarkMode()" style="cursor:pointer;" data-i18n="DarkMode">🌙 Dark Mode</div>
+                    <div class="profile-item" id="menu-dashboard" onclick="openAdminDashboard()" style="display:none;" data-i18n="AdminCMS">⚙️ Admin CMS</div>
+                    <div class="profile-item" onclick="showChangePass()" data-i18n="ChangePass">🔄 Change Password</div>
+                    <div class="profile-item" onclick="handleLogout()" data-i18n="Logout">🚪 Logout</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="mobile-menu-pull" style="display:none;" onclick="toggleMobileTopBar()">▼ Show Menu</div>
+
+        <div id="preview-container" style="display: flex; flex-direction: row; height: 100%; width: 100%; overflow: hidden; background: #e9ecef;">
+            <div id="code-pane-container" style="display:none; width:50%; height:100%; border-right:1px solid #444; flex-direction:column; background:#1e1e1e; flex-shrink: 0;">
+                <div style="padding:8px; background:#333; display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:white; font-size:12px;">Editing: <b id="code-filename">index.html</b></span>
+                    <button onclick="applyCodeChanges()" style="padding:4px 10px; font-size:12px; background:#28a745; color:white; border:none; cursor:pointer; border-radius:3px; font-weight:bold;">💾 Apply Changes</button>
+                </div>
+                <textarea id="code-editor-area" style="width:100%; flex-grow:1; background:#1e1e1e; color:#d4d4d4; font-family:monospace; font-size:13px; border:none; resize:none; padding:10px; outline:none;" spellcheck="false"></textarea>
+            </div>
+
+            <div style="display: flex; flex-direction: column; flex-grow: 1; min-width: 0; height: 100%; position: relative;">
+                <div id="code-stream-view"></div>
+                
+                <div id="progress-overlay">
+                    <div class="overlay-backdrop"></div>
+                    <div class="progress-circle-container">
+                        <button class="close-progress-btn" onclick="hideProgressOverlay()" title="Close Progress">✕</button>
+                        <div class="circular-progress">
+                            <div class="progress-value">
+                                <span id="progress-percent">0%</span>
+                                <span class="progress-subtext" id="progress-text">Initializing...</span>
+                            </div>
+                        </div>
+                    </div>
+                    <button id="stop-gen-btn" onclick="stopGeneration()">⏹ Stop Generation</button>
+                    <div id="gen-wait-note" role="status" aria-live="polite">
+                        <div class="gen-wait-title">⏳ Please wait<span class="gen-wait-dots"><i>.</i><i>.</i><i>.</i></span></div>
+                        <div class="gen-wait-text">AI is generating your website. This usually takes 1-3 minutes.</div>
+                        <div class="gen-wait-small">Please don't close or refresh this page.</div>
+                    </div>
+                </div>
+                
+                <div id="iframe-scroll-wrapper" style="flex-grow: 1; width: 100%; height: 100%; overflow: auto; -webkit-overflow-scrolling: touch; background: #e9ecef; position: relative;">
+                    <iframe id="preview-frame" title="Live Website Preview" sandbox="allow-scripts allow-forms allow-same-origin allow-popups" style="border: none; width: 100%; height: 100%; min-height: 100%; background: #ffffff; transition: max-width 0.3s ease, width 0.3s ease, min-width 0.3s ease; box-shadow: 0 0 15px rgba(0,0,0,0.1); margin: 0 auto; display: block;"></iframe>
+                </div>
+                
+                <div id="powered-by-footer" style="display:none; text-align:center; padding:5px; font-size:12px; background:#1e1e1e; color:#888; border-top:1px solid #333; width: 100%;">
+                    Powered by <a href="https://ewebgen.com" target="_blank" style="color:#4dabf5; text-decoration:none;">EWebGen</a>
+                </div>
+            </div>
+        </div>
+    </div>

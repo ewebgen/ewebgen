@@ -1,0 +1,861 @@
+<script>
+    // ==========================================
+    // 1. CORE GLOBALS & UI UTILITIES (Updated)
+    // ==========================================
+
+    // --- GOAL 1 FIX: FULL DESKTOP VIEW WITHOUT SCROLLBAR ---
+    document.addEventListener("DOMContentLoaded", () => {
+        const overflowFixStyle = document.createElement('style');
+        overflowFixStyle.textContent = `
+            /* Ensure the app doesn't overflow the browser window */
+            body {
+                overflow-x: hidden !important;
+                max-width: 100vw !important;
+            }
+            #preview-container {
+                flex: 1 1 auto !important;
+                min-width: 0 !important;
+                max-width: 100% !important;
+                box-sizing: border-box !important;
+                display: flex;
+                justify-content: center; /* Centers the mobile/tablet views */
+                align-items: flex-start;
+                overflow-x: hidden !important; /* Removes the unwanted horizontal scrollbar */
+            }
+            #preview-frame {
+                /* Defaults to full width for Desktop, but allows Mobile/Tablet icons to resize it */
+                width: 100%; 
+                max-width: 100% !important; /* Ensures it never goes outside the container */
+                box-sizing: border-box !important;
+                transition: width 0.3s ease;
+                margin: 0 auto;
+            }
+        `;
+        document.head.appendChild(overflowFixStyle);
+    });
+
+    let generatedFiles = {};
+    let currentChatHistory = [];
+    let currentPreviewFile = 'index.html';
+    let isEditing = false; 
+    let currentUser = null; 
+    let adminUsersList = []; 
+    
+    let speechRecognition = null; 
+    let isVoiceActive = false;
+    let lastTranscript = '';
+    let abortController = null;
+    let progressInterval = null;
+    let isBuildingSequenceActive = false; 
+    let currentCssBuffer = ''; 
+
+    // History & Context
+    let localHistory = [];
+    let localHistoryIndex = -1;
+
+    // FIX (stale template on new generation): Many scripts write window.generatedFiles /
+    // window.currentChatHistory while others read the `let` globals above. Those were two
+    // different variables, so a closed template's files & chat history leaked into the next
+    // "new website" prompt. Bind the window properties to the same storage.
+    (function bindWorkspaceGlobals() {
+        const bind = (name, getter, setter) => {
+            try { Object.defineProperty(window, name, { get: getter, set: setter, configurable: true }); }
+            catch (e) { console.warn('Could not bind global', name, e); }
+        };
+        bind('generatedFiles', () => generatedFiles, v => { generatedFiles = v || {}; });
+        bind('currentChatHistory', () => currentChatHistory, v => { currentChatHistory = v || []; });
+        bind('currentPreviewFile', () => currentPreviewFile, v => { currentPreviewFile = v || 'index.html'; });
+        bind('localHistory', () => localHistory, v => { localHistory = v || []; });
+        bind('localHistoryIndex', () => localHistoryIndex, v => { localHistoryIndex = (typeof v === 'number') ? v : -1; });
+    })();
+    let currentContextTarget = null;
+    let currentContextDoc = null; 
+    let typingTimer = null; 
+
+    // Robust Selection Tracking
+    let lastValidRange = null; 
+
+    // DOM Elements
+    const generateBtn = document.getElementById('generate-btn');
+    const promptInput = document.getElementById('prompt-input');
+    const chatDisplay = document.getElementById('chat-display');
+    const statusMessage = document.getElementById('status-message');
+    const pageDropdown = document.getElementById('page-dropdown');
+    const imageUploadInput = document.getElementById('image-upload-input');
+    const voiceEditButton = document.getElementById('voice-edit-btn');
+    const codeStreamView = document.getElementById('code-stream-view');
+    const iframe = document.getElementById('preview-frame');
+    
+    let currentImageToReplace = null; 
+    let currentBgElementToReplace = null;
+    let pendingImageInsert = false;
+
+    // --- UI MODES ---
+    function setChatMode(mode) {
+        document.body.classList.remove('view-default', 'view-minimized', 'view-maximized');
+        document.body.classList.add(`view-${mode}`);
+        
+        if (!document.getElementById('admin-dashboard') || document.getElementById('admin-dashboard').style.display === 'none') {
+            if(mode === 'maximized') localStorage.setItem('chatMode', 'maximized');
+            else if (mode === 'default') localStorage.setItem('chatMode', 'default');
+            else if (mode === 'minimized') localStorage.setItem('chatMode', 'minimized');
+        }
+        
+        // Trigger a window resize event to force iframe and flexbox layouts to recalculate
+        window.dispatchEvent(new Event('resize'));
+    }
+    
+    function closeChatBox() {
+        setChatMode('minimized');
+    }
+
+    function initChatState() {
+        const localPref = localStorage.getItem('chatMode');
+        
+        if (localPref) {
+            setChatMode(localPref);
+        } else {
+            fetch('/api/admin/get_settings').then(r => r.json()).then(settings => {
+                const systemDefault = settings.default_chat_state || 'maximized';
+                setChatMode(systemDefault);
+            }).catch(err => {
+                setChatMode('maximized');
+            });
+        }
+    }
+
+    function initDarkMode() {
+        const savedMode = localStorage.getItem('darkMode');
+        if (savedMode === 'enabled') {
+            document.body.classList.add('dark-mode');
+            const btn = document.getElementById('toggle-dark-mode');
+            if(btn) btn.textContent = '☀️';
+            const dmItem = document.getElementById('dm-profile-item');
+            if(dmItem) dmItem.textContent = '☀️ Light Mode';
+            syncPreviewDarkMode(true);
+        }
+    }
+
+    function toggleDarkMode() {
+        document.body.classList.toggle('dark-mode');
+        const isDark = document.body.classList.contains('dark-mode');
+        const btn = document.getElementById('toggle-dark-mode');
+        const dmItem = document.getElementById('dm-profile-item');
+        
+        if (isDark) {
+            localStorage.setItem('darkMode', 'enabled');
+            if(btn) btn.textContent = '☀️';
+            if(dmItem) dmItem.textContent = '☀️ Light Mode';
+        } else {
+            localStorage.setItem('darkMode', 'disabled');
+            if(btn) btn.textContent = '🌙';
+            if(dmItem) dmItem.textContent = '🌙 Dark Mode';
+        }
+        syncPreviewDarkMode(isDark);
+    }
+    
+    function syncPreviewDarkMode(isDark) {
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            if (!doc) return;
+            let style = doc.getElementById('dark-mode-sync');
+            if (!style) {
+                style = doc.createElement('style');
+                style.id = 'dark-mode-sync';
+                doc.head.appendChild(style);
+            }
+            if (isDark) {
+                style.textContent = `
+                    body { transition: background-color 0.3s, color 0.3s; } 
+                    body:not([style*="background"]) { background-color: #121212 !important; color: #e0e0e0 !important; }
+                `;
+            } else { style.textContent = ``; }
+        } catch (e) { console.log("Cannot access iframe for dark mode sync."); }
+    }
+
+    function checkAuth() {
+        fetch('/api/check_auth')
+            .then(r => r.json())
+            .then(data => {
+                if (data.authenticated) {
+                    currentUser = data;
+                    document.body.classList.remove('hide-app-while-loading');
+                    
+                    const emailDisplay = document.getElementById('menu-user-email');
+                    if(emailDisplay) emailDisplay.textContent = data.email;
+                    
+                    const profileIcon = document.getElementById('profile-icon');
+                    if(profileIcon) {
+                        profileIcon.textContent = data.full_name ? data.full_name.charAt(0).toUpperCase() : data.email.charAt(0).toUpperCase();
+                    }
+
+                    // --- GOAL 10 & 12 FIX: Unlock premium features and fix upgrade button logic ---
+                    if (data.role === 'admin') {
+                        const upBtn = document.getElementById('sidebar-upgrade-btn');
+                        if (upBtn) upBtn.style.display = 'none';
+                    } else {
+                        const upBtn = document.getElementById('sidebar-upgrade-btn');
+                        const isFree = data.user_type_name === 'Free' || !data.user_type_name;
+                        
+                        if (upBtn) {
+                            // Hide the button ONLY if they are NOT free AND they have the premium "allow_own_api_keys" flag.
+                            // If they are Free, or if their plan doesn't have the premium flag, keep it visible.
+                            if (!isFree && data.allow_own_api_keys) {
+                                upBtn.style.display = 'none';
+                            } else {
+                                upBtn.style.display = 'flex';
+                            }
+                        }
+                    }
+
+                    // Refresh profile stats for Goal 13 and 15
+                    if (typeof getProfile === 'function') getProfile();
+
+                } else {
+                    document.body.classList.add('hide-app-while-loading');
+                    if (typeof openAuthModal === 'function') openAuthModal();
+                }
+            });
+    }
+    
+    // --- MESSAGE SYSTEM (User Side) ---
+    function toggleNotifications(e) {
+        if(e) e.stopPropagation();
+        const p = document.getElementById('notification-popup');
+        if(p.style.display === 'block') {
+            p.style.display = 'none';
+        } else {
+            p.style.display = 'block';
+            checkNotifications(); 
+        }
+    }
+    
+    function closeNotifications() {
+        document.getElementById('notification-popup').style.display = 'none';
+    }
+
+    function checkNotifications() {
+        fetch('/api/notifications')
+            .then(r => r.json())
+            .then(messages => {
+                const list = document.getElementById('notification-list');
+                const badge = document.getElementById('notif-badge');
+                list.innerHTML = '';
+                
+                const isWelcomeRead = localStorage.getItem('welcome_msg_read') === 'true';
+                
+                const filteredMessages = messages.filter(m => {
+                    if (m.id === 0 && isWelcomeRead) {
+                        m.read = true; 
+                    }
+                    return true;
+                });
+                
+                const unreadCount = filteredMessages.filter(m => !m.read).length;
+                if (unreadCount > 0) {
+                    badge.style.display = 'flex';
+                    badge.textContent = unreadCount > 99 ? '99+' : unreadCount;
+                } else {
+                    badge.style.display = 'none';
+                }
+
+                if(filteredMessages.length === 0) {
+                    list.innerHTML = '<div style="padding:15px; text-align:center; color:#777;">No new messages.</div>';
+                    return;
+                }
+                
+                filteredMessages.forEach(msg => {
+                    const item = document.createElement('div');
+                    item.className = `notif-item ${msg.read ? '' : 'unread'}`;
+                    item.id = `notif-item-${msg.id}`;
+                    
+                    const markReadBtn = !msg.read 
+                        ? `<span class="mark-read-text" onclick="event.stopPropagation(); markNotificationRead(${msg.id}, this)">Mark as Read</span>` 
+                        : '';
+
+                    const deleteBtn = `<span class="delete-msg-btn" onclick="event.stopPropagation(); deleteMessage(${msg.id})" style="color:#dc3545; cursor:pointer; font-weight:bold; margin-left:10px;" title="Delete Message">✕</span>`;
+
+                    item.innerHTML = `
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                            <strong>${msg.subject}</strong>
+                            <div>
+                                ${markReadBtn}
+                                ${deleteBtn}
+                            </div>
+                        </div>
+                        <span style="font-size:0.8em; color:#666;">From: ${msg.from}</span>
+                        <div class="notif-time">${msg.timestamp || ''}</div>
+                    `;
+                    
+                    item.onclick = () => { 
+                        if(!msg.read) markNotificationRead(msg.id, null); 
+                        loadMessageDetail(msg); 
+                    };
+                    list.appendChild(item);
+                });
+            })
+            .catch(err => {
+                console.error("Error fetching messages:", err);
+                document.getElementById('notification-list').innerHTML = '<div style="padding:10px; color:red; text-align:center;">Failed to load.</div>';
+            });
+    }
+    
+    function loadMessageDetail(msg) {
+        document.getElementById('msg-detail-subject').textContent = msg.subject;
+        
+        const threadContainer = document.getElementById('msg-thread-container');
+        threadContainer.innerHTML = '<div style="text-align:center;color:#777;">Loading conversation...</div>';
+        
+        document.getElementById('message-detail-modal').style.display = 'flex';
+        closeNotifications();
+
+        const threadId = msg.thread_id || msg.id; 
+        
+        fetch(`/api/notifications/thread?id=${msg.id}`)
+            .then(r => {
+                if(!r.ok) return { thread: [msg] }; 
+                return r.json();
+            })
+            .then(data => {
+                const messages = data.thread || [msg]; 
+                threadContainer.innerHTML = '';
+                
+                messages.forEach(m => {
+                    const bubble = document.createElement('div');
+                    const isMe = m.sender === 'Me' || m.sender === currentUser.username;
+                    bubble.className = `thread-message ${isMe ? 'sent' : 'received'}`;
+                    
+                    let attachmentHtml = '';
+                    if(m.attachment) {
+                        const fileName = m.attachment.split('/').pop();
+                        attachmentHtml = `<div class="attachment-link"><a href="${m.attachment}" target="_blank">📎 ${fileName}</a></div>`;
+                    }
+
+                    bubble.innerHTML = `
+                        <div class="msg-meta">
+                            <strong>${m.from || m.sender}</strong> <span style="font-size:0.8em; opacity:0.7;">${m.timestamp}</span>
+                        </div>
+                        <div class="msg-text">${m.body}</div>
+                        ${attachmentHtml}
+                    `;
+                    threadContainer.appendChild(bubble);
+                });
+                
+                document.getElementById('reply-parent-id').value = threadId; 
+                threadContainer.scrollTop = threadContainer.scrollHeight;
+            })
+            .catch(e => {
+                threadContainer.innerHTML = `
+                    <div class="thread-message received">
+                        <div class="msg-meta"><strong>${msg.from}</strong> ${msg.timestamp}</div>
+                        <div class="msg-text">${msg.body}</div>
+                    </div>`;
+                document.getElementById('reply-parent-id').value = msg.id;
+            });
+    }
+    
+    function sendUserReply() {
+        const body = document.getElementById('reply-body').value.trim();
+        const parentId = document.getElementById('reply-parent-id').value;
+        const fileInput = document.getElementById('reply-file');
+        
+        if(!body && (!fileInput.files || fileInput.files.length === 0)) { 
+            alert("Please enter a message or attach a file."); return; 
+        }
+
+        const formData = new FormData();
+        formData.append('parent_id', parentId);
+        formData.append('body', body);
+        if(fileInput.files[0]) {
+            formData.append('attachment', fileInput.files[0]);
+        }
+
+        const btn = document.querySelector('#message-detail-modal .reply-btn');
+        const originalText = btn.textContent;
+        btn.textContent = "Sending...";
+        btn.disabled = true;
+
+        fetch('/api/reply', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) {
+                const threadContainer = document.getElementById('msg-thread-container');
+                const bubble = document.createElement('div');
+                bubble.className = 'thread-message sent';
+                let attachHtml = '';
+                if(fileInput.files[0]) attachHtml = `<div class="attachment-link">📎 ${fileInput.files[0].name} (Uploading...)</div>`;
+                bubble.innerHTML = `<div class="msg-meta"><strong>Me</strong> Just now</div><div class="msg-text">${body}</div>${attachHtml}`;
+                threadContainer.appendChild(bubble);
+                threadContainer.scrollTop = threadContainer.scrollHeight;
+                
+                document.getElementById('reply-body').value = '';
+                fileInput.value = '';
+            } else {
+                alert("Error: " + d.error);
+            }
+        })
+        .catch(err => alert("Failed to send reply."))
+        .finally(() => {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        });
+    }
+
+    function markNotificationRead(id, textElement) {
+        if (id === 0) {
+            localStorage.setItem('welcome_msg_read', 'true');
+            const item = document.getElementById(`notif-item-${id}`);
+            if(item) item.classList.remove('unread');
+            if(textElement) textElement.remove();
+            updateBadgeCount(-1);
+            return;
+        }
+
+        fetch('/api/notifications/read', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: id })
+        }).then(() => {
+            const item = document.getElementById(`notif-item-${id}`);
+            if(item) item.classList.remove('unread');
+            if(textElement) textElement.remove();
+            updateBadgeCount(-1);
+        }); 
+    }
+
+    function markAllNotificationsRead() {
+        localStorage.setItem('welcome_msg_read', 'true');
+        fetch('/api/notifications/read_all', { method: 'POST' })
+        .then(() => {
+            checkNotifications();
+        });
+    }
+
+    function updateBadgeCount(change) {
+        const badge = document.getElementById('notif-badge');
+        let count = parseInt(badge.textContent) || 0;
+        count += change;
+        if(count > 0) {
+            badge.textContent = count > 99 ? '99+' : count;
+            badge.style.display = 'flex';
+        } else {
+            badge.textContent = '0';
+            badge.style.display = 'none';
+        }
+    }
+    
+    function closeMessageDetail() {
+        document.getElementById('message-detail-modal').style.display = 'none';
+    }
+
+    function openContactAdmin() {
+        closeNotifications();
+        document.getElementById('contact-admin-modal').style.display = 'flex';
+    }
+
+    function closeContactAdmin() {
+        document.getElementById('contact-admin-modal').style.display = 'none';
+        document.getElementById('contact-subject').value = '';
+        document.getElementById('contact-message').value = '';
+        document.getElementById('contact-file').value = '';
+    }
+
+    function handleSendToAdmin() {
+        const subject = document.getElementById('contact-subject').value.trim();
+        const body = document.getElementById('contact-message').value.trim();
+        const fileInput = document.getElementById('contact-file');
+
+        if(!subject || !body) { alert("Please fill all fields."); return; }
+        
+        const formData = new FormData();
+        formData.append('subject', subject);
+        formData.append('body', body);
+        if(fileInput.files[0]) formData.append('attachment', fileInput.files[0]);
+
+        fetch('/api/contact_admin', {
+            method: 'POST',
+            body: formData
+        }).then(r => r.json()).then(d => {
+            if(d.success) {
+                alert("Message sent to Admin!");
+                closeContactAdmin();
+            } else {
+                alert("Error: " + d.error);
+            }
+        });
+    }
+
+    function loadAdminMessages() {
+        const inbox = document.getElementById('admin-msg-inbox');
+        if (!inbox) return; 
+        inbox.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">Refreshing...</div>';
+        
+        fetch('/api/admin/messages')
+        .then(r => r.json())
+        .then(data => {
+            inbox.innerHTML = '';
+            
+            const countBadge = document.getElementById('admin-msg-count');
+            if(countBadge) {
+                countBadge.textContent = data.messages.length;
+                countBadge.style.display = data.messages.length > 0 ? 'inline-block' : 'none';
+            }
+
+            if(data.messages.length === 0) {
+                inbox.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No messages found.</div>';
+                return;
+            }
+            
+            data.messages.forEach(m => {
+                const div = document.createElement('div');
+                div.className = `inbox-msg ${m.read ? '' : 'unread'}`;
+                const attachIcon = m.has_attachment ? '📎 ' : '';
+
+                div.innerHTML = `
+                    <div class="inbox-header">
+                        <span><b>${m.from_user}</b> (${m.email})</span>
+                        <span>${m.timestamp}</span>
+                    </div>
+                    <div style="font-weight:bold; margin-bottom:4px;">${attachIcon}${m.subject}</div>
+                    <div style="color:#555; margin-bottom:8px;">${m.body.length > 100 ? m.body.substring(0,100)+'...' : m.body}</div>
+                    <div class="msg-actions">
+                        <button class="msg-btn-reply" onclick="openAdminReplyModal('${m.user_id}', '${m.from_user}', '${m.subject}', '${m.thread_id || m.id}')">↩️ Reply</button>
+                    </div>
+                `;
+                
+                div.onclick = (e) => {
+                    if(e.target.tagName !== 'BUTTON') {
+                        openAdminReplyModal(m.user_id, m.from_user, m.subject, m.thread_id || m.id, m.body, m.attachment);
+                    }
+                };
+                inbox.appendChild(div);
+            });
+            
+            const targetSelect = document.getElementById('admin-notif-target');
+            if (targetSelect) {
+                targetSelect.innerHTML = '<option value="all">📢 All Users (Broadcast)</option>';
+                if(adminUsersList.length > 0) {
+                    adminUsersList.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u.id;
+                        opt.textContent = `👤 ${u.username} (${u.email})`;
+                        targetSelect.appendChild(opt);
+                    });
+                }
+            }
+        });
+    }
+
+    function openAdminReplyModal(userId, userName, originalSubject, threadId, originalBody = null, attachment = null) {
+        document.getElementById('admin-reply-modal').style.display = 'flex';
+        document.getElementById('reply-target-id').value = userId;
+        document.getElementById('reply-thread-id').value = threadId; 
+        document.getElementById('reply-target-name').textContent = userName;
+        document.getElementById('reply-subject-context').textContent = originalSubject;
+        
+        const contextDiv = document.getElementById('reply-original-content');
+        if(originalBody) {
+            let attHtml = attachment ? `<br><a href="${attachment}" target="_blank" style="font-size:0.8em">📎 View Attachment</a>` : '';
+            contextDiv.innerHTML = `<div style="background:#f9f9f9; padding:10px; border-left:3px solid #ccc; margin-bottom:10px; font-size:0.9em;">${originalBody}${attHtml}</div>`;
+            contextDiv.style.display = 'block';
+        } else {
+            contextDiv.style.display = 'none';
+        }
+
+        document.getElementById('reply-message').value = '';
+        document.getElementById('admin-reply-file').value = '';
+    }
+
+    function sendAdminReply() {
+        const target = document.getElementById('reply-target-id').value;
+        const threadId = document.getElementById('reply-thread-id').value;
+        const body = document.getElementById('reply-message').value.trim();
+        const fileInput = document.getElementById('admin-reply-file');
+        
+        const origSubject = document.getElementById('reply-subject-context').textContent;
+        const subject = origSubject.startsWith("RE:") ? origSubject : "RE: " + origSubject;
+
+        if(!body && (!fileInput.files || fileInput.files.length === 0)) { alert("Please enter a message."); return; }
+
+        const formData = new FormData();
+        formData.append('target_user_id', target);
+        formData.append('thread_id', threadId); 
+        formData.append('subject', subject);
+        formData.append('body', body);
+        if(fileInput.files[0]) formData.append('attachment', fileInput.files[0]);
+
+        const btn = document.querySelector('#admin-reply-modal .auth-btn');
+        btn.disabled = true; btn.textContent = "Sending...";
+
+        fetch('/api/admin/send_notification', {
+            method: 'POST',
+            body: formData
+        }).then(r => r.json()).then(d => {
+            btn.disabled = false; btn.textContent = "Send Reply";
+            if(d.success) {
+                alert("Reply sent successfully!");
+                document.getElementById('admin-reply-modal').style.display = 'none';
+            } else {
+                alert("Error: " + d.error);
+            }
+        }).catch(e => {
+            btn.disabled = false; btn.textContent = "Send Reply";
+            alert("Send failed.");
+        });
+    }
+
+    function sendAdminNotification() {
+        const target = document.getElementById('admin-notif-target').value;
+        const subject = document.getElementById('admin-notif-subject').value.trim();
+        const body = document.getElementById('admin-notif-body').value.trim();
+        
+        if(target == currentUser.id) {
+            alert("⚠️ You cannot send a notification to yourself.");
+            return;
+        }
+
+        if(!subject || !body) { alert("Please enter subject and message."); return; }
+        
+        const formData = new FormData();
+        formData.append('target_user_id', target);
+        formData.append('subject', subject);
+        formData.append('body', body);
+
+        fetch('/api/admin/send_notification', {
+            method: 'POST', 
+            body: formData 
+        }).then(r => r.json()).then(d => {
+            if(d.success) {
+                alert("Notification sent successfully!");
+                document.getElementById('admin-notif-subject').value = '';
+                document.getElementById('admin-notif-body').value = '';
+            } else {
+                alert("Error: " + d.error);
+            }
+        });
+    }
+
+    function fixHeroDisplay() {
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+        try {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            if(!doc || !doc.body) return;
+            
+            const heroes = doc.querySelectorAll('header, section.hero, .hero-section, [class*="hero"]');
+            
+            heroes.forEach(hero => {
+                const style = iframe.contentWindow.getComputedStyle(hero);
+                const bgImage = style.backgroundImage;
+                const bgColor = style.backgroundColor;
+                
+                if (bgImage === 'none' || bgImage.includes('url("")') || bgImage === 'initial') {
+                    if (bgColor === 'rgba(0, 0, 0, 0)' || bgColor === 'transparent' || bgColor === 'rgb(255, 255, 255)') {
+                        hero.classList.add('hero-fallback');
+                        const textElems = hero.querySelectorAll('h1, h2, p');
+                        textElems.forEach(t => t.classList.add('hero-text-shadow'));
+                    }
+                }
+            });
+        } catch(e) { 
+            console.error("Error fixing hero display", e); 
+        }
+    }
+    
+    function fixRelativeLinks(doc) {
+        if (!doc) return;
+        const links = doc.querySelectorAll('a[href]');
+        links.forEach(a => {
+            const href = a.getAttribute('href');
+            if (href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
+            
+            if (!href.includes('.')) {
+                const potentialHtml = href + '.html';
+                const potentialPhp = href + '.php';
+                
+                if (generatedFiles && generatedFiles[potentialHtml]) {
+                    a.href = potentialHtml;
+                } else if (generatedFiles && generatedFiles[potentialPhp]) {
+                    a.href = potentialPhp;
+                }
+            }
+        });
+    }
+
+    function updateStatus(message, isError = false) {
+        statusMessage.textContent = message;
+        if (document.body.classList.contains('dark-mode')) {
+            statusMessage.style.backgroundColor = isError ? '#330000' : '#1e2a38';
+            statusMessage.style.color = isError ? '#ffaaaa' : '#90caf9';
+        } else {
+            statusMessage.style.backgroundColor = isError ? '#fdd' : '#e3f2fd';
+            statusMessage.style.color = isError ? '#c62828' : '#1565c0';
+        }
+    }
+    const wait = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+    function showProgressOverlay(initialText = "Initializing...") {
+        const overlay = document.getElementById('progress-overlay');
+        overlay.style.display = 'flex';
+        generateBtn.disabled = true;
+        document.getElementById('stop-gen-btn').disabled = false;
+        document.getElementById('stop-gen-btn').textContent = "⏹ Stop Generation";
+        codeStreamView.style.display = 'none'; 
+        updateProgressCircle(0, initialText);
+        
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.open();
+        doc.write('<html><head><style id="live-styles"></style></head><body><div style="font-family:sans-serif;color:#666;padding:20px;"><h2>🏗️ Building your site...</h2><p>Live preview will appear here shortly.</p></div></body></html>');
+        doc.close();
+        currentCssBuffer = '';
+    }
+
+    function updateProgressCircle(percent, text) {
+        const circle = document.querySelector('.circular-progress');
+        const valueSpan = document.getElementById('progress-percent');
+        const textSpan = document.getElementById('progress-text');
+        circle.style.background = `conic-gradient(#007bff ${percent * 3.6}deg, #e9ecef 0deg)`;
+        valueSpan.textContent = `${Math.round(percent)}%`;
+        textSpan.textContent = text;
+    }
+
+    function hideProgressOverlay() {
+        const overlay = document.getElementById('progress-overlay');
+        overlay.style.display = 'none';
+        if (progressInterval) clearInterval(progressInterval);
+        generateBtn.disabled = false;
+        const codeBtn = document.getElementById('code-view-btn');
+        if(codeBtn) codeBtn.disabled = false;
+        setTimeout(fixHeroDisplay, 1000);
+
+        // --- FEATURE 5 FIX: ONLY show the generated successfully message if an actual generation occurred ---
+        if (isBuildingSequenceActive) {
+            appendMessage('ai', '✅ <b>Website generated successfully!</b><br>You can now click on any text to edit it, or right-click elements for more options.');
+            isBuildingSequenceActive = false; // Reset the flag
+        }
+    }
+    
+    function hideCodeStream() { codeStreamView.style.display = 'none'; }
+
+    function appendMessage(role, text) {
+        const msgDiv = document.createElement('div');
+        msgDiv.classList.add(role === 'user' ? 'user-message' : 'ai-message');
+        msgDiv.innerHTML = role === 'user' ? text : 'AI response received. Building website...'; 
+        
+        // Ensure HTML tags (like <br> or <b>) from custom system messages render properly
+        if (role === 'ai' && text !== 'AI response received. Building website...') {
+            msgDiv.innerHTML = text;
+        }
+        
+        chatDisplay.appendChild(msgDiv);
+        chatDisplay.scrollTop = chatDisplay.scrollHeight;
+    }
+
+    function toggleFloatingOptions() { const win = document.getElementById('floating-options'); win.style.display = win.style.display === 'flex' ? 'none' : 'flex'; }
+    
+    const floatHeader = document.getElementById('floating-options-header');
+    const floatWin = document.getElementById('floating-options');
+    let isDraggingOpt = false, optX = 0, optY = 0;
+    
+    if(floatHeader) {
+        floatHeader.onmousedown = (e) => { isDraggingOpt = true; optX = e.clientX - floatWin.offsetLeft; optY = e.clientY - floatWin.offsetTop; };
+        window.addEventListener('mousemove', (e) => { if(!isDraggingOpt) return; floatWin.style.left = (e.clientX - optX) + 'px'; floatWin.style.top = (e.clientY - optY) + 'px'; });
+        window.addEventListener('mouseup', () => isDraggingOpt = false);
+    }
+    
+    function enableEditing(iframeDoc) {
+        iframeDoc.body.contentEditable = 'true';
+        iframeDoc.body.spellcheck = false;
+        iframeDoc.designMode = 'on'; 
+        isEditing = true;
+        
+        if (typeof updatePreviewControls === 'function') updatePreviewControls();
+        if (typeof updateStatus === 'function') updateStatus(`Editing mode ON for ${currentPreviewFile}. Right-click for options.`);
+
+        // --- FIX: ROBUST DROP-DOWN MENU FIX & AUTO-CLOSER ---
+        let menuFixStyle = iframeDoc.getElementById('ewebgen-menu-fix');
+        if (!menuFixStyle) {
+            menuFixStyle = iframeDoc.createElement('style');
+            menuFixStyle.id = 'ewebgen-menu-fix';
+            menuFixStyle.innerHTML = `
+                /* Force Nav to overlay instead of push */
+                nav { z-index: 9999 !important; position: relative; }
+                nav ul { list-style: none; padding: 0; margin: 0; }
+                nav li { position: relative; }
+                
+                /* Aggressively hide dropdowns by default so they don't stick open */
+                nav li > ul, 
+                .dropdown-menu, 
+                .nav-item > .dropdown-menu, 
+                .sub-menu, 
+                .submenu, 
+                [class*="dropdown-menu"], 
+                nav li > div[class*="dropdown"] {
+                    position: absolute !important;
+                    top: 100% !important;
+                    left: 0 !important;
+                    min-width: 200px;
+                    z-index: 10000 !important;
+                    display: none !important;
+                    background: #fff;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    border: 1px solid #eee;
+                    border-radius: 4px;
+                }
+                
+                /* Only show dropdowns strictly on hover, overriding inline AI bugs */
+                nav li:hover > ul, 
+                .dropdown:hover > .dropdown-menu, 
+                .nav-item:hover > .dropdown-menu, 
+                li:hover > .sub-menu, 
+                li:hover > .submenu, 
+                [class*="dropdown"]:hover > [class*="dropdown-menu"], 
+                nav li:hover > div[class*="dropdown"], 
+                .dropdown-menu.show {
+                    display: block !important;
+                }
+                
+                header { z-index: 9998 !important; position: relative; }
+                .hero, .hero-section { z-index: 1 !important; position: relative; }
+            `;
+            iframeDoc.head.appendChild(menuFixStyle);
+        }
+
+        fetch('/api/admin/get_settings').then(r => r.json()).then(d => {
+             if(d.voice_silence_duration) currentVoiceDuration = parseInt(d.voice_silence_duration);
+        }).catch(e => console.log("Using default voice duration"));
+
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+
+        iframeDoc.body.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                const saveBtn = document.getElementById('save-btn');
+                if(saveBtn && !saveBtn.disabled) saveBtn.click(); 
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                if (e.shiftKey) { window.redoAction(); } 
+                else { window.undoAction(); } 
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                window.redoAction(); 
+            }
+        });
+        
+        iframeDoc.body.addEventListener('click', (e) => {
+            if (e.target.classList.contains('buy-btn')) {
+                e.preventDefault();
+            }
+        });
+    }
+
+</script>

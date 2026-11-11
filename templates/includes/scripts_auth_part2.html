@@ -1,0 +1,574 @@
+<script>
+    // --- GLOBAL UTILS ---
+    window.safeCloseModal = function(id) {
+        const el = document.getElementById(id);
+        if(el) el.style.display = 'none';
+    };
+
+    // --- GLOBAL EVENT DELEGATION (BULLETPROOF CLICKS) ---
+    document.addEventListener('click', function(e) {
+        if (e.target && e.target.id === 'profile-icon') {
+            e.stopPropagation();
+            const menu = document.getElementById('profile-menu');
+            if (menu) {
+                menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+            }
+        }
+        if (e.target && e.target.id === 'header-upgrade-btn') {
+            e.stopPropagation();
+            if(typeof window.openPlanSelectionModal === 'function') window.openPlanSelectionModal(e);
+        }
+        if (e.target && e.target.id === 'sidebar-upgrade-btn') {
+            e.stopPropagation();
+            if(typeof window.openPlanSelectionModal === 'function') window.openPlanSelectionModal(e);
+        }
+    });
+
+    // --- ONBOARDING POPUP LOGIC ---
+    window.checkOnboardingRequired = function(userCountry) {
+        if (!userCountry || userCountry.trim() === '') {
+            if (typeof appConfigData !== 'undefined' && appConfigData.hide_onboarding_popup === true) {
+                return; // Admin chose to hide the onboarding popup
+            }
+            // Show Onboarding Modal
+            const modal = document.getElementById('onboarding-modal');
+            if (modal) modal.style.display = 'flex';
+        }
+    };
+
+    window.saveOnboardingData = function() {
+        const country = document.getElementById('onboard-country').value;
+        const language = document.getElementById('onboard-language').value;
+        
+        if (!country) {
+            alert("Please select a country.");
+            return;
+        }
+        
+        fetch('/api/update_country', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ country: country })
+        }).then(r=>r.json()).then(d => {
+            if(d.success) {
+                fetch('/api/update_language', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ language: language })
+                }).then(r2=>r2.json()).then(d2 => {
+                    if(d2.success) {
+                        if(typeof currentUser !== 'undefined' && currentUser) {
+                            currentUser.country = country;
+                            currentUser.language = language;
+                        }
+                        if (typeof changeAppLanguage === 'function') changeAppLanguage(language);
+                        
+                        document.getElementById('onboarding-modal').style.display = 'none';
+
+                        // --- AUTO-RESUME CHECKOUT ---
+                        // If they were interrupted while trying to upgrade, resume it now!
+                        const pendingPlanId = localStorage.getItem('pending_plan_id');
+                        if (pendingPlanId) {
+                            if (typeof initiatePlanPayment === 'function') {
+                                initiatePlanPayment(pendingPlanId);
+                            }
+                        } else {
+                            location.reload();
+                        }
+                    }
+                });
+            }
+        });
+    };
+
+    window.skipOnboarding = function() {
+        document.getElementById('onboarding-modal').style.display = 'none';
+        
+        // If they skip, they can't upgrade. Clear the pending plan.
+        localStorage.removeItem('pending_plan_id');
+        
+        // Set the session flag so checkAuth knows they skipped and doesn't loop
+        sessionStorage.setItem('onboarding_skipped_this_session', 'true');
+        
+        // Reload to let checkAuth handle the skipped state and clear the white screen
+        location.reload();
+    };
+
+    // --- FORM HANDLERS ---
+
+    function handleLogin() {
+        const id = document.getElementById('login-id').value;
+        const pass = document.getElementById('login-pass').value;
+        
+        if(!id || !pass) { alert("Please enter username/email and password."); return; }
+
+        fetch('/api/login', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ identifier: id, password: pass })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                if (data.force_reset) {
+                    showChangePass(true);
+                } else {
+                    currentUser = data; // Store user data locally before reload/display
+                    try { sessionStorage.setItem('eweb_just_logged_in', '1'); sessionStorage.removeItem('eweb_welcome_prompt_done'); } catch (e) {}
+                    
+                    // If onboarding is required, show popup instead of immediate reload
+                    if (!data.country || data.country.trim() === '') {
+                        if (typeof appConfigData === 'undefined' || appConfigData.hide_onboarding_popup !== true) {
+                            document.getElementById('auth-modal').style.display = 'none';
+                            document.body.classList.add('is-logged-in');
+                            window.checkOnboardingRequired(data.country);
+                            return; // Halt reload to let user answer onboarding
+                        }
+                    }
+                    
+                    location.reload();
+                }
+            } 
+            else { 
+                document.getElementById('auth-msg').textContent = data.error; 
+            }
+        });
+    }
+
+    function handleRegister() {
+        const full_name = document.getElementById('reg-fullname').value;
+        const email = document.getElementById('reg-email').value;
+        const phone = document.getElementById('reg-phone').value;
+        const pass = document.getElementById('reg-pass').value;
+        const confirm_pass = document.getElementById('reg-confirm-pass').value;
+        
+        if(!full_name || !email || !phone || !pass || !confirm_pass) { 
+            document.getElementById('reg-msg').textContent = "All fields, including Confirm Password, are required"; 
+            return; 
+        }
+        
+        if(pass !== confirm_pass) {
+            document.getElementById('reg-msg').textContent = "Passwords do not match.";
+            return;
+        }
+
+        const planId = localStorage.getItem('pending_plan_id') || (typeof selectedPlanId !== 'undefined' ? selectedPlanId : null);
+
+        // Send an empty country to the backend to fulfill the database requirements 
+        // without needing a UI element on the registration form.
+        fetch('/api/register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                full_name: full_name, 
+                email: email, 
+                phone_number: phone, 
+                password: pass, 
+                confirm_password: confirm_pass, 
+                country: '', 
+                language: 'en', 
+                plan_id: planId 
+            })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                showVerify(email);
+                alert(data.message);
+            } else {
+                document.getElementById('reg-msg').textContent = data.error;
+            }
+        });
+    }
+
+    function handleVerify() {
+        const code = document.getElementById('ver-code').value;
+        const email = document.getElementById('verify-form').dataset.email;
+        fetch('/api/verify', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email, code })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                showLogin();
+                document.getElementById('auth-msg').textContent = "Verified! Please Login.";
+            } else {
+                document.getElementById('ver-msg').textContent = data.error;
+            }
+        });
+    }
+    
+    function handleForgot() {
+        const email = document.getElementById('forgot-email').value;
+        if(!email) { document.getElementById('forgot-msg').textContent = "Please enter your email."; return; }
+        
+        fetch('/api/forgot_password', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ email })
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                document.getElementById('forgot-msg').style.color = "green";
+                document.getElementById('forgot-msg').textContent = "Password reset instructions sent.";
+            } else {
+                document.getElementById('forgot-msg').style.color = "red";
+                document.getElementById('forgot-msg').textContent = data.error;
+            }
+        });
+    }
+
+    function handleChangePass() {
+        const oldP = document.getElementById('cp-old').value;
+        const newP = document.getElementById('cp-new').value;
+        fetch('/api/change_password', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ old_password: oldP, new_password: newP })
+        }).then(r => r.json()).then(data => {
+            if(data.success) { 
+                alert('Password changed! Account is now verified.'); 
+                location.reload(); 
+            } 
+            else { document.getElementById('cp-msg').textContent = data.error; }
+        });
+    }
+
+    function handleUpdateProfile() {
+        const full_name = document.getElementById('prof-name').value;
+        const email = document.getElementById('prof-email').value;
+        const phone = document.getElementById('prof-phone').value;
+        const country = document.getElementById('prof-country') ? document.getElementById('prof-country').value : '';
+
+        fetch('/api/update_profile', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ full_name, email, phone_number: phone, country: country })
+        }).then(r => r.json()).then(data => {
+            if (data.success) { alert('Profile updated!'); location.reload(); } 
+            else { document.getElementById('prof-msg').textContent = data.error; }
+        });
+    }
+
+    function handleDeleteAccount() {
+        if(!confirm("⚠️ WARNING: This will permanently delete your account, all your saved websites, and generation history. This action cannot be undone. Are you absolutely sure?")) {
+            return;
+        }
+        
+        const msg = document.getElementById('prof-msg');
+        if(msg) {
+            msg.style.color = "#dc3545";
+            msg.textContent = "Deleting account... please wait.";
+        }
+        
+        fetch('/api/delete_account', {
+            method: 'POST', 
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("Your account has been successfully deleted.");
+                window.location.reload(); 
+            } else {
+                if(msg) msg.textContent = "Error: " + data.error;
+                alert("Failed to delete account: " + data.error);
+            }
+        })
+        .catch(e => {
+            if(msg) msg.textContent = "Server error during deletion.";
+        });
+    }
+
+    function handleLogout() {
+        fetch('/api/logout', {method: 'POST'}).then(() => location.reload());
+    }
+
+    // --- PLANS & UPGRADE POPUP LOGIC ---
+    
+    window.openPlanSelectionModal = function(e) {
+        if(e) e.stopPropagation();
+        if(typeof safeCloseModal === 'function') safeCloseModal('auth-modal'); 
+        
+        const modal = document.getElementById('plan-selection-modal');
+        if (modal) {
+            modal.style.display = 'flex'; 
+        } else {
+            alert("Plan selection modal not found on this page.");
+            return;
+        }
+        
+        const container = document.getElementById('plan-selection-list');
+        if(container) container.innerHTML = '<div style="color:#666; width:100%; text-align:center;">Loading Plans...</div>';
+        
+        fetch('/api/plans')
+        .then(r => r.json())
+        .then(plans => {
+            activePlans = plans;
+            if (!container) return;
+            if (plans.length === 0) {
+                container.innerHTML = '<div style="padding:20px; text-align:center;">No active plans available at the moment.</div>';
+                return;
+            }
+
+            let html = '';
+            plans.forEach(p => {
+                const features = p.features ? p.features.map(f => `<li style="margin-bottom:5px;">✓ ${f}</li>`).join('') : '';
+                
+                // --- RENEWAL LOGIC: Always allow clicking, label changes based on state ---
+                let btnText = p.is_current ? "Renew / Extend Plan" : "Select Plan";
+                let btnHtml = `<button onclick="initiatePlanPayment(${p.id})" class="auth-btn" style="width:100%; margin-top:auto;">${btnText}</button>`;
+
+                html += `
+                    <div class="plan-card" style="width:250px; background:white; border:1px solid #eee; border-radius:8px; padding:20px; box-shadow:0 2px 10px rgba(0,0,0,0.05); display:flex; flex-direction:column;">
+                        <div style="font-size:1.2em; font-weight:bold; margin-bottom:5px; text-align:center;">${p.name}</div>
+                        <div style="font-size:1.5em; color:#007bff; text-align:center; font-weight:bold; margin-bottom:15px;">${p.currency} ${p.price}</div>
+                        <ul style="list-style:none; padding:0; margin:0 0 20px 0; font-size:0.9em; color:#555; flex-grow:1;">${features}</ul>
+                        ${btnHtml}
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        })
+        .catch(e => {
+            if(container) container.innerHTML = '<div style="color:red; text-align:center;">Error loading plans.</div>';
+        });
+    };
+
+    window.initiatePlanPayment = function(planId) {
+        if(typeof safeCloseModal === 'function') safeCloseModal('plan-selection-modal');
+        if(typeof activePlans === 'undefined' || activePlans.length === 0) {
+            fetch('/api/plans').then(r=>r.json()).then(p => {
+                activePlans = p;
+                _proceedPayment(planId);
+            });
+        } else {
+            _proceedPayment(planId);
+        }
+    }
+
+    function _proceedPayment(planId) {
+        if (typeof currentUser !== 'undefined' && currentUser && (!currentUser.country || currentUser.country.trim() === '')) {
+            alert("Please complete your profile configuration first.");
+            const modal = document.getElementById('onboarding-modal');
+            if (modal) modal.style.display = 'flex';
+            localStorage.setItem('pending_plan_id', planId);
+            return;
+        }
+        
+        localStorage.removeItem('pending_plan_id');
+
+        const plan = activePlans.find(p => p.id == planId);
+        if(!plan) return;
+
+        window.selectedPlanId = planId;
+        
+        let basePrice = parseFloat(plan.price);
+        let taxEnabled = appConfigData && (appConfigData.tax_enabled === true || appConfigData.tax_enabled === 'true' || appConfigData.tax_enabled === 1);
+        let taxPercentage = (appConfigData && appConfigData.tax_percentage) ? parseFloat(appConfigData.tax_percentage) : 0;
+        let taxAmount = 0;
+        let finalPrice = basePrice;
+
+        if (taxEnabled && taxPercentage > 0) {
+            taxAmount = basePrice * (taxPercentage / 100);
+            finalPrice = basePrice + taxAmount;
+        }
+        
+        window.currentPaymentAmount = finalPrice;
+        window.currentItemName = plan.name;
+        window.currentPaymentMetadata = {
+            type: 'plan_subscription',
+            plan_id: plan.id,
+            product_name: plan.name,
+            base_price: basePrice,
+            tax_amount: taxAmount
+        };
+        const currency = plan.currency || 'USD';
+        
+        fetch('/api/admin/payment_gateways')
+        .then(r => r.json())
+        .then(data => {
+            const gateways = data.gateways || [];
+            const activeGateways = gateways.filter(gw => gw.is_active);
+            
+            if(activeGateways.length === 0) {
+                alert("No payment methods are currently available. Please contact the administrator.");
+                return;
+            }
+            
+            const modal = document.getElementById('payment-modal');
+            
+            if (modal) {
+                const nameEl = document.getElementById('pay-item-name');
+                const amountEl = document.getElementById('pay-amount-display');
+                
+                if (nameEl) nameEl.textContent = plan.name;
+                
+                if (amountEl) {
+                    if (taxEnabled && taxPercentage > 0) {
+                        amountEl.innerHTML = `
+                            <div style="font-size:0.7em; color:#666; margin-bottom:3px;">Base Price: ${currency} ${basePrice.toFixed(2)}</div>
+                            <div style="font-size:0.7em; color:#666; margin-bottom:5px;">Tax (${taxPercentage}%): ${currency} ${taxAmount.toFixed(2)}</div>
+                            <div style="font-weight:bold; font-size:1.1em; color:#007bff; border-top:1px solid #ccc; padding-top:5px;">Total: ${currency} ${finalPrice.toFixed(2)}</div>
+                        `;
+                    } else {
+                        amountEl.textContent = `${currency} ${finalPrice.toFixed(2)}`;
+                    }
+                }
+            }
+
+            let container = document.getElementById('payment-gateway-container');
+            
+            if(!container && modal) {
+                const modalBox = modal.querySelector('.auth-box');
+                if(modalBox) {
+                    const existingContainer = modalBox.querySelector('#dynamic-gateways');
+                    if(existingContainer) existingContainer.remove();
+                    
+                    container = document.createElement('div');
+                    container.id = 'dynamic-gateways';
+                    container.style.marginTop = '20px';
+                    modalBox.appendChild(container);
+                }
+            }
+            
+            if(container) {
+                container.innerHTML = '';
+                
+                const staticBtns = document.getElementById('hardcoded-gateways') || document.querySelector('.payment-buttons');
+                if (staticBtns && staticBtns !== container) staticBtns.style.display = 'none';
+
+                activeGateways.forEach(gw => {
+                    const btn = document.createElement('button');
+                    btn.className = 'auth-btn';
+                    btn.style.marginBottom = '10px';
+                    btn.style.width = '100%';
+                    btn.style.padding = '12px';
+                    btn.style.fontSize = '1em';
+                    btn.style.backgroundColor = '#28a745';
+                    btn.style.border = 'none';
+                    btn.style.borderRadius = '5px';
+                    btn.style.color = '#fff';
+                    btn.style.cursor = 'pointer';
+                    btn.textContent = `Pay with ${gw.name}`;
+                    
+                    btn.onclick = function() {
+                        this.disabled = true;
+                        const originalText = this.textContent;
+                        this.textContent = 'Connecting...';
+                        
+                        if(typeof window.initiateCheckout === 'function') {
+                            window.initiateCheckout(gw.code, currency, this, originalText);
+                        } else {
+                            alert("Error: Checkout system script not loaded properly.");
+                            this.disabled = false;
+                            this.textContent = originalText;
+                        }
+                    };
+                    container.appendChild(btn);
+                });
+            }
+            
+            if(modal) modal.style.display = 'flex';
+        })
+        .catch(e => {
+            alert("Error fetching payment gateways. Please check your internet connection.");
+            console.error(e);
+        });
+    }
+
+    // ==========================================
+    // NEW FEATURE: STORE SLIDER FIXES & PAYMENT HOOK
+    // ==========================================
+    
+    window.toggleStoreSlider = window.openStoreSlider = function(e) {
+        if(e) e.stopPropagation();
+        
+        // Explicitly close all other sliders to prevent overlap
+        if(typeof closeElementsSlider === 'function') closeElementsSlider();
+        if(typeof closeUiElementsSlider === 'function') closeUiElementsSlider();
+        if(typeof closeHelpSlider === 'function') closeHelpSlider();
+
+        const slider = document.getElementById('store-slider');
+        if (slider) {
+            if (slider.classList.contains('active')) {
+                if(typeof closeStoreSlider === 'function') closeStoreSlider();
+            } else {
+                slider.style.display = 'flex';
+                setTimeout(() => { 
+                    slider.style.left = '70px'; 
+                    slider.classList.add('active'); 
+                }, 10);
+            }
+        }
+    };
+
+    window.closeStoreSlider = function() {
+        const slider = document.getElementById('store-slider');
+        if(slider) {
+            slider.style.left = '-650px';
+            slider.classList.remove('active');
+            setTimeout(() => { slider.style.display = 'none'; }, 300);
+        }
+    };
+
+    window.switchStoreTab = function(tab, btn) {
+        document.querySelectorAll('.store-tab-content').forEach(el => el.style.display = 'none');
+        const targetTab = document.getElementById('store-tab-' + tab);
+        if(targetTab) targetTab.style.display = 'block';
+        
+        document.querySelectorAll('.store-menu-item, .store-tab-btn').forEach(el => {
+            el.style.borderLeftColor = 'transparent';
+            el.style.background = 'transparent';
+            el.style.fontWeight = 'normal';
+            el.style.color = '#555';
+        });
+        
+        if (btn) {
+            btn.style.borderLeftColor = '#007bff';
+            btn.style.background = '#e9ecef';
+            btn.style.fontWeight = 'bold';
+            btn.style.color = '#333';
+        }
+    };
+
+    window.selectedStoreAi = 'Gemini';
+    window.selectStoreAI = function(aiName, btn) {
+        window.selectedStoreAi = aiName;
+        const titleSpan = document.getElementById('store-selected-ai');
+        if(titleSpan) titleSpan.textContent = aiName;
+        
+        document.querySelectorAll('.store-ai-btn').forEach(el => {
+            el.style.background = '#fff';
+            el.style.color = '#333';
+            el.style.borderColor = '#ccc';
+        });
+        if (btn) {
+            btn.style.background = '#007bff';
+            btn.style.color = '#fff';
+            btn.style.borderColor = '#007bff';
+        }
+    };
+
+    // FORCE PAYMENT GATEWAY INSTEAD OF FREE REQUEST
+    window.submitApiKeyRequest = function(event) {
+        if(event) event.preventDefault();
+        const amountInput = document.getElementById('store-api-amount');
+        if(!amountInput) return;
+        
+        const amount = amountInput.value;
+        if(!amount || parseFloat(amount) <= 0) {
+            alert("Please enter a valid amount to add (greater than $0).");
+            return;
+        }
+        
+        const aiProvider = window.selectedStoreAi || 'Gemini';
+        
+        // Build the metadata needed for the backend to recognize this as an API Key purchase
+        const metadata = {
+            type: 'api_key_purchase',
+            provider: aiProvider,
+            amount: parseFloat(amount)
+        };
+
+        // Call the existing payment modal logic
+        if(typeof window.openPaymentModal === 'function') {
+            window.closeStoreSlider(); // Hide store so payment modal is visible
+            window.openPaymentModal(`${aiProvider} API Key Deposit`, parseFloat(amount), metadata);
+            amountInput.value = ''; // Clear for next time
+        } else {
+            alert("Payment gateway module is currently unavailable.");
+        }
+    };
+</script>

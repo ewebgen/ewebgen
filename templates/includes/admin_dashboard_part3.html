@@ -1,0 +1,892 @@
+<script>
+    // --- NEW: AI Config Tab Switcher ---
+    window.switchAiConfTab = function(tabName, btnElement) {
+        document.querySelectorAll('.ai-conf-section').forEach(el => el.style.display = 'none');
+        document.getElementById('ai-conf-' + tabName).style.display = 'block';
+        
+        document.querySelectorAll('.ai-conf-btn').forEach(btn => {
+            btn.style.background = '#6c757d';
+            btn.classList.remove('active');
+        });
+        if(btnElement) {
+            btnElement.style.background = '#007bff';
+            btnElement.classList.add('active');
+        }
+        
+        // Re-enforce the visibility toggle so switching tabs doesn't glitch the UI
+        window.toggleProviderSettings();
+    };
+
+    // --- FIX: ROBUST AI PROVIDER UI TOGGLE ---
+    window.toggleProviderSettings = function() {
+        const providerSelect = document.getElementById('admin-ai-provider');
+        if (!providerSelect) return;
+        const provider = providerSelect.value;
+        
+        // Hide ALL provider views globally first (Keys, Models, Instructions)
+        document.querySelectorAll('.provider-key-view, .provider-model-view, .provider-inst-view').forEach(el => {
+            el.style.display = 'none';
+        });
+        
+        // Show ONLY the views matching the actively selected provider
+        document.querySelectorAll('.provider-' + provider).forEach(el => {
+            el.style.display = 'block';
+        });
+
+        // --- GOAL 7 FIX: Show "Not tested" note for Perplexity, Grok, and Meta AI ---
+        document.querySelectorAll('.untested-note').forEach(el => el.remove()); // Clear previous notes
+        if (['grok', 'meta', 'perplexity'].includes(provider)) {
+            // Find the active container for the current provider to inject the message
+            const activeKeyView = document.querySelector('.provider-' + provider + '.provider-key-view');
+            if (activeKeyView) {
+                const note = document.createElement('div');
+                note.className = 'untested-note';
+                note.style.cssText = 'background: #fff3cd; color: #856404; padding: 10px; border-radius: 4px; margin-bottom: 15px; border: 1px solid #ffeeba; font-weight: bold; font-size: 0.9em;';
+                note.innerHTML = `⚠️ Note: The ${provider.toUpperCase()} AI provider integration is experimental and has not been fully tested. Results may vary.`;
+                activeKeyView.parentNode.insertBefore(note, activeKeyView);
+            }
+        }
+        
+        console.log("Admin CMS AI Provider toggled to:", provider);
+    };
+
+    // --- GOAL 2: CUSTOM MODEL TOGGLE ---
+    window.toggleCustomModel = function(provider) {
+        const select = document.getElementById(`admin-model-${provider}-select`);
+        const customInput = document.getElementById(`admin-model-${provider}-custom`);
+        if (!select || !customInput) return;
+        
+        if (select.value === 'custom') {
+            customInput.style.setProperty('display', 'block', 'important');
+            customInput.focus();
+        } else {
+            customInput.style.setProperty('display', 'none', 'important');
+        }
+    };
+
+    // --- NEW: CUSTOM IMAGE MODEL TOGGLE ---
+    window.toggleCustomImageModel = function(provider) {
+        const select = document.getElementById(`admin-image-model-${provider}-select`);
+        const customInput = document.getElementById(`admin-image-model-${provider}-custom`);
+        if (!select || !customInput) return;
+        
+        if (select.value === 'custom') {
+            customInput.style.setProperty('display', 'block', 'important');
+            customInput.focus();
+        } else {
+            customInput.style.setProperty('display', 'none', 'important');
+        }
+    };
+
+    // --- FIX: ADMIN TOKEN LIMIT TOGGLE ---
+    window.toggleAdminTokenLimit = function(provider) {
+        const select = document.getElementById(`admin-token-limit-${provider}-select`);
+        const customInput = document.getElementById(`admin-token-limit-${provider}-custom`);
+        if (!select || !customInput) return;
+        
+        if (select.value === 'custom') {
+            customInput.style.setProperty('display', 'block', 'important');
+            customInput.focus();
+        } else {
+            customInput.style.setProperty('display', 'none', 'important');
+        }
+    };
+
+    // --- GOAL 2 IMPROVEMENT: CRYSTAL CLEAR PLACEHOLDERS & TOOLTIPS FOR CMS DEFAULT PAGES ---
+    window.generateDynamicPageInputs = function(count, existingData = null) {
+        const container = document.getElementById('dynamic-pages-container');
+        if(!container) return;
+        container.innerHTML = '';
+        
+        const num = parseInt(count) || 0;
+        for(let i = 0; i < num; i++) {
+            // Default to 'menu' if location is undefined
+            const pageData = (existingData && existingData[i]) ? existingData[i] : {name: '', description: '', location: 'menu'};
+            
+            const div = document.createElement('div');
+            div.className = 'dynamic-page-row';
+            div.style.cssText = 'display:flex; gap:10px; margin-bottom:10px; align-items:center; background:#fff; padding:10px; border-radius:5px; border:1px solid #eee; flex-wrap:wrap;';
+            
+            // Using || '' prevents 'undefined' from showing up in text boxes
+            div.innerHTML = `
+                <span style="font-weight:bold; color:#888; min-width:25px;">${i+1}.</span>
+                <input type="text" class="auth-input page-name-input" style="flex:1; min-width:150px; margin:0;" placeholder="Page Filename (e.g. index.html or leave blank)" title="Page Filename (.html)" value="${pageData.name || ''}">
+                <input type="text" class="auth-input page-desc-input" style="flex:2; min-width:200px; margin:0;" placeholder="Page Type/Goal (e.g. About Us company bio or leave blank)" title="Page Type / Topic / Goal" value="${pageData.description || ''}">
+                <select class="auth-input page-location-input" style="flex:1; min-width:120px; margin:0;" title="Navigation Menu Placement">
+                    <option value="menu" ${pageData.location === 'menu' ? 'selected' : ''}>Top Menu</option>
+                    <option value="footer" ${pageData.location === 'footer' ? 'selected' : ''}>Footer Only</option>
+                </select>
+            `;
+            container.appendChild(div);
+        }
+    };
+
+    // --- FEATURE 3: WYSIWYG Editor Sync Logic ---
+    window.toggleEditorView = function(id, isCodeView) {
+        const visual = document.getElementById(id + '-visual');
+        const code = document.getElementById(id);
+        if (isCodeView) {
+            code.value = visual.innerHTML;
+            visual.style.display = 'none';
+            code.style.display = 'block';
+        } else {
+            visual.innerHTML = code.value;
+            code.style.display = 'none';
+            visual.style.display = 'block';
+        }
+    };
+    
+    window.syncVisualToCode = function(id) {
+        const visual = document.getElementById(id + '-visual');
+        const code = document.getElementById(id);
+        if (code && visual) code.value = visual.innerHTML;
+    };
+    
+    window.syncCodeToVisual = function(id) {
+        const visual = document.getElementById(id + '-visual');
+        const code = document.getElementById(id);
+        if (code && visual) visual.innerHTML = code.value;
+    };
+
+    // --- FILE UPLOAD LOGIC FOR LOGO ---
+    function uploadAdminLogo(inputElement) {
+        const file = inputElement.files[0];
+        if(!file) return;
+
+        const formData = new FormData();
+        formData.append('image', file);
+
+        fetch('/api/admin/upload_logo', {
+            method: 'POST',
+            body: formData
+        })
+        .then(res => {
+            if(!res.ok) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    document.getElementById('admin-logo-url').value = e.target.result;
+                    alert("Logo read successfully! Don't forget to click Save.");
+                };
+                reader.readAsDataURL(file);
+                return null;
+            }
+            return res.json();
+        })
+        .then(data => {
+            if(data && data.success) {
+                document.getElementById('admin-logo-url').value = data.url;
+                alert("Logo uploaded successfully! Don't forget to click Save.");
+            } else if (data && !data.success) {
+                alert("Error: " + data.error);
+            }
+        })
+        .catch(err => console.error(err));
+    }
+
+    // --- LOGS FIX: POPULATES DROPDOWN AND FETCHES LOGS PER USER ---
+    window.loadGlobalGenerationLogs = function() {
+        const viewer = document.getElementById('admin-log-viewer');
+        if(!viewer) return;
+        viewer.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">Fetching logs from server...</div>';
+        
+        const userFilter = document.getElementById('admin-log-user-filter');
+        
+        // Helper function to fetch logs after dropdown is ready
+        const fetchLogs = () => {
+            let url = '/api/admin/generation_logs';
+            if (userFilter && userFilter.value) {
+                url += `?user_id=${userFilter.value}`;
+            }
+            
+            fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if(data.success && data.logs) {
+                    if(data.logs.length === 0) {
+                        viewer.innerHTML = '<div style="color:#888; text-align:center; padding:20px;">No generation logs found for this user.</div>';
+                        return;
+                    }
+                    viewer.innerHTML = '';
+                    data.logs.forEach(log => {
+                        const entry = document.createElement('div');
+                        entry.style.marginBottom = '15px';
+                        entry.style.paddingBottom = '10px';
+                        entry.style.borderBottom = '1px solid #333';
+                        
+                        const header = document.createElement('div');
+                        header.style.color = '#00d2ff';
+                        header.style.marginBottom = '5px';
+                        header.innerHTML = `<strong>[${log.timestamp}]</strong> User: <span style="color:#f39c12;">${log.user_email}</span>`;
+                        
+                        const content = document.createElement('div');
+                        content.style.whiteSpace = 'pre-wrap';
+                        content.textContent = log.content;
+                        
+                        entry.appendChild(header);
+                        entry.appendChild(content);
+                        viewer.appendChild(entry);
+                    });
+                } else {
+                    viewer.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Error fetching logs: ${data.error || 'Unknown error'}</div>`;
+                }
+            })
+            .catch(err => {
+                viewer.innerHTML = `<div style="color:red; text-align:center; padding:20px;">Network error fetching logs.</div>`;
+            });
+        };
+
+        // Populate dropdown with users if it hasn't been populated yet
+        if (userFilter && userFilter.options.length <= 1) {
+            fetch('/api/admin/users')
+            .then(r => r.json())
+            .then(users => {
+                if (Array.isArray(users)) {
+                    window.adminUsersList = users; 
+                    const currentVal = userFilter.value;
+                    userFilter.innerHTML = '<option value="">All Users</option>';
+                    users.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u.id;
+                        opt.textContent = `👤 ${u.username || 'Unknown'} (${u.email})`;
+                        userFilter.appendChild(opt);
+                    });
+                    if(currentVal) userFilter.value = currentVal;
+                }
+                fetchLogs();
+            })
+            .catch(err => {
+                console.error("Error fetching users for logs filter:", err);
+                fetchLogs(); // Fallback to fetching logs anyway if user list fails
+            });
+        } else {
+            fetchLogs(); // Dropdown already populated, just fetch logs
+        }
+    };
+
+    // --- CLIENT SIDE CMS LOGIC ---
+    
+    function performRestoreFromCMS() {
+        const select = document.getElementById('cms-restore-select');
+        const version = select.value;
+        if (!version) {
+            alert("Please select a version first.");
+            return;
+        }
+        
+        if (!confirm(`Are you sure you want to restore version ${version}?`)) return;
+        
+        fetch('/api/system/perform_update', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ version: version })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ System Restored. Reloading...");
+                window.location.reload();
+            } else {
+                alert("❌ Restore Failed: " + data.error);
+            }
+        });
+    }
+
+    function initClientUpdatesTab() {
+        fetch('/api/system/check_remote_updates')
+        .then(r => r.json())
+        .then(data => {
+            const icon = document.getElementById('cms-update-status-icon');
+            const title = document.getElementById('cms-update-title');
+            const desc = document.getElementById('cms-update-desc');
+            
+            if(data.success) {
+                if(data.update_available) {
+                    icon.textContent = "🎉";
+                    title.textContent = "Update Available!";
+                    desc.innerHTML = `New Version: <b>${data.latest_version}</b><br>Current: ${data.current_version}`;
+                } else {
+                    icon.textContent = "✅";
+                    title.textContent = "System is Up to Date";
+                    desc.innerHTML = `Current Version: <b>${data.current_version}</b>`;
+                }
+            } else {
+                icon.textContent = "⚠️";
+                title.textContent = "Connection Error";
+                desc.textContent = "Could not check for updates.";
+            }
+        });
+
+        const select = document.getElementById('cms-restore-select');
+        if (select) {
+            select.innerHTML = '<option>Loading...</option>';
+            fetch('/api/system/list_remote_versions')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.updates) {
+                    select.innerHTML = '<option value="" disabled selected>Select Version...</option>';
+                    data.updates.forEach(u => {
+                        const opt = document.createElement('option');
+                        opt.value = u.version;
+                        opt.textContent = `${u.version} (${u.release_date})`;
+                        select.appendChild(opt);
+                    });
+                } else {
+                    select.innerHTML = '<option disabled>Failed to load versions</option>';
+                }
+            });
+        }
+    }
+
+    // Wrap the override inside DOMContentLoaded to ensure it fires correctly without conflicts
+    document.addEventListener("DOMContentLoaded", () => {
+        
+        // Define the global tab switching function robustly
+        window.switchAdminTab = function(tabId, el) {
+            
+            // 1. Completely hide all tab contents safely
+            const allTabs = document.querySelectorAll('.admin-tab-content');
+            allTabs.forEach(c => {
+                c.style.display = 'none';
+                c.classList.remove('active');
+            });
+            
+            // 2. Safely show only the target tab
+            const target = document.getElementById(tabId);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            } else {
+                console.error("Admin Tab not found:", tabId);
+            }
+            
+            // 3. Update the left sidebar navigation active state
+            document.querySelectorAll('.admin-nav-item').forEach(i => i.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            // 4. Trigger Data Loading Logic specifically for the clicked tab
+            if (tabId === 'tab-updates' && typeof initClientUpdatesTab === 'function') initClientUpdatesTab();
+            if (tabId === 'tab-logs' && typeof loadGlobalGenerationLogs === 'function') loadGlobalGenerationLogs();
+            if (tabId === 'tab-users' && typeof loadAdminUsers === 'function') loadAdminUsers();
+            if (tabId === 'tab-usertypes' && typeof loadAdminUserTypes === 'function') loadAdminUserTypes();
+            if (tabId === 'tab-plans' && typeof loadAdminPlans === 'function') { loadAdminPlans(); if (typeof loadUserTypesForDropdown === 'function') loadUserTypesForDropdown(); }
+            if (tabId === 'tab-payments' && typeof loadPaymentGateways === 'function') loadPaymentGateways();
+            if (tabId === 'tab-notifs' && typeof loadAdminMessages === 'function') loadAdminMessages();
+            
+            const settingsTabs = ['tab-ai', 'tab-smtp', 'tab-images', 'tab-general', 'tab-brand', 'tab-legal', 'tab-oauth'];
+            if (settingsTabs.includes(tabId) && typeof window.loadAdminSettings === 'function') {
+                window.loadAdminSettings();
+            }
+        };
+        
+        // Safety: If Admin CMS is opened, make sure the default tab is fully loaded properly
+        const defaultTabElement = document.querySelector('.admin-nav-item.active');
+        if (defaultTabElement) {
+            window.switchAdminTab('tab-general', defaultTabElement);
+        }
+    });
+
+    // --- FIX: BULLETPROOF LOAD AND SAVE JAVASCRIPT LOGIC ---
+
+    window.loadAdminSettings = function() {
+        fetch('/api/admin/get_settings').then(r => r.json()).then(d => {
+            const setVal = (id, val) => { const el = document.getElementById(id); if (el) el.value = val; };
+            const setCheck = (id, val) => { const el = document.getElementById(id); if (el) el.checked = val; };
+
+            if(document.getElementById('admin-ai-provider')) {
+                document.getElementById('admin-ai-provider').value = d.ai_provider || 'gemini';
+                // Trigger visibility immediately after loading from database
+                window.toggleProviderSettings();
+            }
+            
+            let keys = {};
+            try { keys = JSON.parse(d.provider_keys_json || '{}'); } catch(e) {}
+            if(!keys.gemini && d.gemini_api_key) keys.gemini = [d.gemini_api_key];
+            if(!keys.openai && d.openai_api_key) keys.openai = [d.openai_api_key];
+            if(!keys.claude && d.claude_api_key) keys.claude = [d.claude_api_key];
+            if(!keys.deepseek && d.deepseek_api_key) keys.deepseek = [d.deepseek_api_key];
+            if(!keys.grok && d.xai_api_key) keys.grok = [d.xai_api_key];
+            if(!keys.meta && d.meta_api_key) keys.meta = [d.meta_api_key];
+            if(!keys.perplexity && d.perplexity_api_key) keys.perplexity = [d.perplexity_api_key];
+
+            ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'].forEach(prov => {
+                const container = document.getElementById(`keys-container-${prov}`);
+                if(container && typeof window.addKeyField === 'function') {
+                    container.innerHTML = '';
+                    const pKeys = keys[prov] || [];
+                    if(pKeys.length === 0) window.addKeyField(prov, '');
+                    else pKeys.forEach(k => window.addKeyField(prov, k));
+                }
+            });
+
+            // --- GOAL 1 & 3: LOAD DYNAMIC PAGES (With Location) ---
+            let pageData = [];
+            try { pageData = JSON.parse(d.default_pages_json || '[]'); } catch(e){}
+            if(document.getElementById('admin-default-page-count')) {
+                const count = pageData.length > 0 ? pageData.length : 7;
+                document.getElementById('admin-default-page-count').value = count;
+                window.generateDynamicPageInputs(count, pageData);
+            }
+
+            setVal('admin-chat-state', d.default_chat_state || 'maximized');
+            setCheck('admin-concurrent-enable', d.concurrent_limit_enabled || false);
+            setVal('admin-concurrent-limit', d.concurrent_limit || 5);
+            setVal('admin-menu-color', d.top_menu_color || '#212529');
+            setVal('admin-menu-color-text', d.top_menu_color || '#212529');
+            setVal('admin-voice-duration', d.voice_silence_duration || 2000);
+            
+            setVal('admin-search-limit', d.image_search_limit || 10);
+            setCheck('admin-store-images', d.store_images_locally !== undefined ? d.store_images_locally : true);
+
+            // --- ISSUE 2 FIX: LOAD THE 'POWERED BY' CONFIGURATION TO THE UI ---
+            setCheck('admin-show-powered-by', d.show_powered_by !== undefined ? d.show_powered_by : true);
+            
+            // --- GOAL 3: LOAD TAX SETTINGS (Moved to Monetization Tab) ---
+            setCheck('admin-tax-enabled', d.tax_enabled !== undefined ? d.tax_enabled : false);
+            setVal('admin-tax-percentage', d.tax_percentage || 0);
+
+            // --- GOAL 1 FIX: Load Webhook Forwarding state ---
+            setCheck('admin-forward-api-keys', d.forward_api_keys_to_owner !== undefined ? d.forward_api_keys_to_owner : false);
+
+            if(document.getElementById('email-method')) {
+                document.getElementById('email-method').value = d.email_method || 'smtp';
+                if (typeof window.toggleEmailFields === 'function') window.toggleEmailFields();
+            }
+            
+            setVal('smtp-host', d.smtp_host || '');
+            setVal('smtp-port', d.smtp_port || '');
+            setVal('smtp-user', d.smtp_user || '');
+            setVal('smtp-from', d.smtp_from_email || '');
+            setVal('email-api-url', d.email_api_url || '');
+            setVal('email-api-key', d.email_api_key || '');
+            
+            // CMS Fields mapping
+            setVal('admin-logo-url', d.logo_url || '');
+            setVal('admin-logo-width', d.logo_width || '120px');
+            setVal('admin-logo-height', d.logo_height || 'auto');
+            setVal('admin-login-title', d.login_left_title || 'Welcome to Ewebgen');
+            setVal('admin-login-content', d.login_left_content || '');
+            setVal('admin-terms-content', d.terms_content || '');
+            setVal('admin-privacy-content', d.privacy_content || '');
+            setVal('admin-gdpr-msg', d.gdpr_cookie_msg || '');
+            setVal('admin-google-client-id', d.google_client_id || '');
+            setVal('admin-google-client-secret', d.google_client_secret || '');
+
+            // Synchronize visual editors immediately on load
+            ['admin-login-content', 'admin-terms-content', 'admin-privacy-content', 'admin-gdpr-msg'].forEach(id => {
+                const visual = document.getElementById(id + '-visual');
+                const code = document.getElementById(id);
+                if (visual && code) visual.innerHTML = code.value;
+            });
+
+            // --- GOAL 2: Helper to cleanly load custom models ---
+            const setModelVal = (prov, val) => {
+                const sel = document.getElementById(`admin-model-${prov}-select`);
+                const cust = document.getElementById(`admin-model-${prov}-custom`);
+                if(!sel) {
+                    const fallback = document.getElementById(`admin-model-${prov}`);
+                    if(fallback) fallback.value = val || '';
+                    return;
+                }
+                if(!val) {
+                    sel.selectedIndex = 0; 
+                    if(cust) cust.style.display = 'none';
+                    return;
+                }
+                // Check if the value exists in the dropdown options
+                let found = Array.from(sel.options).some(opt => opt.value === val);
+                if(found) {
+                    sel.value = val;
+                    if(cust) cust.style.display = 'none';
+                } else {
+                    sel.value = 'custom';
+                    if(cust) {
+                        cust.value = val;
+                        cust.style.display = 'block';
+                    }
+                }
+            };
+
+            // Populate the models safely using the helper
+            setModelVal('gemini', d.model_gemini);
+            setModelVal('openai', d.model_openai);
+            setModelVal('claude', d.model_claude);
+            setModelVal('deepseek', d.model_deepseek);
+            setModelVal('grok', d.model_grok);
+            setModelVal('meta', d.model_meta);
+            setModelVal('perplexity', d.model_perplexity);
+            
+            // --- GOAL 1 FIX: Helper to load Custom Image Models properly ---
+            const setImageModelVal = (prov, val) => {
+                const sel = document.getElementById(`admin-image-model-${prov}-select`);
+                const cust = document.getElementById(`admin-image-model-${prov}-custom`);
+                if(!sel) return;
+                if(!val) {
+                    sel.selectedIndex = 0; 
+                    if(cust) cust.style.display = 'none';
+                    return;
+                }
+                let found = Array.from(sel.options).some(opt => opt.value === val);
+                if(found) {
+                    sel.value = val;
+                    if(cust) cust.style.display = 'none';
+                } else {
+                    sel.value = 'custom';
+                    if(cust) {
+                        cust.value = val;
+                        cust.style.display = 'block';
+                    }
+                }
+            };
+            
+            // Populate the image models safely
+            setImageModelVal('gemini', d.image_model_gemini);
+            setImageModelVal('openai', d.image_model_openai);
+            setImageModelVal('claude', d.image_model_claude);
+            setImageModelVal('deepseek', d.image_model_deepseek);
+            setImageModelVal('grok', d.image_model_grok);
+            setImageModelVal('meta', d.image_model_meta);
+            setImageModelVal('perplexity', d.image_model_perplexity);
+
+            // Populate the token limits
+            const setTokenVal = (prov, val) => {
+                const sel = document.getElementById(`admin-token-limit-${prov}-select`);
+                const cust = document.getElementById(`admin-token-limit-${prov}-custom`);
+                if(sel) {
+                    let found = Array.from(sel.options).some(opt => opt.value === String(val));
+                    if(found) { sel.value = val; if(cust) cust.style.display = 'none'; } 
+                    else if (val) { sel.value = 'custom'; if(cust) { cust.value = val; cust.style.display = 'block'; } }
+                    else { sel.value = ''; if(cust) cust.style.display = 'none'; } 
+                }
+            };
+            
+            setTokenVal('gemini', d.token_limit_gemini);
+            setTokenVal('openai', d.token_limit_openai);
+            setTokenVal('claude', d.token_limit_claude);
+            setTokenVal('deepseek', d.token_limit_deepseek);
+            setTokenVal('grok', d.token_limit_grok);
+            setTokenVal('meta', d.token_limit_meta);
+            setTokenVal('perplexity', d.token_limit_perplexity);
+
+            // Populate instructions
+            setVal('admin-inst-gemini', d.inst_gemini || '');
+            setVal('admin-inst-openai', d.inst_openai || '');
+            setVal('admin-inst-claude', d.inst_claude || '');
+            setVal('admin-inst-deepseek', d.inst_deepseek || '');
+            setVal('admin-inst-grok', d.inst_grok || '');
+            setVal('admin-inst-meta', d.inst_meta || '');
+            setVal('admin-inst-perplexity', d.inst_perplexity || '');
+            
+            setVal('admin-design-guidelines', d.design_guidelines || '');
+            
+            if (typeof window.renderImageProviders === 'function') window.renderImageProviders(d.image_providers_json);
+        });
+    };
+
+    window.saveAdminSettings = function(event) {
+        const getVal = (id, def = '') => document.getElementById(id) ? document.getElementById(id).value.trim() : def;
+        const getCheck = (id, def = true) => document.getElementById(id) ? document.getElementById(id).checked : def;
+
+        // --- BUG FIX: Force Sync Visual Editors to Textareas BEFORE saving ---
+        ['admin-login-content', 'admin-terms-content', 'admin-privacy-content', 'admin-gdpr-msg'].forEach(id => {
+            const visual = document.getElementById(id + '-visual');
+            const code = document.getElementById(id);
+            if (visual && code) code.value = visual.innerHTML;
+        });
+
+        const aiKeyData = {};
+        // Add claude and deepseek to the list of providers to map keys for
+        ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'].forEach(prov => {
+            const inputs = document.querySelectorAll(`.provider-key-input[data-provider="${prov}"]`);
+            aiKeyData[prov] = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+        });
+
+        // --- GOAL 1 & 3: SERIALIZE DYNAMIC PAGES (With Location) ---
+        const pageData = [];
+        document.querySelectorAll('.dynamic-page-row').forEach(row => {
+            const nameInput = row.querySelector('.page-name-input');
+            const descInput = row.querySelector('.page-desc-input');
+            const locInput = row.querySelector('.page-location-input');
+            
+            // Allow blank strings instead of filtering them out
+            const name = nameInput ? nameInput.value.trim() : '';
+            const desc = descInput ? descInput.value.trim() : '';
+            const loc = locInput ? locInput.value : 'menu';
+
+            // Feature 4: Always push the object, even if name/desc are blank, so AI can decide
+            pageData.push({name: name, description: desc, location: loc});
+        });
+
+        // --- GOAL 2: Helper to cleanly extract custom models ---
+        const getModelVal = (prov) => {
+            const sel = document.getElementById(`admin-model-${prov}-select`);
+            const cust = document.getElementById(`admin-model-${prov}-custom`);
+            if(!sel) {
+                // Fallback if the UI hasn't been updated to the select boxes yet
+                const oldInput = document.getElementById(`admin-model-${prov}`);
+                return oldInput ? oldInput.value.trim() : '';
+            }
+            return sel.value === 'custom' ? (cust ? cust.value.trim() : '') : sel.value;
+        };
+
+        // --- GOAL 1 FIX: Helper to extract Custom Image Models correctly ---
+        const getImageModelVal = (prov) => {
+            const sel = document.getElementById(`admin-image-model-${prov}-select`);
+            const cust = document.getElementById(`admin-image-model-${prov}-custom`);
+            if(!sel) return '';
+            return sel.value === 'custom' ? (cust ? cust.value.trim() : '') : sel.value;
+        };
+
+        const getTokenVal = (prov) => {
+            const sel = document.getElementById(`admin-token-limit-${prov}-select`);
+            const cust = document.getElementById(`admin-token-limit-${prov}-custom`);
+            if(sel) return sel.value === 'custom' ? (cust ? cust.value.trim() : '') : sel.value;
+            return '';
+        };
+
+        const imgProvs = {};
+        document.querySelectorAll('#image-providers-list .settings-group').forEach(group => {
+            const name = group.dataset.providerName;
+            const enableCheck = group.querySelector(`.prov-enable[data-prov="${name}"]`);
+            const enabled = enableCheck ? enableCheck.checked : false;
+            const keyInputs = group.querySelectorAll(`.img-prov-key[data-prov="${name}"]`);
+            const keys = Array.from(keyInputs).map(i => i.value.trim()).filter(v => v);
+            imgProvs[name] = { enabled: enabled, key: keys.length > 0 ? keys[0] : '', keys: keys, type: 'paid' };
+        });
+
+        const data = { 
+            ai_provider: getVal('admin-ai-provider', 'gemini'),
+            provider_keys_json: JSON.stringify(aiKeyData),
+            
+            // --- CRITICAL FIX: Explicitly set provider keys for DB columns ---
+            gemini_api_key: (aiKeyData['gemini'] && aiKeyData['gemini'][0]) ? aiKeyData['gemini'][0] : '',
+            openai_api_key: (aiKeyData['openai'] && aiKeyData['openai'][0]) ? aiKeyData['openai'][0] : '',
+            claude_api_key: (aiKeyData['claude'] && aiKeyData['claude'][0]) ? aiKeyData['claude'][0] : '',
+            deepseek_api_key: (aiKeyData['deepseek'] && aiKeyData['deepseek'][0]) ? aiKeyData['deepseek'][0] : '',
+            xai_api_key: (aiKeyData['grok'] && aiKeyData['grok'][0]) ? aiKeyData['grok'][0] : '',
+            meta_api_key: (aiKeyData['meta'] && aiKeyData['meta'][0]) ? aiKeyData['meta'][0] : '',
+            perplexity_api_key: (aiKeyData['perplexity'] && aiKeyData['perplexity'][0]) ? aiKeyData['perplexity'][0] : '',
+
+            // --- GOAL 1 & 3: PASS DYNAMIC PAGES TO BACKEND ---
+            default_pages_json: JSON.stringify(pageData),
+
+            default_chat_state: getVal('admin-chat-state', 'maximized'),
+            voice_silence_duration: getVal('admin-voice-duration', '2000'),
+            concurrent_limit_enabled: getCheck('admin-concurrent-enable', false),
+            concurrent_limit: parseInt(getVal('admin-concurrent-limit', '5')) || 5,
+            top_menu_color: getVal('admin-menu-color', '#212529'),
+            store_images_locally: getCheck('admin-store-images', true),
+            
+            // --- GOAL 1 FIX: Extract Webhook Forwarding setting and pass to backend ---
+            forward_api_keys_to_owner: getCheck('admin-forward-api-keys', false),
+
+            // --- ISSUE 2 FIX: EXTRACT THE CHECKBOX STATE FOR 'POWERED BY' AND PASS TO BACKEND ---
+            show_powered_by: getCheck('admin-show-powered-by', true),
+            
+            // --- GOAL 3: Save Tax Settings ---
+            tax_enabled: getCheck('admin-tax-enabled', false),
+            tax_percentage: parseFloat(getVal('admin-tax-percentage', '0')) || 0.0,
+            
+            image_search_limit: parseInt(getVal('admin-search-limit', '10')) || 10,
+            image_providers_json: JSON.stringify(imgProvs),
+            email_method: getVal('email-method', 'smtp'),
+            smtp_host: getVal('smtp-host'),
+            smtp_port: getVal('smtp-port'),
+            smtp_user: getVal('smtp-user'),
+            smtp_pass: getVal('smtp-pass'), // Backend handles ignoring empty password updates automatically
+            smtp_from_email: getVal('smtp-from'),
+            email_api_url: getVal('email-api-url'),
+            email_api_key: getVal('email-api-key'),
+            
+            logo_url: getVal('admin-logo-url'),
+            logo_width: getVal('admin-logo-width', '120px'),
+            logo_height: getVal('admin-logo-height', 'auto'),
+            login_left_title: getVal('admin-login-title', 'Welcome to Ewebgen'),
+            login_left_content: getVal('admin-login-content'),
+            terms_content: getVal('admin-terms-content'),
+            privacy_content: getVal('admin-privacy-content'),
+            gdpr_cookie_msg: getVal('admin-gdpr-msg'),
+            google_client_id: getVal('admin-google-client-id'),
+            google_client_secret: getVal('admin-google-client-secret'),
+
+            // --- GOAL 2: Extract using the new helper for models ---
+            model_gemini: getModelVal('gemini'),
+            inst_gemini: getVal('admin-inst-gemini'),
+            
+            model_openai: getModelVal('openai'),
+            inst_openai: getVal('admin-inst-openai'),
+            
+            model_claude: getModelVal('claude'),
+            inst_claude: getVal('admin-inst-claude'),
+            
+            model_deepseek: getModelVal('deepseek'),
+            inst_deepseek: getVal('admin-inst-deepseek'),
+
+            model_grok: getModelVal('grok'),
+            inst_grok: getVal('admin-inst-grok'),
+            
+            model_meta: getModelVal('meta'),
+            inst_meta: getVal('admin-inst-meta'),
+            
+            model_perplexity: getModelVal('perplexity'),
+            inst_perplexity: getVal('admin-inst-perplexity'),
+
+            // --- GOAL 1 FIX: Extract Image Models correctly to pass to backend ---
+            image_model_gemini: getImageModelVal('gemini'),
+            image_model_openai: getImageModelVal('openai'),
+            image_model_claude: getImageModelVal('claude'),
+            image_model_deepseek: getImageModelVal('deepseek'),
+            image_model_grok: getImageModelVal('grok'),
+            image_model_meta: getImageModelVal('meta'),
+            image_model_perplexity: getImageModelVal('perplexity'),
+
+            token_limit_gemini: getTokenVal('gemini'),
+            token_limit_openai: getTokenVal('openai'),
+            token_limit_claude: getTokenVal('claude'),
+            token_limit_deepseek: getTokenVal('deepseek'),
+            token_limit_grok: getTokenVal('grok'),
+            token_limit_meta: getTokenVal('meta'),
+            token_limit_perplexity: getTokenVal('perplexity'),
+            
+            design_guidelines: getVal('admin-design-guidelines')
+        };
+
+        const btn = event && event.target ? event.target : null;
+        let originalText = 'Save Settings';
+        
+        if (btn && btn.tagName === 'BUTTON') {
+            originalText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = 'Saving...';
+        }
+
+        fetch('/api/admin/update_settings', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+        }).then(r => r.json()).then(d => {
+            if (btn && btn.tagName === 'BUTTON') {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+            if (d.success) {
+                alert(d.message || "✅ Settings saved successfully!");
+                const controlBar = document.getElementById('control-bar');
+                if(controlBar && data.top_menu_color) controlBar.style.backgroundColor = data.top_menu_color;
+            } else {
+                alert("❌ Error: " + d.error);
+            }
+        }).catch(err => {
+            if (btn && btn.tagName === 'BUTTON') {
+                btn.disabled = false;
+                btn.textContent = originalText;
+            }
+            alert("❌ Network Error while saving.");
+            console.error(err);
+        });
+    };
+
+    window.addKeyField = function(provider, value = '') {
+        const container = document.getElementById(`keys-container-${provider}`);
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = 'key-input-group';
+        div.innerHTML = `
+            <input type="password" class="auth-input provider-key-input" data-provider="${provider}" value="${value}" placeholder="API Key">
+            <button class="remove-key-btn" onclick="this.parentElement.remove()">✕</button>
+        `;
+        container.appendChild(div);
+    };
+
+    window.toggleEmailFields = function() {
+        const methodElement = document.getElementById('email-method');
+        if (!methodElement) return;
+        const method = methodElement.value;
+        const smtpFields = document.getElementById('smtp-fields');
+        const apiFields = document.getElementById('api-fields');
+        if (smtpFields) smtpFields.style.display = method === 'smtp' ? 'block' : 'none';
+        if (apiFields) apiFields.style.display = method === 'api' ? 'block' : 'none';
+    };
+
+    window.renderImageProviders = function(jsonStr) {
+        const container = document.getElementById('image-providers-list');
+        if(!container) return;
+        container.innerHTML = '';
+        let providers = {};
+        try { providers = JSON.parse(jsonStr) || {}; } catch(e) {}
+        
+        ['pexels', 'unsplash', 'pixabay', 'freepik', 'shutterstock', 'mighty'].forEach(p => {
+            if(!providers[p]) providers[p] = { enabled: false, key: '', keys: [], type: 'paid' };
+        });
+        
+        Object.keys(providers).forEach(p => {
+            if (p === 'pollinations') return;
+            const config = providers[p];
+            let currentKeys = config.keys || [];
+            if(currentKeys.length === 0 && config.key) currentKeys.push(config.key);
+            
+            const div = document.createElement('div');
+            div.className = 'settings-group';
+            div.dataset.providerName = p;
+            
+            let html = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong>${p.toUpperCase()}</strong>
+                    <label><input type="checkbox" class="prov-enable" data-prov="${p}" ${config.enabled ? 'checked' : ''}> Enable</label>
+                </div>
+                <div id="img-keys-container-${p}" style="margin-top:5px;"></div>
+                <button onclick="window.addImageKeyField('${p}')" style="background:#28a745; color:white; border:none; padding:3px 8px; border-radius:3px; font-size:11px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+            `;
+            div.innerHTML = html;
+            container.appendChild(div);
+
+            if (currentKeys.length === 0) window.addImageKeyField(p, '');
+            else currentKeys.forEach(k => window.addImageKeyField(p, k));
+        });
+    };
+
+    window.addImageKeyField = function(provider, value='') {
+        const container = document.getElementById(`img-keys-container-${provider}`);
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = 'key-input-group';
+        div.style.marginBottom = '5px';
+        div.innerHTML = `
+            <input type="password" class="auth-input img-prov-key" data-prov="${provider}" value="${value}" placeholder="API Key">
+            <button class="remove-key-btn" onclick="this.parentElement.remove()" style="padding:5px 10px;">✕</button>
+        `;
+        container.appendChild(div);
+    };
+    
+    // --- GOAL 1 FIX: DYNAMIC UI INJECTION FOR WEBHOOK FORWARDING ---
+    // Injects the Webhook toggle UI automatically without modifying other HTML files
+    document.addEventListener("DOMContentLoaded", () => {
+        const interval = setInterval(() => {
+            const generalTab = document.getElementById('tab-general');
+            if (generalTab && !document.getElementById('admin-forward-api-keys')) {
+                const panel = generalTab.querySelector('.admin-panel');
+                if (panel) {
+                    const toggleDiv = document.createElement('div');
+                    toggleDiv.className = 'settings-group';
+                    toggleDiv.style.cssText = 'background: #f4f0ff; padding: 15px; border-radius: 5px; border: 1px solid #dcd0ff; margin-bottom:15px;';
+                    toggleDiv.innerHTML = `
+                        <label style="color: #6f42c1; font-weight:bold; font-size:1.1em; display:flex; align-items:center; gap:8px;">
+                            <span>🚀</span> Forward API Key Requests to Owner App
+                        </label>
+                        <div style="display:flex; align-items:center; gap:10px; margin-top:10px;">
+                            <input type="checkbox" id="admin-forward-api-keys" style="transform:scale(1.3); cursor:pointer;">
+                            <span style="font-weight:bold; color:#333;">Enable Webhook Forwarding (app.ewebgen.com)</span>
+                        </div>
+                        <p style="font-size:0.85em; color:#666; margin-top:8px; line-height:1.5;">
+                            If enabled, when your users purchase an API key, the request will be securely forwarded to the Master Owner CMS (app.ewebgen.com). The Owner can fulfill the request, and the API key will automatically sync back to your users here.
+                        </p>
+                    `;
+                    const h3 = panel.querySelector('h3');
+                    if (h3 && h3.nextSibling) {
+                        panel.insertBefore(toggleDiv, h3.nextSibling);
+                    } else {
+                        panel.appendChild(toggleDiv);
+                    }
+                    clearInterval(interval);
+                }
+            }
+        }, 1000);
+    });    
+</script>

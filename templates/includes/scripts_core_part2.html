@@ -1,0 +1,839 @@
+<script>
+    // ==========================================
+    // CODE PANE LOGIC (Updated for Sync)
+    // ==========================================
+
+    function injectCodeButton() {
+        const controlBar = document.getElementById('action-buttons-right');
+        const winControls = document.querySelector('.window-controls');
+        if (winControls && !document.getElementById('close-chat-btn')) {
+            const closeBtn = document.createElement('button');
+            closeBtn.id = 'close-chat-btn';
+            closeBtn.innerHTML = '✕';
+            closeBtn.className = 'win-btn btn-close';
+            closeBtn.title = 'Close Chat';
+            closeBtn.onclick = closeChatBox;
+            winControls.appendChild(closeBtn);
+        }
+
+        if (controlBar && !document.getElementById('code-view-btn')) {
+            const btn = document.createElement('button');
+            btn.id = 'code-view-btn';
+            btn.textContent = '💻 Code';
+            btn.title = "Toggle Editable Code View";
+            btn.disabled = true; 
+            btn.onclick = toggleCodeView;
+            controlBar.insertBefore(btn, controlBar.firstChild);
+        }
+
+        const previewContainer = document.getElementById('preview-container');
+        if (previewContainer && !document.getElementById('code-pane-container')) {
+            const container = document.createElement('div');
+            container.id = 'code-pane-container';
+            container.style.display = 'none';
+            container.style.width = '50%';
+            container.style.height = '100%';
+            container.style.borderRight = '1px solid #444';
+            container.style.flexDirection = 'column';
+            container.style.background = '#1e1e1e';
+            
+            const toolbar = document.createElement('div');
+            toolbar.style.padding = '8px';
+            toolbar.style.background = '#333';
+            toolbar.style.display = 'flex';
+            toolbar.style.justifyContent = 'space-between';
+            toolbar.innerHTML = `<span style="color:white; font-size:12px;">Editing: <b id="code-filename">index.html</b></span>`;
+            
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = '💾 Apply Changes';
+            saveBtn.className = 'btn-save-code';
+            saveBtn.style.padding = '4px 10px';
+            saveBtn.style.fontSize = '12px';
+            saveBtn.style.background = '#28a745';
+            saveBtn.style.color = 'white';
+            saveBtn.style.border = 'none';
+            saveBtn.style.cursor = 'pointer';
+            saveBtn.onclick = applyCodeChanges;
+            toolbar.appendChild(saveBtn);
+            
+            const textArea = document.createElement('textarea');
+            textArea.id = 'code-editor-area';
+            textArea.style.width = '100%';
+            textArea.style.flexGrow = '1';
+            textArea.style.background = '#1e1e1e';
+            textArea.style.color = '#d4d4d4';
+            textArea.style.fontFamily = 'monospace';
+            textArea.style.fontSize = '13px';
+            textArea.style.border = 'none';
+            textArea.style.resize = 'none';
+            textArea.style.padding = '10px';
+            textArea.style.outline = 'none';
+            textArea.spellcheck = false;
+            
+            textArea.addEventListener('input', () => {
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(() => {
+                   if(currentPreviewFile) generatedFiles[currentPreviewFile] = textArea.value;
+                   enableSaveButton(); // Edit happened, so enable Save
+                }, 800);
+            });
+            
+            // Code -> Preview Highlight Logic (Signature Match)
+            const handleCodeInteraction = () => {
+                const startPos = textArea.selectionStart;
+                const source = textArea.value;
+                
+                // Find nearest preceding tag start
+                const textBefore = source.substring(0, startPos);
+                const tagMatch = textBefore.match(/<([a-z0-9]+)([^>]*?)$/i);
+                
+                if (tagMatch) {
+                    const tagName = tagMatch[1];
+                    const attributes = tagMatch[2];
+                    
+                    // Try to extract ID for best match
+                    const idMatch = attributes.match(/id=["']([^"']+)["']/i);
+                    const id = idMatch ? idMatch[1] : null;
+                    
+                    const iframe = document.getElementById('preview-frame');
+                    if(iframe && iframe.contentWindow && iframe.contentWindow.highlightElementInPreview) {
+                        iframe.contentWindow.highlightElementInPreview({
+                            tagName: tagName,
+                            id: id
+                        });
+                    }
+                }
+            };
+            
+            textArea.addEventListener('mouseup', handleCodeInteraction);
+            textArea.addEventListener('keyup', handleCodeInteraction);
+
+            container.appendChild(toolbar);
+            container.appendChild(textArea);
+            previewContainer.insertBefore(container, document.getElementById('preview-frame'));
+        }
+    }
+
+    function toggleCodeView() {
+        const container = document.getElementById('code-pane-container');
+        const frame = document.getElementById('preview-frame');
+        
+        if (container.style.display === 'flex') {
+            container.style.display = 'none';
+            frame.style.width = '100%';
+        } else {
+            container.style.display = 'flex';
+            frame.style.width = '50%';
+            updateCodePaneContent();
+        }
+    }
+
+    function updateCodePaneContent() {
+        const container = document.getElementById('code-pane-container');
+        if (container && container.style.display === 'flex') {
+            const editor = document.getElementById('code-editor-area');
+            const fileLabel = document.getElementById('code-filename');
+            
+            let content = "";
+            if (currentPreviewFile.endsWith('.html') || currentPreviewFile.endsWith('.php')) {
+                const doc = document.getElementById('preview-frame').contentDocument;
+                // Prefer saving the full content including Head
+                if(doc && doc.documentElement && typeof getCleanFullContent === 'function') {
+                     content = getCleanFullContent(doc);
+                } else {
+                     content = generatedFiles[currentPreviewFile] || "";
+                }
+            } else {
+                content = generatedFiles[currentPreviewFile] || "";
+            }
+
+            if(editor.value !== content) {
+                editor.value = content;
+            }
+            fileLabel.textContent = currentPreviewFile;
+        }
+    }
+
+    window.highlightCodeFromPreview = function(data) {
+        const container = document.getElementById('code-pane-container');
+        if (!container || container.style.display === 'none' || container.style.display === '') {
+             return; 
+        }
+
+        const editor = document.getElementById('code-editor-area');
+        if (!editor) return;
+
+        const source = editor.value;
+        const tagName = data.tagName.toLowerCase();
+        let foundIndex = -1;
+        let matchLength = 0;
+
+        function escapeRegExp(string) {
+            return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); 
+        }
+
+        if (data.id) {
+            const idPattern = new RegExp(`<${tagName}[^>]*\\bid=["']${escapeRegExp(data.id)}["']`, 'i');
+            const match = source.match(idPattern);
+            if(match) {
+                foundIndex = match.index;
+                matchLength = match[0].length;
+            }
+        } 
+        
+        if (foundIndex === -1 && data.className) {
+             const cleanClass = data.className.trim();
+             if(cleanClass.length > 0) {
+                 const classPattern = new RegExp(`<${tagName}[^>]*\\bclass=["'][^"']*${escapeRegExp(cleanClass)}[^"']*["']`, 'i');
+                 const match = source.match(classPattern);
+                 if(match) {
+                     foundIndex = match.index;
+                     matchLength = match[0].length;
+                 }
+             }
+        }
+
+        if (foundIndex === -1 && data.text && data.text.length > 5) {
+            const safeText = escapeRegExp(data.text);
+            const regexPattern = safeText.replace(/\s+/g, '[\\s\\n\\r]+');
+            const textRegex = new RegExp(regexPattern, 'i');
+            const match = source.match(textRegex);
+            
+            if (match) {
+                const textIndex = match.index;
+                const preText = source.substring(0, textIndex);
+                const lastTagIndex = preText.lastIndexOf(`<${tagName}`);
+                
+                if (lastTagIndex !== -1 && (textIndex - lastTagIndex) < 1000) {
+                     foundIndex = lastTagIndex;
+                     const tagEnd = source.indexOf('>', lastTagIndex);
+                     matchLength = (tagEnd !== -1) ? (tagEnd - lastTagIndex + 1) : tagName.length + 2;
+                }
+            }
+        }
+
+        if (foundIndex !== -1) {
+            editor.focus({preventScroll: true});
+            editor.setSelectionRange(foundIndex, foundIndex + matchLength);
+            
+            const textBefore = source.substring(0, foundIndex);
+            const lineCount = (textBefore.match(/\n/g) || []).length;
+            const lineHeight = 18; 
+            
+            editor.scrollTop = (lineCount * lineHeight) - (editor.clientHeight / 2);
+            
+            editor.classList.remove('highlight-flash');
+            void editor.offsetWidth; 
+            editor.classList.add('highlight-flash');
+        }
+    };
+
+    function applyCodeChanges() {
+        const editor = document.getElementById('code-editor-area');
+        const newContent = editor.value;
+        
+        if(currentPreviewFile) {
+            generatedFiles[currentPreviewFile] = newContent;
+            
+            if(currentPreviewFile.endsWith('.html')) {
+                const iframe = document.getElementById('preview-frame');
+                
+                let previewHtml = newContent;
+                const cssContent = generatedFiles['styles.css'];
+                
+                // --- GOAL 2 FIX: PREVENT ALIGNMENT COLLAPSE ON CODE APPLY ---
+                if (!previewHtml.trim().toLowerCase().startsWith('<!doctype')) {
+                    previewHtml = '<!DOCTYPE html>\n' + previewHtml;
+                }
+                if (!previewHtml.includes('name="viewport"')) {
+                    if (previewHtml.includes('<head>')) {
+                        previewHtml = previewHtml.replace('<head>', '<head>\n<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">');
+                    } else if (previewHtml.includes('<html')) {
+                        previewHtml = previewHtml.replace(/<html[^>]*>/i, '$&\n<head>\n<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">\n</head>');
+                    } else {
+                        previewHtml = '<!DOCTYPE html>\n<html>\n<head>\n<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">\n</head>\n<body>\n' + previewHtml + '\n</body>\n</html>';
+                    }
+                }
+                
+                if (cssContent) {
+                    previewHtml = previewHtml.replace(/<link[^>]+href=["']styles\.css["'][^>]*>/i, '');
+                    if(previewHtml.includes('</head>')) {
+                        previewHtml = previewHtml.replace('</head>', `<style id="live-styles">${cssContent}</style></head>`);
+                    } else {
+                        previewHtml += `<style id="live-styles">${cssContent}</style>`;
+                    }
+                }
+                
+                iframe.srcdoc = previewHtml;
+                iframe.onload = () => { 
+                    if(typeof initEditor === 'function') initEditor(iframe); 
+                    if(typeof fixHeroDisplay === 'function') fixHeroDisplay();
+                    if(typeof captureState === 'function') captureState(); 
+                    if(typeof setupPreviewPaymentListeners === 'function') setupPreviewPaymentListeners();
+                };
+
+                fetch('/save', {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: currentPreviewFile, new_body_content: newContent })
+                }).then(r=>r.json()).then(d => {
+                    updateStatus("✅ Code saved & applied.");
+                    enableSaveButton();
+                });
+
+            } else if (currentPreviewFile === 'styles.css') {
+                fetch('/save_css', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ new_css_content: newContent })
+                }).then(r=>r.json()).then(d => {
+                    updateStatus("✅ CSS saved. Reloading preview...");
+                    document.getElementById('preview-frame').contentWindow.location.reload();
+                    enableSaveButton();
+                });
+            } else if (currentPreviewFile.endsWith('.php')) {
+                 fetch('/save', {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: currentPreviewFile, new_body_content: newContent })
+                }).then(r=>r.json()).then(d => {
+                    updateStatus("✅ PHP saved. Reloading...");
+                    document.getElementById('preview-frame').contentWindow.location.reload();
+                    enableSaveButton();
+                });
+            }
+        }
+    }
+
+    function injectNewControls() {
+        const actionRight = document.getElementById('action-buttons-right');
+        if (actionRight && !document.getElementById('notif-btn')) {
+            const notifWrapper = document.createElement('div');
+            notifWrapper.style.position = 'relative';
+            notifWrapper.style.display = 'inline-block';
+            notifWrapper.innerHTML = `
+                <button id="notif-btn" onclick="toggleNotifications(event)" style="background:transparent; border:none; font-size:1.2em; cursor:pointer;" title="Messages">✉️</button>
+                <div id="notif-badge" style="position:absolute; top:-2px; right:-2px; background:red; color:white; border-radius:50%; width:16px; height:16px; font-size:10px; display:none; justify-content:center; align-items:center;">0</div>
+            `;
+            const profileContainer = document.getElementById('profile-container');
+            actionRight.insertBefore(notifWrapper, profileContainer);
+        }
+    }
+
+    // FIX ISSUE 2 (Firefox 90% hang / 0% stuck error fixed globally)
+    function loadPreview(filename) {
+        return new Promise((resolve) => {
+            window.lastValidRange = null; 
+            
+            // --- GOAL 1 & 2 FIX: Synchronously lock and clear history before the iframe even begins loading ---
+            window.isSwitchingPage = true; 
+            window.localHistory = []; 
+            window.localHistoryIndex = -1;
+            
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof checkHistoryStatus === 'function') checkHistoryStatus();
+
+            if (generatedFiles[filename]) {
+                const iframe = document.getElementById('preview-frame');
+                iframe.removeAttribute('srcdoc'); 
+                
+                const url = `/preview/${filename}?t=` + new Date().getTime();
+                currentPreviewFile = filename;
+                
+                if(typeof updatePageDropdown === 'function') updatePageDropdown(filename);
+                
+                iframe.onload = () => { 
+                    window.isSwitchingPage = false; // Unlock capture
+                    if(typeof initEditor === 'function') initEditor(iframe); 
+                    
+                    window.localHistory = []; 
+                    window.localHistoryIndex = -1; 
+                    
+                    if(typeof captureState === 'function') captureState();
+                    if(typeof setupPreviewPaymentListeners === 'function') setupPreviewPaymentListeners();
+                    resolve(); 
+                };
+                
+                setTimeout(() => {
+                    iframe.src = url;
+                }, 50);
+            } else { 
+                window.isSwitchingPage = false;
+                resolve(); 
+            }
+        });
+    }
+
+    // ==========================================
+    // UNDO / REDO & SAVE STATE LOGIC (FIXED)
+    // ==========================================
+    window.captureState = function(force = false) { 
+        if (window.isSwitchingPage) return; // FIX 1 & 2: Prevent capturing during load
+        if (typeof isRestoring !== 'undefined' && isRestoring && !force) return; 
+        
+        const iframe = document.getElementById('preview-frame');
+        if(!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document; 
+        if (!doc || !doc.body) return; 
+        
+        let html = (typeof getCleanFullContent === 'function') ? getCleanFullContent(doc) : doc.body.innerHTML;
+        if (!html) return; 
+
+        // FIX 1: Strict guard against the loading screen
+        if (html.includes("Building your site") || html.includes("Live preview will appear here shortly")) {
+            return; 
+        }
+        
+        if (typeof window.localHistory === 'undefined' || !window.localHistory) {
+            window.localHistory = [];
+            window.localHistoryIndex = -1;
+        }
+
+        if (window.localHistoryIndex >= 0 && window.localHistory[window.localHistoryIndex] === html) {
+            return;
+        }
+
+        if (window.localHistoryIndex < window.localHistory.length - 1) {
+            window.localHistory = window.localHistory.slice(0, window.localHistoryIndex + 1);
+        }
+        
+        window.localHistory.push(html); 
+        window.localHistoryIndex++; 
+        
+        if (window.localHistory.length > 50) { 
+            window.localHistory.shift(); 
+            window.localHistoryIndex--; 
+        }
+        
+        if(typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+        if(typeof currentPreviewFile !== 'undefined' && currentPreviewFile) {
+            if (typeof generatedFiles !== 'undefined') {
+                generatedFiles[currentPreviewFile] = html;
+            }
+        }
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+    };
+
+    window.undoAction = function() {
+        if (window.isSwitchingPage) return; // FIX 2: Protect during load
+        if (window.typingTimer) clearTimeout(window.typingTimer);
+        
+        if (window.localHistoryIndex > 0) {
+            window.localHistoryIndex--;
+            window.restoreHTML(window.localHistory[window.localHistoryIndex]);
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof updateStatus === 'function') updateStatus("⏪ Undid last action.");
+        }
+    };
+
+    window.redoAction = function() {
+        if (window.isSwitchingPage) return; // FIX 2: Protect during load
+        if (window.typingTimer) clearTimeout(window.typingTimer);
+        
+        if (window.localHistoryIndex < window.localHistory.length - 1) {
+            window.localHistoryIndex++;
+            window.restoreHTML(window.localHistory[window.localHistoryIndex]);
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof updateStatus === 'function') updateStatus("⏩ Redid last action.");
+        }
+    };
+
+    window.restoreHTML = function(html) { 
+        if (!html) return; 
+        
+        isRestoring = true; 
+        if (window.typingTimer) clearTimeout(window.typingTimer);
+        
+        const iframe = document.getElementById('preview-frame'); 
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        if (typeof editorObserver !== 'undefined' && editorObserver) editorObserver.disconnect();
+
+        if (html.trim().toLowerCase().startsWith('<html')) {
+            const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+            if(htmlMatch && htmlMatch[1]) {
+                doc.documentElement.innerHTML = htmlMatch[1];
+            } else {
+                doc.documentElement.innerHTML = html;
+            }
+        } else {
+            doc.body.innerHTML = html;
+        }
+
+        currentBgElementToReplace = null; 
+        currentImageToReplace = null; 
+        
+        if (typeof window.initEditor === 'function') window.initEditor(iframe); 
+        
+        if (typeof window.enforceResponsive === 'function') window.enforceResponsive(doc);
+        
+        if(typeof currentPreviewFile !== 'undefined' && currentPreviewFile) {
+            if (typeof generatedFiles !== 'undefined') {
+                generatedFiles[currentPreviewFile] = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+            }
+        }
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+        
+        setTimeout(() => { isRestoring = false; }, 300);
+    };
+
+    window.updateUndoRedoButtons = function() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if(undoBtn) undoBtn.disabled = (window.localHistoryIndex <= 0);
+        if(redoBtn) redoBtn.disabled = (window.localHistoryIndex >= window.localHistory.length - 1);
+    };
+
+    function enableSaveButton() {
+        const saveBtn = document.getElementById('save-btn');
+        if (saveBtn) {
+            saveBtn.disabled = false;
+            saveBtn.textContent = "💾 Save";
+        }
+    }
+
+    function safeCloseModal(modalId) {
+        const m = document.getElementById(modalId);
+        if (m) m.style.display = 'none';
+        document.body.style.pointerEvents = 'auto';
+    }
+    
+    window.closeUserModal = () => safeCloseModal('user-modal');
+    window.closeUserTypeModal = () => safeCloseModal('user-type-modal');
+    window.closeAdminUserModal = () => safeCloseModal('user-modal'); 
+    window.closeAdminUserTypeModal = () => safeCloseModal('user-type-modal');
+
+    // ==========================================
+    // NEW: HELP, HIRE & FEEDBACK SLIDER LOGIC
+    // ==========================================
+
+    window.toggleHelpSlider = function(e) {
+        if (e) e.stopPropagation();
+        const helpSlider = document.getElementById('help-slider');
+        const slider = document.getElementById('elements-slider');
+        const uiSlider = document.getElementById('ui-elements-slider');
+        const overlay = document.getElementById('slider-overlay');
+
+        if (slider) slider.classList.remove('open', 'active');
+        if (uiSlider) uiSlider.classList.remove('active');
+
+        if (helpSlider) {
+            if (helpSlider.classList.contains('active')) {
+                closeHelpSlider();
+            } else {
+                helpSlider.classList.add('active');
+                if (overlay) overlay.style.display = 'block';
+                loadHelpArticles();
+            }
+        }
+    };
+
+    window.closeHelpSlider = function() {
+        const helpSlider = document.getElementById('help-slider');
+        const overlay = document.getElementById('slider-overlay');
+        if (helpSlider) helpSlider.classList.remove('active');
+
+        const slider = document.getElementById('elements-slider');
+        const uiSlider = document.getElementById('ui-elements-slider');
+        if (overlay && (!slider || (!slider.classList.contains('open') && !slider.classList.contains('active'))) && (!uiSlider || !uiSlider.classList.contains('active'))) {
+            overlay.style.display = 'none';
+        }
+    };
+
+    window.switchHelpTab = function(tabName, btnEl) {
+        document.querySelectorAll('.help-pane-content').forEach(pane => pane.style.display = 'none');
+        document.querySelectorAll('.help-tab-btn').forEach(btn => btn.classList.remove('active'));
+
+        const targetPane = document.getElementById('help-pane-' + tabName);
+        if (targetPane) targetPane.style.display = 'block';
+        if (btnEl) btnEl.classList.add('active');
+
+        if (tabName === 'kb') loadHelpArticles();
+        if (tabName === 'hire' && typeof currentUser !== 'undefined' && currentUser) {
+            const nameEl = document.getElementById('hire-req-name');
+            const emailEl = document.getElementById('hire-req-email');
+            const phoneEl = document.getElementById('hire-req-phone');
+            if (nameEl && !nameEl.value) nameEl.value = currentUser.full_name || currentUser.username || '';
+            if (emailEl && !emailEl.value) emailEl.value = currentUser.email || '';
+            if (phoneEl && !phoneEl.value) phoneEl.value = currentUser.phone_number || '';
+        }
+    };
+
+    window.allHelpArticlesList = [];
+
+    window.loadHelpArticles = function() {
+        const listEl = document.getElementById('help-kb-list');
+        if (!listEl) return;
+
+        fetch('/api/help/articles')
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && data.articles) {
+                window.allHelpArticlesList = data.articles;
+                renderHelpArticlesList(window.allHelpArticlesList);
+            } else {
+                listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">No knowledge base questions found.</div>';
+            }
+        })
+        .catch(err => {
+            listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#dc3545;">Failed to load knowledge base.</div>';
+            console.error(err);
+        });
+    };
+
+    window.renderHelpArticlesList = function(articles) {
+        const listEl = document.getElementById('help-kb-list');
+        if (!listEl) return;
+        listEl.innerHTML = '';
+
+        if (!articles || articles.length === 0) {
+            listEl.innerHTML = '<div style="text-align:center; padding:20px; color:#888;">No questions match your search.</div>';
+            return;
+        }
+
+        let currentCat = null;
+        articles.forEach(art => {
+            if (art.category !== currentCat) {
+                currentCat = art.category;
+                const catHeader = document.createElement('div');
+                catHeader.style.cssText = 'font-size:11px; font-weight:bold; color:#007bff; text-transform:uppercase; margin-top:8px; padding-bottom:3px; border-bottom:1px solid #eef;';
+                catHeader.textContent = currentCat || 'General';
+                listEl.appendChild(catHeader);
+            }
+
+            const itemDiv = document.createElement('div');
+            itemDiv.style.cssText = 'border:1px solid #eef; border-radius:6px; overflow:hidden; background:#fdfdfd;';
+            itemDiv.innerHTML = `
+                <div onclick="const ans = this.nextElementSibling; ans.style.display = ans.style.display === 'none' ? 'block' : 'none';" style="padding:10px 12px; font-size:13px; font-weight:600; color:#333; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff;">
+                    <span>${art.question}</span>
+                    <span style="font-size:10px; color:#888;">▼</span>
+                </div>
+                <div style="display:none; padding:10px 12px; font-size:12px; color:#555; line-height:1.5; border-top:1px dashed #eee; background:#fafbfc;">
+                    ${art.answer.replace(/\n/g, '<br>')}
+                </div>
+            `;
+            listEl.appendChild(itemDiv);
+        });
+    };
+
+    window.filterHelpArticles = function() {
+        const inputEl = document.getElementById('help-kb-search-input');
+        if (!inputEl) return;
+        const query = inputEl.value.toLowerCase().trim();
+
+        if (!query) {
+            renderHelpArticlesList(window.allHelpArticlesList);
+            return;
+        }
+
+        const filtered = window.allHelpArticlesList.filter(art => 
+            (art.question && art.question.toLowerCase().includes(query)) ||
+            (art.answer && art.answer.toLowerCase().includes(query)) ||
+            (art.category && art.category.toLowerCase().includes(query))
+        );
+        renderHelpArticlesList(filtered);
+    };
+
+    window.submitHireDeveloperForm = function() {
+        const name = document.getElementById('hire-req-name')?.value.trim();
+        const email = document.getElementById('hire-req-email')?.value.trim();
+        const phone = document.getElementById('hire-req-phone')?.value.trim();
+        const country = document.getElementById('hire-req-country')?.value.trim();
+        const desc = document.getElementById('hire-req-desc')?.value.trim();
+
+        if (!name || !email || !desc) {
+            alert("Please fill in Name, Email, and Project Description.");
+            return;
+        }
+
+        fetch('/api/hire/request', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email, phone, country, description: desc })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ " + data.message);
+                document.getElementById('hire-req-desc').value = '';
+            } else {
+                alert("❌ Error: " + data.error);
+            }
+        })
+        .catch(err => {
+            alert("Network error while submitting hiring request.");
+            console.error(err);
+        });
+    };
+
+    window.submitAppFeedbackForm = function() {
+        const selectedStar = document.querySelector('input[name="app-rating"]:checked');
+        const rating = selectedStar ? parseInt(selectedStar.value) : 5;
+        const message = document.getElementById('app-feedback-msg')?.value.trim();
+
+        fetch('/api/feedback/submit', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ rating, message })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ " + data.message);
+                if (document.getElementById('app-feedback-msg')) document.getElementById('app-feedback-msg').value = '';
+            } else {
+                alert("❌ Error: " + data.error);
+            }
+        })
+        .catch(err => {
+            alert("Network error while sending feedback.");
+            console.error(err);
+        });
+    };
+
+    // ==========================================
+    // EVENT LISTENERS & INITIALIZATION
+    // ==========================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if(typeof initDarkMode === 'function') initDarkMode(); 
+        if(typeof initChatState === 'function') initChatState(); 
+        injectCodeButton(); 
+        injectNewControls(); 
+        
+        if (typeof checkNotifications === 'function') checkNotifications(); 
+        
+        const voiceEditButton = document.getElementById('voice-edit-btn');
+        const promptInput = document.getElementById('prompt-input');
+
+        if (voiceEditButton && !('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { 
+            voiceEditButton.disabled = true; 
+        }
+        
+        if (promptInput) {
+            promptInput.addEventListener('keydown', (e) => { 
+                if (e.key === 'Enter' && !e.shiftKey) { 
+                    e.preventDefault(); 
+                    if(typeof generateWebsite === 'function') generateWebsite(); 
+                } 
+            });
+        }
+        
+        const loginId = document.getElementById('login-id');
+        const loginPass = document.getElementById('login-pass');
+        if (loginId && loginPass) {
+            const handleEnter = (e) => { if (e.key === 'Enter' && typeof handleLogin === 'function') handleLogin(); };
+            loginId.addEventListener('keypress', handleEnter);
+            loginPass.addEventListener('keypress', handleEnter);
+        }
+        
+        if (typeof checkAuth === 'function') checkAuth(); 
+        if (typeof updatePreviewControls === 'function') updatePreviewControls();
+
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+                e.preventDefault();
+                e.stopPropagation();
+                const codeContainer = document.getElementById('code-pane-container');
+                if(codeContainer && codeContainer.style.display === 'flex') {
+                    applyCodeChanges();
+                } else if(document.getElementById('save-btn') && !document.getElementById('save-btn').disabled) {
+                    if (typeof saveContent === 'function') saveContent();
+                }
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.isSwitchingPage) return; // FIX 2: Prevent undoing previous template during load
+                if(e.shiftKey) { if(document.getElementById('redo-btn')) document.getElementById('redo-btn').click(); } 
+                else { if(document.getElementById('undo-btn')) document.getElementById('undo-btn').click(); }
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
+                e.preventDefault();
+                e.stopPropagation();
+                if (window.isSwitchingPage) return; // FIX 2
+                if(document.getElementById('redo-btn')) document.getElementById('redo-btn').click();
+            }
+        });
+
+        // GLOBAL CLICK HANDLER
+        window.addEventListener('click', function(e) {
+            const profileIcon = document.getElementById('profile-icon');
+            const profileMenu = document.getElementById('profile-menu');
+            if (profileIcon && profileMenu) {
+                if (!profileIcon.contains(e.target) && !profileMenu.contains(e.target)) {
+                    profileMenu.style.display = 'none';
+                }
+            }
+            
+            const projectBtn = document.getElementById('project-toggle-btn');
+            const projectMenu = document.getElementById('project-menu');
+            if (projectBtn && projectMenu) {
+                if (!projectBtn.contains(e.target) && !projectMenu.contains(e.target)) {
+                    projectMenu.style.display = 'none';
+                }
+            }
+
+            // --- Elements/Templates/Help Slider Auto-Close Logic ---
+            const slider = document.getElementById('elements-slider'); // Templates drawer
+            const uiSlider = document.getElementById('ui-elements-slider'); // Elements drawer
+            const helpSlider = document.getElementById('help-slider'); // Help drawer
+            
+            const sidebarBtn = document.getElementById('sidebar-add-btn'); // Templates btn
+            const uiSidebarBtn = document.getElementById('sidebar-elements-btn'); // Elements btn
+            const settingsBtn = document.getElementById('sidebar-settings-btn'); // Settings btn
+            const helpSidebarBtn = document.getElementById('sidebar-help-btn'); // Help btn
+            
+            const templateModal = document.getElementById('admin-template-modal');
+            
+            // 1. Templates Slider Close Logic
+            if (slider && (slider.classList.contains('open') || slider.classList.contains('active'))) {
+                let clickedOutside = !slider.contains(e.target) && (!sidebarBtn || !sidebarBtn.contains(e.target));
+                let clickedElementsBtn = uiSidebarBtn && uiSidebarBtn.contains(e.target);
+                let clickedSettingsBtn = settingsBtn && settingsBtn.contains(e.target);
+                let clickedHelpBtn = helpSidebarBtn && helpSidebarBtn.contains(e.target);
+                
+                let notInModal = !templateModal || (!templateModal.contains(e.target) && templateModal.style.display !== 'flex');
+                let notInAuthModal = !e.target.closest('.auth-modal');
+
+                if ((clickedOutside && notInModal && notInAuthModal) || clickedElementsBtn || clickedSettingsBtn || clickedHelpBtn) {
+                    if (typeof closeElementsSlider === 'function') closeElementsSlider();
+                    else slider.classList.remove('open', 'active');
+                }
+            }
+
+            // 2. Elements Slider Close Logic
+            if (uiSlider && uiSlider.classList.contains('active')) {
+                let clickedOutsideUi = !uiSlider.contains(e.target) && (!uiSidebarBtn || !uiSidebarBtn.contains(e.target));
+                let clickedTemplatesBtn = sidebarBtn && sidebarBtn.contains(e.target);
+                let clickedSettingsBtn = settingsBtn && settingsBtn.contains(e.target);
+                let clickedHelpBtn = helpSidebarBtn && helpSidebarBtn.contains(e.target);
+
+                if (clickedOutsideUi || clickedTemplatesBtn || clickedSettingsBtn || clickedHelpBtn) {
+                    if (typeof closeUiElementsSlider === 'function') closeUiElementsSlider();
+                    else uiSlider.classList.remove('active');
+                }
+            }
+
+            // 3. Help Slider Close Logic
+            if (helpSlider && helpSlider.classList.contains('active')) {
+                let clickedOutsideHelp = !helpSlider.contains(e.target) && (!helpSidebarBtn || !helpSidebarBtn.contains(e.target));
+                let clickedTemplatesBtn = sidebarBtn && sidebarBtn.contains(e.target);
+                let clickedElementsBtn = uiSidebarBtn && uiSidebarBtn.contains(e.target);
+                let clickedSettingsBtn = settingsBtn && settingsBtn.contains(e.target);
+
+                if (clickedOutsideHelp || clickedTemplatesBtn || clickedElementsBtn || clickedSettingsBtn) {
+                    if (typeof closeHelpSlider === 'function') closeHelpSlider();
+                    else helpSlider.classList.remove('active');
+                }
+            }
+
+            if(e.target && e.target.textContent && e.target.textContent.trim() === 'Cancel' && e.target.closest('.auth-modal')) {
+                e.target.closest('.auth-modal').style.display = 'none';
+                document.body.style.pointerEvents = 'auto';
+            }
+        });
+        
+        if (typeof checkNotifications === 'function') setInterval(checkNotifications, 60000);
+    });
+</script>

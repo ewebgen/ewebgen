@@ -1,0 +1,831 @@
+{% include 'index_modals.html' %}
+
+    <style>
+        .eweb-vert-tab {
+            background: transparent; border: none; padding: 15px 20px; cursor: pointer; font-weight: bold;
+            color: #555; text-align: left; border-left: 4px solid transparent; width: 100%; transition: 0.2s;
+        }
+        .eweb-vert-tab:hover { background: #f0f0f0; }
+        .eweb-vert-tab.active { background: #e8f4fd; color: #007bff; border-left: 4px solid #007bff; }
+    </style>
+
+    <div id="ewebgen-settings-modal" class="auth-modal" style="display:none !important; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:999999; justify-content:center; align-items:center;">
+        <div class="auth-box" style="width:900px; max-width:95vw; height:75vh; min-height:500px; padding:0; display:flex; flex-direction:column; background:white; border-radius:10px; overflow:hidden;">
+            
+            <div style="padding:20px; border-bottom:1px solid #eee; display:flex; justify-content:space-between; align-items:center; background:#f8f9fa;">
+                <h2 style="margin:0; color:#333;" data-i18n="us_title">⚙️ Personal Settings</h2>
+                <button onclick="closeEwebgenSettings()" style="background:none; border:none; font-size:1.5em; cursor:pointer; color:#777;">&times;</button>
+            </div>
+
+            <div style="display:flex; flex-grow:1; overflow:hidden;">
+                <div style="width: 250px; background: #fdfdfd; border-right: 1px solid #eee; display: flex; flex-direction: column; overflow-y: auto;">
+                    <button class="eweb-vert-tab active" onclick="switchEwebVertTab('eweb-tab-ga', this)" data-i18n="us_ga">📈 Google Analytics</button>
+                    <button class="eweb-vert-tab" onclick="switchEwebVertTab('eweb-tab-ai', this)" data-i18n="us_ai_gen">🧠 AI Generation</button>
+                    <button class="eweb-vert-tab" onclick="switchEwebVertTab('eweb-tab-contact', this)" data-i18n="us_contact">📧 Contact & SMTP</button>
+                </div>
+
+                <div style="flex: 1; padding: 25px; overflow-y: auto; text-align: left;">
+                    
+                    <div id="eweb-tab-ga" class="eweb-tab-content" style="display:block;">
+                        <h3 style="margin-top:0; color:#333;">Google Analytics Tracking</h3>
+                        <p style="color:#666; font-size:0.9em; margin-bottom:15px;">Paste your entire Google Analytics or Tag Manager <code>&lt;script&gt;</code> code here. It will automatically be injected into the <code>&lt;head&gt;</code> of all your generated website pages.</p>
+                        
+                        <textarea id="eweb-ga-code" class="auth-input" style="height: 250px; font-family: monospace; font-size:12px; background:#f8f9fa;" placeholder="&#10;<script async src='https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX'></script>&#10;<script>&#10;  window.dataLayer = window.dataLayer || [];&#10;  function gtag(){dataLayer.push(arguments);}&#10;  gtag('js', new Date());&#10;  gtag('config', 'G-XXXXXXX');&#10;</script>"></textarea>
+                        
+                        <button class="auth-btn" style="width:auto; margin-top: 15px; background:#007bff;" onclick="saveEwebSettings('analytics')">Save Analytics Code</button>
+                    </div>
+
+                    <div id="eweb-tab-ai" class="eweb-tab-content" style="display:none !important;">
+                        <h3 style="margin-top:0; color:#333; border-bottom:1px solid #eee; padding-bottom:10px;">AI Models & Structure</h3>
+                        
+                        <div id="eweb-ai-locked" style="display:none !important; text-align:center; padding: 30px; background:#fff3cd; color:#856404; border-radius: 5px; border: 1px solid #ffeeba;">
+                            <span style="font-size: 2em; display:block; margin-bottom: 10px;">🔒</span>
+                            <strong style="font-size: 1.1em;">Feature Locked</strong>
+                            <p style="margin-top: 5px;">Your current plan does not allow using personal AI API Keys or Custom Models.</p>
+                        </div>
+
+                        <div id="eweb-ai-unlocked" style="display:block;">
+                            
+                            <label style="font-weight:bold; color:#333;">Active AI Provider</label>
+                            <select id="eweb-ai-provider" class="auth-input" onchange="toggleEwebAIPanels()">
+                                <option value="default">Default as Admin AI</option>
+                                <option value="gemini">Google Gemini</option>
+                                <option value="openai">OpenAI</option>
+                                <option value="claude">Anthropic Claude</option>
+                                <option value="deepseek">DeepSeek</option>
+                                <option value="grok">xAI Grok</option>
+                                <option value="meta">Meta (Groq)</option>
+                                <option value="perplexity">Perplexity</option>
+                            </select>
+
+                            <div style="display:flex; gap:15px;">
+                                <div style="flex:1;">
+                                    <label style="font-weight:bold; color:#555;">API Key</label>
+                                    <div id="eweb-panel-gemini" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-gemini-key" class="auth-input" placeholder="AIzaSy..."></div>
+                                    <div id="eweb-panel-openai" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-openai-key" class="auth-input" placeholder="sk-..."></div>
+                                    <div id="eweb-panel-claude" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-claude-key" class="auth-input" placeholder="sk-ant-..."></div>
+                                    <div id="eweb-panel-deepseek" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-deepseek-key" class="auth-input" placeholder="sk-..."></div>
+                                    <div id="eweb-panel-grok" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-xai-key" class="auth-input" placeholder="xai-..."></div>
+                                    <div id="eweb-panel-meta" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-meta-key" class="auth-input" placeholder="gsk_..."></div>
+                                    <div id="eweb-panel-perplexity" class="eweb-panel" style="display:none !important;"><input type="password" id="eweb-perplexity-key" class="auth-input" placeholder="pplx-..."></div>
+                                </div>
+                                
+                                <div style="flex:1;">
+                                    <label style="font-weight:bold; color:#555;">AI Model</label>
+                                    
+                                    <div id="eweb-model-panel-gemini" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-gemini" class="auth-input" onchange="window.toggleEwebModelInput('gemini')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="gemini-1.5-flash">gemini-1.5-flash</option>
+                                            <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                                            <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-gemini" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. gemini-1.5-pro">
+                                        
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-gemini" class="auth-input" onchange="window.toggleEwebTokenInput('gemini')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-gemini" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+                                    
+                                    <div id="eweb-model-panel-openai" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-openai" class="auth-input" onchange="window.toggleEwebModelInput('openai')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="gpt-4o">gpt-4o</option>
+                                            <option value="gpt-4o-mini">gpt-4o-mini</option>
+                                            <option value="o1-mini">o1-mini</option>
+                                            <option value="gpt-4-turbo">gpt-4-turbo</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-openai" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. gpt-4o">
+
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-openai" class="auth-input" onchange="window.toggleEwebTokenInput('openai')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-openai" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-claude" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-claude" class="auth-input" onchange="window.toggleEwebModelInput('claude')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="claude-3-5-sonnet-20241022">claude-3-5-sonnet-20241022</option>
+                                            <option value="claude-3-5-haiku-20241022">claude-3-5-haiku-20241022</option>
+                                            <option value="claude-3-opus-20240229">claude-3-opus-20240229</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-claude" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. claude-3-5-sonnet-v2">
+
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-claude" class="auth-input" onchange="window.toggleEwebTokenInput('claude')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-claude" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-deepseek" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-deepseek" class="auth-input" onchange="window.toggleEwebModelInput('deepseek')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="deepseek-chat">deepseek-chat</option>
+                                            <option value="deepseek-coder">deepseek-coder</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-deepseek" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. deepseek-reasoner">
+
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-deepseek" class="auth-input" onchange="window.toggleEwebTokenInput('deepseek')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-deepseek" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-grok" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-grok" class="auth-input" onchange="window.toggleEwebModelInput('grok')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="grok-4.3">grok-4.3</option>
+                                            <option value="grok-4">grok-4</option>
+                                            <option value="grok-4-fast">grok-4-fast</option>
+                                            <option value="grok-3">grok-3</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-grok" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. grok-4.3">
+
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-grok" class="auth-input" onchange="window.toggleEwebTokenInput('grok')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-grok" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-meta" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-meta" class="auth-input" onchange="window.toggleEwebModelInput('meta')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="llama-3.3-70b-versatile">llama-3.3-70b-versatile</option>
+                                            <option value="meta-llama/llama-4-maverick-17b-128e-instruct">meta-llama/llama-4-maverick-17b-128e-instruct</option>
+                                            <option value="meta-llama/llama-4-scout-17b-16e-instruct">meta-llama/llama-4-scout-17b-16e-instruct</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-meta" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. llama-3.3-70b-versatile">
+
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-meta" class="auth-input" onchange="window.toggleEwebTokenInput('meta')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-meta" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+
+                                    <div id="eweb-model-panel-perplexity" class="eweb-model-panel" style="display:none;">
+                                        <select id="eweb-model-perplexity" class="auth-input" onchange="window.toggleEwebModelInput('perplexity')">
+                                            <option value="default">Default Admin Model</option>
+                                            <option value="sonar-pro">sonar-pro</option>
+                                            <option value="sonar">sonar</option>
+                                            <option value="sonar-reasoning-pro">sonar-reasoning-pro</option>
+                                            <option value="other">Other (Custom Model)...</option>
+                                        </select>
+                                        <input type="text" id="eweb-custom-model-perplexity" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. sonar-reasoning">
+
+                                        <label style="font-weight:bold; color:#555; margin-top:10px; display:block;">Token Limit</label>
+                                        <select id="eweb-token-perplexity" class="auth-input" onchange="window.toggleEwebTokenInput('perplexity')">
+                                            <option value="default">Default Admin Token Limit</option>
+                                            <option value="maximum">Maximum</option>
+                                            <option value="other">Custom Limit...</option>
+                                        </select>
+                                        <input type="number" id="eweb-custom-token-perplexity" class="auth-input" style="display:none; margin-top:5px;" placeholder="e.g. 4096">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr style="border:none; border-top:1px solid #eee; margin:20px 0;">
+
+                            <h4 style="margin-top:0; color:#333;">Default Pages Structure</h4>
+                            <p style="font-size:0.9em; color:#666;">Define which pages the AI should generate by default.</p>
+                            <select id="eweb-pages-mode" class="auth-input" onchange="window.toggleEwebPagesInput()">
+                                <option value="default">Default as Admin (Recommended)</option>
+                                <option value="manual">Manual (Custom Pages)</option>
+                            </select>
+                            
+                            <div id="eweb-pages-wrapper" style="display:none !important; margin-top:10px; background:#f8f9fa; padding:15px; border:1px solid #ddd; border-radius:5px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                    <strong style="color:#555;">Your Pages</strong>
+                                    <button onclick="window.addEwebPageRow()" style="background:#17a2b8; color:white; border:none; padding:5px 10px; border-radius:4px; cursor:pointer; font-size:0.9em;">+ Add Page</button>
+                                </div>
+                                <div id="eweb-pages-ui-list" style="max-height:200px; overflow-y:auto; padding-right:5px;"></div>
+                                <textarea id="eweb-pages-json" style="display:none !important;"></textarea>
+                            </div>
+
+                            <button class="auth-btn" style="width:auto; margin-top: 20px; background:#28a745;" onclick="saveEwebSettings('ai')">Save AI Settings</button>
+                        </div>
+                    </div>
+
+                    <div id="eweb-tab-contact" class="eweb-tab-content" style="display:none !important;">
+                        <h3 style="margin:0; color:#333;">📧 Contact Form & SMTP</h3>
+                        <p style="color:#666; font-size:0.9em; margin-bottom:15px;">Configure where your website's contact form submissions are sent.</p>
+                        
+                        <label style="color:#555; font-weight:bold;">Receiving Email Address</label>
+                        <input type="email" id="eweb-contact-email" class="auth-input" placeholder="e.g. hello@yourdomain.com">
+                        
+                        <div style="margin-top:20px; padding:15px; background:#f8f9fa; border-radius:5px; border:1px solid #ddd;">
+                            <label style="font-size:1em; font-weight:bold; color:#333; margin-bottom:10px; display:block;">Custom SMTP Credentials <span style="font-size:0.8em; color:#888; font-weight:normal;">(Optional - Overrides System Default)</span></label>
+                            <input type="text" id="eweb-smtp-host" class="auth-input" style="margin-top:5px;" placeholder="SMTP Host (e.g., smtp.gmail.com)">
+                            <div style="display:flex; gap:10px;">
+                                <input type="text" id="eweb-smtp-port" class="auth-input" style="flex:1;" placeholder="Port (e.g., 587)">
+                                <input type="text" id="eweb-smtp-user" class="auth-input" style="flex:2;" placeholder="SMTP Username">
+                            </div>
+                            <input type="password" id="eweb-smtp-pass" class="auth-input" placeholder="SMTP Password">
+                        </div>
+                        <button class="auth-btn" style="width:auto; margin: 15px; background:#007bff;" onclick="saveEwebSettings('contact')">Save Contact Settings</button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#f4f7f6 !important; z-index:10000; justify-content:center; align-items:center;">
+        <div class="auth-page-wrapper" style="display:flex; width:100%; max-width:1200px; height:85vh; max-height:850px; min-height:600px; background:white; border-radius:15px; overflow:hidden; box-shadow: 0 25px 50px rgba(0,0,0,0.3);">
+            
+            <div class="auth-left-pane" id="auth-left-panel" style="flex:1.2; background: linear-gradient(135deg, #0056b3 0%, #007bff 100%); color:white; display:flex; flex-direction:column; justify-content:center; align-items:flex-start; padding:60px; position:relative;">
+                <div style="position:absolute; top:0; left:0; right:0; bottom:0; opacity:0.1; background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 20px 20px; pointer-events:none;"></div>
+                
+                <img id="app-brand-logo" style="display:none; margin-bottom:30px; max-height:60px;" alt="Logo">
+                <div id="app-brand-text" style="font-size:2.5em; font-weight:bold; margin-bottom:30px; display:flex; align-items:center; gap:10px;">
+                    <span style="font-size:1.2em;">🌐</span> Ewebgen
+                </div>
+                
+                <h1 id="dynamic-login-title" style="font-size:2.8em; line-height:1.2; margin-bottom:20px; font-weight:800; text-shadow: 0 2px 10px rgba(0,0,0,0.2);">
+                    Build Websites<br>at the Speed of Thought.
+                </h1>
+                
+                <div id="dynamic-login-content" style="font-size:1.1em; line-height:1.6; opacity:0.9; margin-bottom:40px; max-width:90%;">
+                    Describe your vision, and our AI will generate a complete, responsive, multi-page website in seconds. Edit inline, update via chat, and deploy instantly.
+                </div>
+                
+                <div style="display:flex; gap:15px;">
+                    <div style="background:rgba(255,255,255,0.2); padding:10px 20px; border-radius:8px; backdrop-filter:blur(5px);">
+                        <div style="font-size:1.5em; font-weight:bold;">10x</div>
+                        <div style="font-size:0.8em; opacity:0.8;">Faster Workflow</div>
+                    </div>
+                    <div style="background:rgba(255,255,255,0.2); padding:10px 20px; border-radius:8px; backdrop-filter:blur(5px);">
+                        <div style="font-size:1.5em; font-weight:bold;">100%</div>
+                        <div style="font-size:0.8em; opacity:0.8;">Customizable</div>
+                    </div>
+                </div>
+                
+                <div style="position:absolute; bottom:20px; left:60px; font-size:0.8em; opacity:0.7;">
+                    <a href="#" onclick="showLegalModal('terms')" style="color:white; text-decoration:none; margin-right:15px;">Terms of Service</a>
+                    <a href="#" onclick="showLegalModal('privacy')" style="color:white; text-decoration:none;">Privacy Policy</a>
+                </div>
+            </div>
+            
+            <div class="auth-right-pane" style="flex:1; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:40px; position:relative; background:#fdfdfd;">
+                
+                <div id="login-form" class="auth-form-container" style="width:100%; max-width:380px;">
+                    <h2 style="font-size:2em; color:#333; margin-bottom:10px;">Welcome Back</h2>
+                    <p style="color:#666; margin-bottom:30px;">Please enter your details to sign in.</p>
+                    
+                    <div id="auth-msg" style="color:red; font-size:14px; margin-bottom:15px; min-height:20px; font-weight:bold;"></div>
+                    
+                    <label class="auth-label">Email or Username</label>
+                    <input type="text" id="login-id" class="auth-input" placeholder="Enter your email or username">
+                    
+                    <label class="auth-label">Password</label>
+                    <input type="password" id="login-pass" class="auth-input" placeholder="Enter your password">
+                    
+                    <div style="text-align:right; margin-bottom:25px;">
+                        <a href="#" onclick="showForgot()" style="color:#007bff; font-size:0.9em; text-decoration:none; font-weight:bold;">Forgot Password?</a>
+                    </div>
+                    
+                    <button class="auth-btn" style="background:#007bff; font-size:1.1em; padding:14px;" onclick="handleLogin()">Sign In</button>
+                    
+                    <div id="g_id_onload"
+                         data-client_id=""
+                         data-context="signin"
+                         data-ux_mode="popup"
+                         data-callback="handleCredentialResponse"
+                         data-auto_prompt="false">
+                    </div>
+                    <div class="g_id_signin"
+                         data-type="standard"
+                         data-shape="rectangular"
+                         data-theme="outline"
+                         data-text="signin_with"
+                         data-size="large"
+                         data-logo_alignment="left"
+                         style="margin-top: 15px; display:flex; justify-content:center;">
+                    </div>
+                    
+                    <div style="text-align:center; margin-top:30px; color:#666;">
+                        Don't have an account? <a href="#" onclick="showRegister()" style="color:#007bff; font-weight:bold; text-decoration:none;">Sign Up</a>
+                    </div>
+                </div>
+                
+                <div id="register-form" class="auth-form-container" style="display:none !important; width:100%; max-width:380px;">
+                    <h2 style="font-size:2em; color:#333; margin-bottom:10px;">Create Account</h2>
+                    <p style="color:#666; margin-bottom:20px;">Join us and start building.</p>
+                    
+                    <div id="reg-msg" style="color:red; font-size:13px; margin-bottom:15px; font-weight:bold;"></div>
+                    <div id="reg-success" style="color:green; font-size:13px; margin-bottom:15px; display:none !important; font-weight:bold;"></div>
+                    
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label class="auth-label">Full Name</label>
+                            <input type="text" id="reg-fullname" class="auth-input" placeholder="John Doe">
+                        </div>
+                        <div style="flex:1;">
+                            <label class="auth-label">Phone</label>
+                            <input type="tel" id="reg-phone" class="auth-input" placeholder="+1 234 567">
+                        </div>
+                    </div>
+                    
+                    <label class="auth-label">Email Address</label>
+                    <input type="email" id="reg-email" class="auth-input" placeholder="name@company.com">
+                    
+                    <div style="display:flex; gap:10px;">
+                        <div style="flex:1;">
+                            <label class="auth-label">Password</label>
+                            <input type="password" id="reg-pass" class="auth-input" placeholder="Min 8 chars">
+                        </div>
+                        <div style="flex:1;">
+                            <label class="auth-label">Confirm</label>
+                            <input type="password" id="reg-confirm-pass" class="auth-input" placeholder="Confirm">
+                        </div>
+                    </div>
+                    
+                    <button class="auth-btn" style="background:#28a745; font-size:1.1em; padding:14px; margin-top:10px;" onclick="handleRegister()">Create Account</button>
+                    
+                    <div style="text-align:center; margin-top:20px; color:#666;">
+                        Already have an account? <a href="#" onclick="showLogin()" style="color:#007bff; font-weight:bold; text-decoration:none;">Sign In</a>
+                    </div>
+                </div>
+
+                <div id="verify-form" class="auth-form-container" style="display:none !important; width:100%; max-width:380px; text-align:center;">
+                    <div style="font-size:3em; margin-bottom:20px;">✉️</div>
+                    <h2 style="font-size:2em; color:#333; margin-bottom:10px;">Verify Email</h2>
+                    <p style="color:#666; margin-bottom:30px;">We've sent a 6-digit code to your email.</p>
+                    
+                    <div id="ver-msg" style="color:red; font-size:14px; margin-bottom:15px; font-weight:bold;"></div>
+                    
+                    <input type="hidden" id="verify-email-input">
+                    <input type="text" id="ver-code" class="auth-input" placeholder="Enter 6-digit code" style="text-align:center; font-size:1.5em; letter-spacing:5px; font-weight:bold;">
+                    
+                    <button class="auth-btn" style="background:#007bff; font-size:1.1em; padding:14px; margin-top:10px;" onclick="handleVerify()">Verify & Login</button>
+                </div>
+
+                <div id="forgot-form" class="auth-form-container" style="display:none !important; width:100%; max-width:380px;">
+                    <h2 style="font-size:2em; color:#333; margin-bottom:10px;">Reset Password</h2>
+                    <p style="color:#666; margin-bottom:30px;">Enter your email to receive a temporary code.</p>
+                    
+                    <div id="forgot-msg" style="color:red; font-size:14px; margin-bottom:15px; font-weight:bold;"></div>
+                    
+                    <label class="auth-label">Email Address</label>
+                    <input type="email" id="forgot-email" class="auth-input" placeholder="name@company.com">
+                    
+                    <button class="auth-btn" style="background:#007bff; font-size:1.1em; padding:14px; margin-top:10px;" onclick="handleForgot()">Send Reset Code</button>
+                    
+                    <div style="text-align:center; margin-top:20px;">
+                        <a href="#" onclick="showLogin()" style="color:#666; text-decoration:none;">Back to Login</a>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <div id="onboarding-modal" class="auth-modal" style="display:none !important; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:10050; justify-content:center; align-items:center;">
+        <div class="auth-box" style="width:400px; max-width:90%; background:#fff; padding:30px; border-radius:12px; text-align:center; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
+            <h2 style="margin-top:0; color:#333;" data-i18n="OnboardWelcome">Welcome! 🎉</h2>
+            <p style="color:#666; font-size:0.95em; margin-bottom:20px;" data-i18n="OnboardConfig">Please configure your default settings to continue.</p>
+            
+            <div style="text-align:left; margin-bottom:15px;">
+                <label style="font-weight:bold; font-size:0.9em; color:#555;" data-i18n="SelectCountry">Select your Country</label>
+                <select id="onboard-country" class="auth-input" style="width:100%; margin-top:5px;">
+                    <option value="" disabled selected>Select Country...</option>
+                    <option value="US">United States</option>
+                    <option value="UK">United Kingdom</option>
+                    <option value="IN">India</option>
+                    <option value="CA">Canada</option>
+                    <option value="AU">Australia</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+
+            <div style="text-align:left; margin-bottom:20px;">
+                <label style="font-weight:bold; font-size:0.9em; color:#555;" data-i18n="SelectLanguage">Select your Language</label>
+                <select id="onboard-language" class="auth-input" style="width:100%; margin-top:5px;">
+                    <option value="en" selected>English</option>
+                    <option value="es">Español</option>
+                    <option value="fr">Français</option>
+                    <option value="ar">العربية</option>
+                    <option value="zh">中文</option>
+                    <option value="ru">Русский</option>
+                    <option value="hi">हिन्दी</option>
+                </select>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; gap:10px;">
+                <button class="auth-btn" style="background:#6c757d; flex:1;" onclick="skipOnboarding()" data-i18n="Skip">Skip for Now</button>
+                <button class="auth-btn" style="background:#28a745; flex:1;" onclick="saveOnboardingData()" data-i18n="SaveContinue">Save & Continue</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // --- OPEN AND POPULATE USER PERSONAL SETTINGS MODAL ---
+        window.openEwebgenSettings = function() {
+            document.getElementById('ewebgen-settings-modal').style.display = 'flex';
+            document.getElementById('ewebgen-settings-modal').style.setProperty('display', 'flex', 'important');
+            
+            fetch('/api/user/settings')
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const s = data.settings || {};
+                    const am = data.admin_models || {};
+                    const providers = ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'];
+                    
+                    providers.forEach(p => {
+                        const select = document.getElementById(`eweb-model-${p}`);
+                        if (select && select.options[0] && am[p]) {
+                            select.options[0].textContent = `Default Admin Model (${am[p]})`;
+                        }
+                    });
+
+                    if (!data.allow_own_api_keys) {
+                        document.getElementById('eweb-ai-locked').style.display = 'block';
+                        document.getElementById('eweb-ai-locked').style.setProperty('display', 'block', 'important');
+                        document.getElementById('eweb-ai-unlocked').style.display = 'none';
+                        document.getElementById('eweb-ai-unlocked').style.setProperty('display', 'none', 'important');
+                    } else {
+                        document.getElementById('eweb-ai-locked').style.display = 'none';
+                        document.getElementById('eweb-ai-locked').style.setProperty('display', 'none', 'important');
+                        document.getElementById('eweb-ai-unlocked').style.display = 'block';
+                        document.getElementById('eweb-ai-unlocked').style.setProperty('display', 'block', 'important');
+                    }
+
+                    if (document.getElementById('eweb-ga-code')) document.getElementById('eweb-ga-code').value = s.google_analytics || '';
+                    if (document.getElementById('eweb-ai-provider')) document.getElementById('eweb-ai-provider').value = s.ai_provider || 'default';
+                    
+                    if (document.getElementById('eweb-gemini-key')) document.getElementById('eweb-gemini-key').value = s.gemini_api_key || '';
+                    if (document.getElementById('eweb-openai-key')) document.getElementById('eweb-openai-key').value = s.openai_api_key || '';
+                    if (document.getElementById('eweb-claude-key')) document.getElementById('eweb-claude-key').value = s.claude_api_key || '';
+                    if (document.getElementById('eweb-deepseek-key')) document.getElementById('eweb-deepseek-key').value = s.deepseek_api_key || '';
+                    if (document.getElementById('eweb-xai-key')) document.getElementById('eweb-xai-key').value = s.xai_api_key || '';
+                    if (document.getElementById('eweb-meta-key')) document.getElementById('eweb-meta-key').value = s.meta_api_key || '';
+                    if (document.getElementById('eweb-perplexity-key')) document.getElementById('eweb-perplexity-key').value = s.perplexity_api_key || '';
+
+                    providers.forEach(p => {
+                        const modelVal = s[`user_model_${p}`] || 'default';
+                        const modelSelect = document.getElementById(`eweb-model-${p}`);
+                        const customModelInput = document.getElementById(`eweb-custom-model-${p}`);
+                        
+                        if (modelSelect) {
+                            let exists = false;
+                            for (let i = 0; i < modelSelect.options.length; i++) {
+                                if (modelSelect.options[i].value === modelVal) { exists = true; break; }
+                            }
+                            if (exists) {
+                                modelSelect.value = modelVal;
+                                if (customModelInput) customModelInput.style.display = 'none';
+                            } else {
+                                modelSelect.value = 'other';
+                                if (customModelInput) {
+                                    customModelInput.style.display = 'block';
+                                    customModelInput.style.setProperty('display', 'block', 'important');
+                                    customModelInput.value = modelVal;
+                                }
+                            }
+                        }
+
+                        const tokenVal = s[`user_token_${p}`] || 'default';
+                        const tokenSelect = document.getElementById(`eweb-token-${p}`);
+                        const customTokenInput = document.getElementById(`eweb-custom-token-${p}`);
+                        if (tokenSelect) {
+                            if (tokenVal === 'default' || tokenVal === 'maximum') {
+                                tokenSelect.value = tokenVal;
+                                if (customTokenInput) customTokenInput.style.display = 'none';
+                            } else {
+                                tokenSelect.value = 'other';
+                                if (customTokenInput) {
+                                    customTokenInput.style.display = 'block';
+                                    customTokenInput.style.setProperty('display', 'block', 'important');
+                                    customTokenInput.value = tokenVal;
+                                }
+                            }
+                        }
+                    });
+
+                    if (document.getElementById('eweb-contact-email')) document.getElementById('eweb-contact-email').value = s.contact_email || '';
+                    if (document.getElementById('eweb-smtp-host')) document.getElementById('eweb-smtp-host').value = s.smtp_host || '';
+                    if (document.getElementById('eweb-smtp-port')) document.getElementById('eweb-smtp-port').value = s.smtp_port || '';
+                    if (document.getElementById('eweb-smtp-user')) document.getElementById('eweb-smtp-user').value = s.smtp_user || '';
+                    if (document.getElementById('eweb-smtp-pass')) document.getElementById('eweb-smtp-pass').value = s.smtp_pass || '';
+
+                    if (document.getElementById('eweb-pages-mode')) {
+                        document.getElementById('eweb-pages-mode').value = s.default_pages_mode || 'default';
+                        window.toggleEwebPagesInput();
+                    }
+                    if (document.getElementById('eweb-pages-json')) {
+                        document.getElementById('eweb-pages-json').value = s.default_pages_json || '[]';
+                        window.renderEwebPagesList();
+                    }
+
+                    window.toggleEwebAIPanels();
+                }
+            });
+        };
+
+        window.closeEwebgenSettings = function() {
+            document.getElementById('ewebgen-settings-modal').style.display = 'none';
+        };
+
+        window.saveEwebSettings = function(category) {
+            let payload = {};
+            
+            if (category === 'analytics') {
+                payload.google_analytics = document.getElementById('eweb-ga-code').value;
+            } else if (category === 'contact') {
+                payload.contact_email = document.getElementById('eweb-contact-email').value;
+                payload.smtp_host = document.getElementById('eweb-smtp-host').value;
+                payload.smtp_port = document.getElementById('eweb-smtp-port').value;
+                payload.smtp_user = document.getElementById('eweb-smtp-user').value;
+                payload.smtp_pass = document.getElementById('eweb-smtp-pass').value;
+            } else if (category === 'ai') {
+                payload.ai_provider = document.getElementById('eweb-ai-provider').value;
+                
+                payload.gemini_api_key = document.getElementById('eweb-gemini-key').value;
+                payload.openai_api_key = document.getElementById('eweb-openai-key').value;
+                payload.claude_api_key = document.getElementById('eweb-claude-key').value;
+                payload.deepseek_api_key = document.getElementById('eweb-deepseek-key').value;
+                payload.xai_api_key = document.getElementById('eweb-xai-key').value;
+                payload.meta_api_key = document.getElementById('eweb-meta-key').value;
+                payload.perplexity_api_key = document.getElementById('eweb-perplexity-key').value;
+
+                const providers = ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'];
+                providers.forEach(p => {
+                    const modelSelect = document.getElementById(`eweb-model-${p}`);
+                    if (modelSelect) {
+                        if (modelSelect.value === 'other') {
+                            payload[`user_model_${p}`] = document.getElementById(`eweb-custom-model-${p}`).value.trim();
+                        } else {
+                            payload[`user_model_${p}`] = modelSelect.value;
+                        }
+                    }
+
+                    const tokenSelect = document.getElementById(`eweb-token-${p}`);
+                    if (tokenSelect) {
+                        if (tokenSelect.value === 'other') {
+                            payload[`user_token_${p}`] = document.getElementById(`eweb-custom-token-${p}`).value;
+                        } else {
+                            payload[`user_token_${p}`] = tokenSelect.value;
+                        }
+                    }
+                });
+
+                if (document.getElementById('eweb-pages-mode')) {
+                    payload.default_pages_mode = document.getElementById('eweb-pages-mode').value;
+                }
+                if (typeof serializeEwebPagesUI === 'function') {
+                    payload.default_pages_json = serializeEwebPagesUI();
+                }
+            }
+
+            fetch('/api/user/settings', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    alert("✅ Settings saved successfully!");
+                    if (category === 'analytics' && typeof window.applyGoogleAnalyticsToAllPages === 'function') {
+                        window.applyGoogleAnalyticsToAllPages(payload.google_analytics);
+                    }
+                } else {
+                    alert("❌ Error saving settings: " + data.error);
+                }
+            });
+        };
+
+        window.toggleEwebAIPanels = function() {
+            const provider = document.getElementById('eweb-ai-provider').value;
+            document.querySelectorAll('.eweb-panel, .eweb-model-panel').forEach(el => {
+                el.style.display = 'none';
+                el.style.setProperty('display', 'none', 'important');
+            });
+            if (provider !== 'default') {
+                const keyPanel = document.getElementById(`eweb-panel-${provider}`);
+                const modelPanel = document.getElementById(`eweb-model-panel-${provider}`);
+                if (keyPanel) { keyPanel.style.display = 'block'; keyPanel.style.setProperty('display', 'block', 'important'); }
+                if (modelPanel) { modelPanel.style.display = 'block'; modelPanel.style.setProperty('display', 'block', 'important'); }
+            }
+        };
+
+        window.switchEwebVertTab = function(tabId, btn) {
+            document.querySelectorAll('.eweb-vert-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.eweb-tab-content').forEach(el => {
+                el.style.display = 'none';
+                el.style.setProperty('display', 'none', 'important');
+            });
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) { activeTab.style.display = 'block'; activeTab.style.setProperty('display', 'block', 'important'); }
+        };
+
+        window.toggleEwebPagesInput = function() {
+            const mode = document.getElementById('eweb-pages-mode').value;
+            const wrapper = document.getElementById('eweb-pages-wrapper');
+            if (wrapper) {
+                if (mode === 'manual') { wrapper.style.display = 'block'; wrapper.style.setProperty('display', 'block', 'important'); }
+                else { wrapper.style.display = 'none'; wrapper.style.setProperty('display', 'none', 'important'); }
+            }
+        };
+
+        window.addEwebPageRow = function(name='', desc='', loc='main') {
+            const container = document.getElementById('eweb-pages-ui-list');
+            if (!container) return;
+            const div = document.createElement('div');
+            div.className = 'eweb-page-row';
+            div.style.cssText = 'display:flex; gap:10px; margin-bottom:8px; align-items:center;';
+            div.innerHTML = `
+                <input type="text" class="auth-input p-name" value="${name}" placeholder="Filename (e.g. about.html)" style="flex:1; margin:0;">
+                <input type="text" class="auth-input p-desc" value="${desc}" placeholder="Description/Goal" style="flex:1.5; margin:0;">
+                <select class="auth-input p-loc" style="width:100px; margin:0;">
+                    <option value="main" ${loc==='main'?'selected':''}>Main Nav</option>
+                    <option value="hidden" ${loc==='hidden'?'selected':''}>Hidden Link</option>
+                </select>
+                <button onclick="this.parentElement.remove()" style="background:#dc3545; color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer;">✕</button>
+            `;
+            container.appendChild(div);
+        };
+
+        window.renderEwebPagesList = function() {
+            const container = document.getElementById('eweb-pages-ui-list');
+            if (!container) return;
+            container.innerHTML = '';
+            try {
+                const raw = document.getElementById('eweb-pages-json').value || '[]';
+                const arr = JSON.parse(raw);
+                if (Array.isArray(arr)) {
+                    arr.forEach(p => { window.addEwebPageRow(p.name, p.description, p.location || 'main'); });
+                }
+            } catch(e) {}
+        };
+
+        function serializeEwebPagesUI() {
+            const rows = document.querySelectorAll('#eweb-pages-ui-list .eweb-page-row');
+            const pages = [];
+            rows.forEach(r => {
+                const name = r.querySelector('.p-name').value.trim();
+                const desc = r.querySelector('.p-desc').value.trim();
+                const loc = r.querySelector('.p-loc').value;
+                pages.push({name: name, description: desc, location: loc});
+            });
+            return JSON.stringify(pages);
+        }
+
+        let globalHistoryData = [];
+        let currentHistoryPage = 1;
+        const HISTORY_PER_PAGE = 20;
+
+        function openMyHistory() {
+            const profileMenu = document.getElementById('profile-menu');
+            if (profileMenu) profileMenu.style.display = 'none';
+            
+            document.getElementById('my-history-modal').style.display = 'flex';
+            const tbody = document.getElementById('my-history-body');
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px;">Loading history...</td></tr>';
+            
+            const pagination = document.getElementById('my-history-pagination');
+            if(pagination) pagination.innerHTML = '';
+            
+            fetch('/api/user/history')
+            .then(r=>r.json()).then(data => {
+                if(data.success) {
+                    globalHistoryData = data.history || [];
+                    currentHistoryPage = 1;
+                    renderHistoryPage();
+                } else {
+                    tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:red;">Failed to load history.</td></tr>';
+                }
+            }).catch(() => {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:20px; color:red;">Network error. Could not load history.</td></tr>';
+            });
+        }
+
+        window.renderHistoryPage = function() {
+            const tbody = document.getElementById('my-history-body');
+            const pagination = document.getElementById('my-history-pagination');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+
+            if (globalHistoryData.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:#666; font-style:italic;">No activity recorded yet.</td></tr>';
+                if(pagination) pagination.innerHTML = '';
+                return;
+            }
+
+            const startIndex = (currentHistoryPage - 1) * HISTORY_PER_PAGE;
+            const endIndex = Math.min(startIndex + HISTORY_PER_PAGE, globalHistoryData.length);
+            const pageData = globalHistoryData.slice(startIndex, endIndex);
+
+            pageData.forEach(h => {
+                let linkHtml = '<span style="color:#aaa;">-</span>';
+                if (h.reference_id && h.action_type === 'website_generated') {
+                    linkHtml = `<button onclick="loadHistoryProject('${h.reference_id}')" style="background:#007bff; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:12px; font-weight:bold;">Load Website</button>`;
+                }
+                
+                let icon = '📝';
+                if(h.action_type === 'website_generated') icon = '🌐';
+                else if(h.action_type === 'image_generated') icon = '🖼️';
+                else if(h.action_type === 'order_placed') icon = '💳';
+                else if(h.action_type === 'project_saved') icon = '💾';
+                
+                tbody.innerHTML += `
+                    <tr style="border-bottom:1px solid #eee;">
+                        <td style="padding:10px; font-size:12px; color:#666;">${h.date}</td>
+                        <td><strong>${icon} ${h.action_type.replace('_', ' ').toUpperCase()}</strong></td>
+                        <td>${h.description}</td>
+                        <td>${linkHtml}</td>
+                    </tr>
+                `;
+            });
+
+            if (pagination) {
+                pagination.innerHTML = '';
+                const totalPages = Math.ceil(globalHistoryData.length / HISTORY_PER_PAGE);
+
+                if (totalPages > 1) {
+                    for (let i = 1; i <= totalPages; i++) {
+                        const btn = document.createElement('button');
+                        btn.style.padding = '5px 10px';
+                        btn.style.margin = '2px';
+                        btn.style.border = 'none';
+                        btn.style.borderRadius = '3px';
+                        btn.style.cursor = 'pointer';
+                        btn.style.fontWeight = 'bold';
+                        
+                        if (i === currentHistoryPage) {
+                            btn.style.background = '#007bff';
+                            btn.style.color = 'white';
+                        } else {
+                            btn.style.background = '#e9ecef';
+                            btn.style.color = '#333';
+                        }
+                        
+                        btn.textContent = i;
+                        btn.onclick = () => {
+                            currentHistoryPage = i;
+                            renderHistoryPage();
+                        };
+                        pagination.appendChild(btn);
+                    }
+                }
+            }
+        };
+
+        window.toggleEwebModelInput = function(provider) {
+            const select = document.getElementById(`eweb-model-${provider}`);
+            let customInput = document.getElementById(`eweb-custom-model-${provider}`);
+            if (!customInput) { customInput = document.getElementById(`us-custom-model-${provider}`); }
+            if (select && customInput) {
+                if (select.value === 'other') {
+                    customInput.style.display = 'block';
+                    customInput.style.setProperty('display', 'block', 'important');
+                    customInput.focus();
+                } else {
+                    customInput.style.display = 'none';
+                    customInput.style.setProperty('display', 'none', 'important');
+                }
+            }
+        };
+
+        window.toggleEwebTokenInput = function(provider) {
+            const select = document.getElementById(`eweb-token-${provider}`);
+            const customInput = document.getElementById(`eweb-custom-token-${provider}`);
+            if (select && customInput) {
+                if (select.value === 'other') {
+                    customInput.style.display = 'block';
+                    customInput.style.setProperty('display', 'block', 'important');
+                    customInput.focus();
+                } else {
+                    customInput.style.display = 'none';
+                    customInput.style.setProperty('display', 'none', 'important');
+                }
+            }
+        };
+    </script>

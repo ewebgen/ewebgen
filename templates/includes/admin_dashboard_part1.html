@@ -1,0 +1,389 @@
+<div id="admin-dashboard">
+    <div class="admin-layout">
+        
+        <div class="admin-sidebar" style="min-width: 260px; flex-shrink: 0;">
+            <div class="admin-sidebar-header">
+                <span data-i18n="admin_cms_title">🛠️ Admin CMS</span>
+                <span style="font-size:0.8em; opacity:0.7;">v2.1</span>
+            </div>
+            
+            <div class="admin-nav">
+                <div class="admin-nav-group">
+                    <div class="admin-nav-item-header active" onclick="toggleAdminMenu('sub-general', this)" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span data-i18n="admin_gen_settings">⚙️ General Settings</span>
+                        <span id="arrow-sub-general">▼</span>
+                    </div>
+                    <div id="sub-general" class="admin-sub-nav" style="display:block; background-color: #34495e; border-left: 3px solid #ccc;">
+                        <div class="admin-nav-item active" onclick="switchAdminTab('tab-general', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_interface">Interface & Defaults</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-brand', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_brand">Brand & Login Page</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-legal', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_legal">Legal & GDPR</div>
+                    </div>
+                </div>
+
+                <div class="admin-nav-item" onclick="switchAdminTab('tab-logs', this)" data-i18n="admin_logs">📜 Generation Logs</div>
+                
+                <div class="admin-nav-group">
+                    <div class="admin-nav-item-header" onclick="toggleAdminMenu('sub-users', this)" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span data-i18n="admin_users">👥 Users & Roles</span>
+                        <span id="arrow-sub-users">▼</span>
+                    </div>
+                    <div id="sub-users" class="admin-sub-nav" style="display:none; background-color: #34495e; border-left: 3px solid #3498db;">
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-users', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_manage_users">Manage Users</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-usertypes', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_user_types">User Types (Limits)</div>
+                    </div>
+                </div>
+
+                <div class="admin-nav-group">
+                    <div class="admin-nav-item-header" onclick="toggleAdminMenu('sub-money', this)" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span data-i18n="admin_money">💰 Monetization</span>
+                        <span id="arrow-sub-money">▼</span>
+                    </div>
+                    <div id="sub-money" class="admin-sub-nav" style="display:none; background-color: #34495e; border-left: 3px solid #28a745;">
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-plans', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_plans">Subscription Plans</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-payments', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_payments">Payment Gateways</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-api-key-reqs', this)" style="padding-left: 30px; font-size: 0.95em;">🔑 API Key Requests</div>
+                    </div>
+                </div>
+                
+                <div class="admin-nav-group">
+                    <div class="admin-nav-item-header" onclick="toggleAdminMenu('sub-config', this)" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span data-i18n="admin_config">🔧 System Config</span>
+                        <span id="arrow-sub-config">▼</span>
+                    </div>
+                    <div id="sub-config" class="admin-sub-nav" style="display:none; background-color: #34495e; border-left: 3px solid #f1c40f;">
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-ai', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_ai">AI Providers</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-images', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_images">Image Providers</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-smtp', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_smtp">Email Settings</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-oauth', this)" style="padding-left: 30px; font-size: 0.95em;" data-i18n="admin_oauth">Auth & OAuth (Google)</div>
+                    </div>
+                </div>
+
+                <div class="admin-nav-group">
+                    <div class="admin-nav-item-header" onclick="toggleAdminMenu('sub-support', this)" style="display:flex; justify-content:space-between; align-items:center;">
+                        <span>🎧 Support & Feedback</span>
+                        <span id="arrow-sub-support">▼</span>
+                    </div>
+                    <div id="sub-support" class="admin-sub-nav" style="display:none; background-color: #34495e; border-left: 3px solid #17a2b8;">
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-help-kb', this)" style="padding-left: 30px; font-size: 0.95em;">❓ Knowledge Base (Q&A)</div>
+                        <!-- HIDDEN FROM CLIENT ADMIN CMS (Managed on Owner CMS) -->
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-hire-reqs', this)" style="display:none; padding-left: 30px; font-size: 0.95em;">👨‍💻 Hire Requests</div>
+                        <div class="admin-nav-item" onclick="switchAdminTab('tab-user-feedback', this)" style="display:none; padding-left: 30px; font-size: 0.95em;">💬 Ratings & Feedback</div>
+                    </div>
+                </div>
+
+                <div class="admin-nav-item" onclick="switchAdminTab('tab-updates', this)" data-i18n="admin_updates">🚀 System Updates</div>
+                <div class="admin-nav-item" onclick="switchAdminTab('tab-notifs', this)">
+                    <span data-i18n="admin_messages">✉️ Messages</span> <span id="admin-msg-count" class="badge badge-danger" style="display:none; margin-left:5px;">0</span>
+                </div>
+            </div>
+            
+            <div class="admin-exit-btn" onclick="closeAdminDashboard()" data-i18n="admin_back">
+                Back to Editor Mode
+            </div>
+        </div>
+
+        <div class="admin-content" style="flex-grow: 1; min-width: 0; overflow-x: hidden;">
+            
+            <div id="tab-general" class="admin-tab-content active" style="display:block;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">⚙️ General Interface & Defaults</h3>
+
+                    <div class="settings-group" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-bottom:15px;">
+                        <label style="color: #28a745;">💾 Save As Configuration</label>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="checkbox" id="admin-store-images" checked> 
+                            <span><b>Save Image while clicking "Save As"</b></span>
+                        </div>
+                        <p style="font-size:0.8em; color:#666; margin-top:5px; line-height: 1.4;">
+                            <strong>Enabled (Lazy Load):</strong> Images are kept as remote URLs during creation. They are downloaded to the server only when the user clicks "Save As".<br>
+                            <strong>Disabled (Eager Load):</strong> Images are downloaded to the server immediately during website generation.
+                        </p>
+                    </div>
+
+                    <div class="settings-group">
+                        <label>Default Chatbox State (on Load)</label>
+                        <select id="admin-chat-state" class="auth-input">
+                            <option value="maximized">Maximized (Docked Sidebar)</option>
+                            <option value="default">Floating (Medium)</option>
+                            <option value="minimized">Minimized (Icon Only)</option>
+                        </select>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label>Voice Input Silence Duration (ms)</label>
+                        <input type="number" id="admin-voice-duration" class="auth-input" placeholder="e.g. 2000" min="500" step="100">
+                    </div>
+
+                    <div class="settings-group">
+                        <label>Top Menu Bar Color</label>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <input type="color" id="admin-menu-color" class="auth-input" style="width:50px; height:35px; padding:2px;">
+                            <input type="text" id="admin-menu-color-text" class="auth-input" placeholder="#000000" style="width:100px;">
+                        </div>
+                    </div>
+                    
+                    <div class="settings-group">
+                        <label>Concurrent User Limit per AI Agent</label>
+                        <div style="display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                             <input type="checkbox" id="admin-concurrent-enable"> <span style="font-weight:normal;">Enable Limit</span>
+                        </div>
+                        <input type="number" id="admin-concurrent-limit" class="auth-input" placeholder="e.g. 5" min="1">
+                        <p style="font-size:0.8em; color:#666;">If enabled, requests exceeding this limit will trigger a new agent instance (load balancing logic).</p>
+                    </div>
+
+                    <div class="settings-group" style="background:#f8f9fa; border:1px solid #ddd; border-radius:5px; padding:15px; margin-bottom:15px;">
+                        <label style="font-weight:bold; cursor:pointer; display:flex; align-items:center;">
+                            <input type="checkbox" id="admin-hide-onboarding" style="margin-right:10px; width:18px; height:18px;"> 
+                            Disable First-Time Onboarding Popup
+                        </label>
+                        <p style="font-size:0.85em; color:#666; margin:5px 0 0 28px;">If checked, users will <b>not</b> be asked for their Country and Language on first login. They will be prompted during checkout or upgrade instead.</p>
+                    </div>
+                    
+                    <!-- NEW: LIVE PREVIEW TOGGLE -->
+                    <div class="settings-group" style="background:#e8f4fd; padding:15px; border-radius:5px; border:1px solid #b8daff; margin-bottom:15px;">
+                        <label style="color: #0056b3; font-size:1.1em; margin-bottom:10px;">📺 Website Generation Display</label>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="checkbox" id="admin-show-live-preview" style="width:18px; height:18px;"> 
+                            <span><b>Show Live Preview During Generation</b></span>
+                        </div>
+                        <p style="font-size:0.85em; color:#555; margin-top:8px; line-height: 1.5; margin-left:28px;">
+                            <strong>Enabled:</strong> Users see the website layout building and code streaming in real-time.<br>
+                            <strong>Disabled (Default):</strong> Users only see the progress percentage circle. The website is hidden and appears instantly once 100% complete.
+                        </p>
+                    </div>
+
+                    <button class="auth-btn" style="width:auto;" onclick="saveAdminSettings()">Save Interface Settings</button>
+                </div>
+            </div>
+
+            <div id="tab-brand" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">🖼️ Brand & Login Settings</h3>
+
+                    <div class="settings-group" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-bottom:15px;">
+                        <label style="color: #28a745;">🖼️ Brand Logo Settings</label>
+                        <div style="display:flex; gap:10px; margin-bottom:10px; align-items:flex-end;">
+                            <div style="flex:1;">
+                                <label style="font-weight:bold; font-size:0.9em;">Logo Image URL</label>
+                                <input type="text" id="admin-logo-url" class="auth-input" placeholder="https://example.com/logo.png" style="margin:0;">
+                            </div>
+                            <div>
+                                <input type="file" id="admin-logo-file-input" style="display:none;" accept="image/*" onchange="uploadAdminLogo(this)">
+                                <button onclick="document.getElementById('admin-logo-file-input').click()" style="background:#17a2b8; color:white; border:none; padding:10px 15px; border-radius:4px; cursor:pointer; font-size:14px; height: 42px;">Upload Logo</button>
+                            </div>
+                        </div>
+                        <div style="display:flex; gap:10px;">
+                            <div style="flex:1;">
+                                <label style="font-weight:bold; font-size:0.9em;">Logo Width</label>
+                                <input type="text" id="admin-logo-width" class="auth-input" placeholder="120px" style="margin:0;">
+                            </div>
+                            <div style="flex:1;">
+                                <label style="font-weight:bold; font-size:0.9em;">Logo Height</label>
+                                <input type="text" id="admin-logo-height" class="auth-input" placeholder="auto" style="margin:0;">
+                            </div>
+                        </div>
+                        <p style="font-size:0.8em; color:#666; margin-top:5px;">This logo will appear in the top-left menu area (above the templates button) and on the left side of the login page.</p>
+                    </div>
+
+                    <div class="settings-group" style="background: #e3f2fd; padding: 20px; border-radius: 8px; border: 1px solid #b6d4fe; margin-bottom:15px; box-shadow: 0 4px 6px rgba(0,0,0,0.05);">
+                        <h4 style="margin-top:0; color: #0056b3; border-bottom: 2px solid #b6d4fe; padding-bottom: 10px;">🖥️ Login Page Content (Left Side)</h4>
+                        <p style="font-size:0.85em; color:#555; margin-bottom:15px;">Design the welcome message and layout that appears on the left half of the login/registration screen.</p>
+                        
+                        <div style="margin-bottom:15px;">
+                            <label style="font-weight:bold; font-size:0.9em;">Left Side Title</label>
+                            <input type="text" id="admin-login-title" class="auth-input" placeholder="Welcome to Ewebgen">
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                <label style="font-weight:bold; font-size:0.9em; margin:0;">Left Side Content (HTML Supported)</label>
+                                <label style="font-size:0.85em; cursor:pointer; background:#fff; padding:2px 8px; border-radius:4px; border:1px solid #ccc; margin:0;">
+                                    <input type="checkbox" onchange="toggleEditorView('admin-login-content', this.checked)"> <span style="font-weight:bold; color:#d35400;">View Code</span>
+                                </label>
+                            </div>
+                            <div id="admin-login-content-visual" contenteditable="true" class="auth-input" style="height:350px; overflow-y:auto; background: linear-gradient(135deg, #0056b3 0%, #007bff 100%); color:#ffffff; border:1px solid #004494; padding:15px; display:block; border-radius:6px; max-width: 100%; box-sizing: border-box; word-break: break-word;" onkeyup="syncVisualToCode('admin-login-content')" onblur="syncVisualToCode('admin-login-content')"></div>
+                            <textarea id="admin-login-content" class="auth-input" style="height:350px; display:none; background:#2c3e50; color:#ecf0f1; font-family:monospace; max-width: 100%; box-sizing: border-box;" placeholder="Company info, links, features..." onkeyup="syncCodeToVisual('admin-login-content')" onblur="syncCodeToVisual('admin-login-content')"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="settings-group" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-bottom:15px;">
+                        <label style="color: #28a745;">📢 Powered By Footer</label>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <input type="checkbox" id="admin-show-powered-by" checked> 
+                            <span><b>Show "Powered by EWebGen" below editor/preview and on login screen</b></span>
+                        </div>
+                    </div>
+
+                    <button class="auth-btn" style="width:auto;" onclick="saveAdminSettings()">Save Brand & Login Settings</button>
+                </div>
+            </div>
+
+            <div id="tab-legal" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">⚖️ Legal & GDPR Compliance</h3>
+                    <div class="settings-group" style="background: #e8f5e9; padding: 15px; border-radius: 5px; border: 1px solid #c3e6cb; margin-bottom:15px;">
+                        
+                        <div style="margin-bottom:15px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                <label style="font-weight:bold; font-size:0.9em; margin:0;">Terms & Conditions Content</label>
+                                <label style="font-size:0.85em; cursor:pointer; background:#fff; padding:2px 8px; border-radius:4px; border:1px solid #ccc; margin:0;">
+                                    <input type="checkbox" onchange="toggleEditorView('admin-terms-content', this.checked)"> <span style="font-weight:bold; color:#d35400;">View Code</span>
+                                </label>
+                            </div>
+                            <div id="admin-terms-content-visual" contenteditable="true" class="auth-input" style="height:150px; overflow-y:auto; overflow-x:hidden; background:#fff; color:#333; border:1px solid #ccc; padding:8px; display:block; max-width: 100%; box-sizing: border-box; word-break: break-word;" onkeyup="syncVisualToCode('admin-terms-content')" onblur="syncVisualToCode('admin-terms-content')"></div>
+                            <textarea id="admin-terms-content" class="auth-input" style="height:150px; display:none; background:#2c3e50; color:#ecf0f1; font-family:monospace; max-width: 100%; box-sizing: border-box;" onkeyup="syncCodeToVisual('admin-terms-content')" onblur="syncCodeToVisual('admin-terms-content')"></textarea>
+                        </div>
+                        
+                        <div style="margin-bottom:15px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                <label style="font-weight:bold; font-size:0.9em; margin:0;">Privacy Policy Content</label>
+                                <label style="font-size:0.85em; cursor:pointer; background:#fff; padding:2px 8px; border-radius:4px; border:1px solid #ccc; margin:0;">
+                                    <input type="checkbox" onchange="toggleEditorView('admin-privacy-content', this.checked)"> <span style="font-weight:bold; color:#d35400;">View Code</span>
+                                </label>
+                            </div>
+                            <div id="admin-privacy-content-visual" contenteditable="true" class="auth-input" style="height:150px; overflow-y:auto; overflow-x:hidden; background:#fff; color:#333; border:1px solid #ccc; padding:8px; display:block; max-width: 100%; box-sizing: border-box; word-break: break-word;" onkeyup="syncVisualToCode('admin-privacy-content')" onblur="syncVisualToCode('admin-privacy-content')"></div>
+                            <textarea id="admin-privacy-content" class="auth-input" style="height:150px; display:none; background:#2c3e50; color:#ecf0f1; font-family:monospace; max-width: 100%; box-sizing: border-box;" onkeyup="syncCodeToVisual('admin-privacy-content')" onblur="syncCodeToVisual('admin-privacy-content')"></textarea>
+                        </div>
+                        
+                        <div style="margin-bottom:10px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:5px;">
+                                <label style="font-weight:bold; font-size:0.9em; margin:0;">GDPR Cookie Banner Message</label>
+                                <label style="font-size:0.85em; cursor:pointer; background:#fff; padding:2px 8px; border-radius:4px; border:1px solid #ccc; margin:0;">
+                                    <input type="checkbox" onchange="toggleEditorView('admin-gdpr-msg', this.checked)"> <span style="font-weight:bold; color:#d35400;">View Code</span>
+                                </label>
+                            </div>
+                            <div id="admin-gdpr-msg-visual" contenteditable="true" class="auth-input" style="height:80px; overflow-y:auto; overflow-x:hidden; background:#fff; color:#333; border:1px solid #ccc; padding:8px; display:block; max-width: 100%; box-sizing: border-box; word-break: break-word;" onkeyup="syncVisualToCode('admin-gdpr-msg')" onblur="syncVisualToCode('admin-gdpr-msg')"></div>
+                            <textarea id="admin-gdpr-msg" class="auth-input" style="height:80px; display:none; background:#2c3e50; color:#ecf0f1; font-family:monospace; max-width: 100%; box-sizing: border-box;" onkeyup="syncCodeToVisual('admin-gdpr-msg')" onblur="syncCodeToVisual('admin-gdpr-msg')"></textarea>
+                        </div>
+                    </div>
+                    <button class="auth-btn" style="width:auto;" onclick="saveAdminSettings()">Save Legal Settings</button>
+                </div>
+            </div>
+
+            <div id="tab-logs" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">📜 Global Generation Logs</h3>
+                    <p style="color:#666; font-size:0.9em; margin-bottom:15px;">Live view of all user prompts and website generation events across the platform.</p>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        
+                        <select id="admin-log-user-filter" class="auth-input" style="width:300px; margin:0;" onchange="loadGlobalGenerationLogs()">
+                            <option value="">All Users</option>
+                        </select>
+
+                        <button onclick="loadGlobalGenerationLogs()" style="background:#17a2b8; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">🔄 Refresh Logs</button>
+                    </div>
+                    <div id="admin-log-viewer" class="log-container" style="background:#1e1e1e; padding:15px; border-radius:5px; height:500px; overflow-y:auto; font-family:monospace; color:#0f0; font-size:13px; border: 1px solid #333; box-shadow: inset 0 0 10px rgba(0,0,0,0.5);">
+                        <div style="color:#777; text-align:center; padding:20px;">Loading global logs...</div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="tab-oauth" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <h3 style="margin-top:0;">🔐 Google Sign-in & Authentication</h3>
+                    <div class="settings-group" style="background: #fdfae5; padding: 15px; border-radius: 5px; border: 1px solid #f1e290; margin-bottom:15px;">
+                        <div style="margin-bottom:10px;">
+                            <label style="font-weight:bold; font-size:0.9em;">Google Client ID</label>
+                            <input type="text" id="admin-google-client-id" class="auth-input" placeholder="123456789-xxxx.apps.googleusercontent.com">
+                        </div>
+                        <div style="margin-bottom:10px;">
+                            <label style="font-weight:bold; font-size:0.9em;">Google Client Secret (Optional)</label>
+                            <input type="password" id="admin-google-client-secret" class="auth-input" placeholder="GOCSPX-xxxxxx">
+                        </div>
+                        <p style="font-size:0.8em; color:#666; margin-top:5px;">Requires setting up OAuth 2.0 in Google Cloud Console. Enable "Google+" and "People API" scopes. Add your domain to authorized origins.</p>
+                    </div>
+                    <button class="auth-btn" style="width:auto;" onclick="saveAdminSettings()">Save Auth Settings</button>
+                </div>
+            </div>
+
+            <div id="tab-help-kb" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3 style="margin:0; color:#2c3e50;">❓ Help & Knowledge Base Management</h3>
+                            <p style="font-size:13px; color:#666; margin:4px 0 0 0;">Create and manage Q&A articles displayed in the client-side Help sidebar slider.</p>
+                        </div>
+                        <div style="display:flex; gap:8px;">
+                            <button onclick="exportHelpArticlesJson()" style="background:#6c757d; color:white; border:none; padding:8px 14px; border-radius:4px; font-weight:bold; cursor:pointer;">📤 Export JSON</button>
+                            <button onclick="document.getElementById('help-kb-import-input').click()" style="background:#17a2b8; color:white; border:none; padding:8px 14px; border-radius:4px; font-weight:bold; cursor:pointer;">📥 Import JSON</button>
+                            <input type="file" id="help-kb-import-input" accept=".json" style="display:none;" onchange="if(this.files.length) importHelpArticlesJson(this.files[0])">
+                            <button onclick="openEditHelpArticleModal(null)" style="background:#28a745; color:white; border:none; padding:8px 15px; border-radius:4px; font-weight:bold; cursor:pointer;">+ Add Q&A</button>
+                        </div>
+                    </div>
+                    <table class="user-table">
+                        <thead>
+                            <tr><th>ID</th><th>Category</th><th>Question</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="admin-help-kb-tbody">
+                            <tr><td colspan="5" style="text-align:center; padding:20px; color:#888;">Loading Q&A items...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- HIDDEN IN DOM FOR CLIENT ADMIN CMS -->
+            <div id="tab-hire-reqs" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3 style="margin:0; color:#2c3e50;">👨‍💻 Developer Hiring Requests</h3>
+                            <p style="font-size:13px; color:#666; margin:4px 0 0 0;">View client requests for custom widget integration or bespoke web architecture.</p>
+                        </div>
+                        <button onclick="loadAdminHireRequests()" style="background:#17a2b8; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">🔄 Refresh</button>
+                    </div>
+                    <table class="user-table">
+                        <thead>
+                            <tr><th>Date</th><th>Client Information</th><th>Country</th><th>Project Requirements</th><th>Status</th><th>Action</th></tr>
+                        </thead>
+                        <tbody id="admin-hire-reqs-tbody">
+                            <tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">Loading hire requests...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- HIDDEN IN DOM FOR CLIENT ADMIN CMS -->
+            <div id="tab-user-feedback" class="admin-tab-content" style="display:none;">
+                <div class="admin-panel">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
+                        <div>
+                            <h3 style="margin-top:0; color:#2c3e50;">💬 Application Ratings & Feedback</h3>
+                            <p style="font-size:13px; color:#666; margin:4px 0 0 0;">Review user suggestions and 1-5 star ratings. Replies appear in the user's message area!</p>
+                        </div>
+                        <button onclick="loadAdminFeedbacks()" style="background:#17a2b8; color:white; border:none; padding:8px 15px; border-radius:4px; cursor:pointer;">🔄 Refresh</button>
+                    </div>
+                    <table class="user-table">
+                        <thead>
+                            <tr><th>Date</th><th>User</th><th>Rating</th><th>Feedback / Suggestion</th><th>Admin Reply Status</th><th>Reply</th></tr>
+                        </thead>
+                        <tbody id="admin-feedbacks-tbody">
+                            <tr><td colspan="6" style="text-align:center; padding:20px; color:#888;">Loading feedback...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+<div id="admin-help-article-modal" class="auth-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:999999; justify-content:center; align-items:center;">
+    <div class="auth-box" style="width:550px; background:#fff; padding:25px; border-radius:8px; text-align:left;">
+        <h3 id="admin-help-modal-title" style="margin-top:0; color:#2c3e50;">Add Knowledge Base Q&A</h3>
+        <input type="hidden" id="admin-help-id">
+        <div style="margin-bottom:12px;">
+            <label style="font-size:12px; font-weight:bold; color:#444;">Category</label>
+            <input type="text" id="admin-help-category" class="auth-input" placeholder="Getting Started / AI / Export / General" style="width:100%; margin:3px 0 0 0;">
+        </div>
+        <div style="margin-bottom:12px;">
+            <label style="font-size:12px; font-weight:bold; color:#444;">Question *</label>
+            <input type="text" id="admin-help-question" class="auth-input" placeholder="e.g. How do I export my website?" style="width:100%; margin:3px 0 0 0;">
+        </div>
+        <div style="margin-bottom:15px;">
+            <label style="font-size:12px; font-weight:bold; color:#444;">Answer *</label>
+            <textarea id="admin-help-answer" rows="5" class="auth-input" placeholder="Detailed step-by-step instructions..." style="width:100%; margin:3px 0 0 0; resize:vertical; font-family:sans-serif;"></textarea>
+        </div>
+        <div style="margin-bottom:20px;">
+            <label style="cursor:pointer; font-size:13px; font-weight:bold;"><input type="checkbox" id="admin-help-active" checked> Active & Visible to Users</label>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+            <button class="auth-btn btn-cancel" style="width:auto; margin:0;" onclick="document.getElementById('admin-help-article-modal').style.display='none'">Cancel</button>
+            <button class="auth-btn" style="width:auto; margin:0; background:#28a745;" onclick="saveAdminHelpArticle()">Save Q&A</button>
+        </div>
+    </div>
+</div>

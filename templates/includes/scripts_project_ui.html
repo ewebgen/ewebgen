@@ -1,0 +1,1582 @@
+<style>
+    /* =========================================================
+       GOAL 1 FIX: VISIBLE CROPPER LINES FOR IMAGE EDITOR
+       ========================================================= */
+    .cropper-line {
+        background-color: #007bff !important;
+    }
+    .cropper-line.line-e, .cropper-line.line-w {
+        width: 5px !important;
+    }
+    .cropper-line.line-n, .cropper-line.line-s {
+        height: 5px !important;
+    }
+    .cropper-point {
+        background-color: #007bff !important;
+        width: 14px !important;
+        height: 14px !important;
+        opacity: 1 !important;
+        border-radius: 50% !important;
+    }
+    .cropper-view-box {
+        outline: 3px dashed #007bff !important;
+        outline-color: #007bff !important;
+    }
+    .cropper-face {
+        background-color: rgba(0, 123, 255, 0.3) !important;
+    }
+</style>
+
+<script>
+    // ==========================================
+    // PROJECT MANAGEMENT, SIDEBAR & INITIALIZATION
+    // ==========================================
+
+    // --- GOALS 1 & 2 FIX: Global Dropdown Closer ---
+    window.closeAllDropdowns = function() {
+        const projMenu = document.getElementById('project-menu');
+        if (projMenu) projMenu.style.display = 'none';
+        
+        const profileMenu = document.getElementById('profile-menu');
+        if (profileMenu) profileMenu.style.display = 'none';
+        
+        if (typeof closeFontToolbar === 'function') closeFontToolbar();
+        
+        const ctxMenu = document.getElementById('custom-context-menu');
+        if (ctxMenu) ctxMenu.style.display = 'none';
+    };
+
+    function toggleProjectMenu() {
+        const menu = document.getElementById('project-menu');
+        if (menu.style.display === 'block') menu.style.display = 'none';
+        else { listProjects(); menu.style.display = 'block'; }
+    }
+    
+    function closeProjectMenu() { document.getElementById('project-menu').style.display = 'none'; }
+    
+    window.addEventListener('click', function(e) {
+        const btn = document.getElementById('project-toggle-btn');
+        const menu = document.getElementById('project-menu');
+        if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) menu.style.display = 'none';
+        
+        const profileIcon = document.getElementById('profile-icon');
+        const profileMenu = document.getElementById('profile-menu');
+        if (profileIcon && profileMenu && !profileIcon.contains(e.target) && !profileMenu.contains(e.target)) profileMenu.style.display = 'none';
+
+        const slider = document.getElementById('elements-slider'); 
+        const uiSlider = document.getElementById('ui-elements-slider'); 
+        const helpSlider = document.getElementById('help-slider');
+        const storeSlider = document.getElementById('store-slider');
+        
+        const templatesBtn = document.getElementById('sidebar-add-btn');
+        const elementsBtn = document.getElementById('sidebar-elements-btn');
+        const settingsBtn = document.getElementById('sidebar-settings-btn');
+        const helpBtn = document.getElementById('sidebar-help-btn');
+        const storeBtn = document.getElementById('sidebar-store-btn');
+        
+        const isClickInsideModal = e.target.closest('.auth-modal') || e.target.closest('.modal') || e.target.closest('#custom-context-menu');
+
+        if (!isClickInsideModal) {
+            if (slider && (slider.classList.contains('open') || slider.classList.contains('active'))) {
+                let clickedOutsideTemplates = !slider.contains(e.target) && (!templatesBtn || !templatesBtn.contains(e.target));
+                let clickedOtherBtns = (elementsBtn && elementsBtn.contains(e.target)) || (settingsBtn && settingsBtn.contains(e.target)) || (helpBtn && helpBtn.contains(e.target)) || (storeBtn && storeBtn.contains(e.target));
+                
+                if (clickedOutsideTemplates || clickedOtherBtns) {
+                    if (typeof closeElementsSlider === 'function') closeElementsSlider();
+                    else slider.classList.remove('open', 'active');
+                }
+            }
+
+            if (uiSlider && uiSlider.classList.contains('active')) {
+                let clickedOutsideElements = !uiSlider.contains(e.target) && (!elementsBtn || !elementsBtn.contains(e.target));
+                let clickedOtherBtns = (templatesBtn && templatesBtn.contains(e.target)) || (settingsBtn && settingsBtn.contains(e.target)) || (helpBtn && helpBtn.contains(e.target)) || (storeBtn && storeBtn.contains(e.target));
+                
+                if (clickedOutsideElements || clickedOtherBtns) {
+                    if (typeof closeUiElementsSlider === 'function') closeUiElementsSlider();
+                    else uiSlider.classList.remove('active');
+                }
+            }
+
+            if (helpSlider && helpSlider.classList.contains('active')) {
+                let clickedOutsideHelp = !helpSlider.contains(e.target) && (!helpBtn || !helpBtn.contains(e.target));
+                let clickedOtherBtns = (templatesBtn && templatesBtn.contains(e.target)) || (elementsBtn && elementsBtn.contains(e.target)) || (settingsBtn && settingsBtn.contains(e.target)) || (storeBtn && storeBtn.contains(e.target));
+                
+                if (clickedOutsideHelp || clickedOtherBtns) {
+                    if (typeof closeHelpSlider === 'function') closeHelpSlider();
+                    else helpSlider.classList.remove('active');
+                }
+            }
+
+            if (storeSlider && storeSlider.classList.contains('active')) {
+                let clickedOutsideStore = !storeSlider.contains(e.target) && (!storeBtn || !storeBtn.contains(e.target));
+                let clickedOtherBtns = (templatesBtn && templatesBtn.contains(e.target)) || (elementsBtn && elementsBtn.contains(e.target)) || (settingsBtn && settingsBtn.contains(e.target)) || (helpBtn && helpBtn.contains(e.target));
+                
+                if (clickedOutsideStore || clickedOtherBtns) {
+                    if (typeof closeStoreSlider === 'function') closeStoreSlider();
+                    else storeSlider.classList.remove('active');
+                }
+            }
+        }
+    });
+
+    window.openWidgetDrawer = function() {
+        const slider = document.getElementById('elements-slider');
+        if (slider && !slider.classList.contains('open')) {
+            if (typeof openElementsSlider === 'function') openElementsSlider();
+            else slider.classList.add('open');
+        }
+        
+        const uiSlider = document.getElementById('ui-elements-slider');
+        if (uiSlider && !uiSlider.classList.contains('active')) {
+            if (typeof openUiElementsSlider === 'function') openUiElementsSlider();
+            else uiSlider.classList.add('active');
+        }
+    };
+
+    function listProjects() {
+        fetch('/list_projects').then(r => r.json()).then(data => {
+            const menuContent = document.querySelector('.project-list-content');
+            menuContent.innerHTML = ''; 
+            
+            if (data.projects.length === 0) { 
+                const emptyMsg = document.createElement('div');
+                emptyMsg.style.cssText = 'padding:10px; color:#aaa; font-size:0.9em; text-align:center;';
+                emptyMsg.textContent = 'No projects saved.';
+                menuContent.appendChild(emptyMsg);
+                return; 
+            }
+            data.projects.forEach(project => {
+                const itemDiv = document.createElement('div'); itemDiv.className = 'project-item';
+                const nameSpan = document.createElement('span'); nameSpan.className = 'project-name-span'; nameSpan.textContent = project; nameSpan.onclick = () => loadProjectByName(project);
+                const deleteBtn = document.createElement('button'); deleteBtn.className = 'delete-project-btn'; deleteBtn.innerHTML = '✕'; deleteBtn.onclick = (e) => { e.stopPropagation(); deleteProject(project); };
+                itemDiv.appendChild(nameSpan); itemDiv.appendChild(deleteBtn); menuContent.appendChild(itemDiv);
+            });
+        });
+    }
+
+    window.saveProject = async function(isSaveAs = false) {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        if (typeof checkProjectLimit === 'function') {
+            const canProceed = await checkProjectLimit();
+            if(!canProceed) return;
+        }
+
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        let currentName = session.activeProject || session.active_project || "MyWebsite";
+
+        let projName = "MyProject";
+        if (isSaveAs || (!session.activeProject && !session.active_project)) {
+            projName = prompt("Enter a name for your project to save it:", currentName);
+        } else {
+            projName = currentName; 
+        }
+        if (!projName) return;
+
+        if (typeof updateStatus === 'function') updateStatus("Syncing edits before saving...");
+
+        // FIX: Synchronize current edits to backend BEFORE saving to prevent lost changes
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
+        let newBody = "";
+        if (doc) {
+            if (typeof window.getCleanFullContent === 'function') {
+                newBody = window.getCleanFullContent(doc);
+            } else {
+                const clone = doc.body.cloneNode(true);
+                clone.querySelectorAll('.bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar').forEach(c => c.remove());
+                newBody = clone.innerHTML;
+            }
+        }
+
+        const previewFile = typeof currentPreviewFile !== 'undefined' && currentPreviewFile ? currentPreviewFile : 'index.html';
+        
+        if (newBody) {
+            try {
+                await fetch('/save', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filename: previewFile, new_body_content: newBody })
+                });
+            } catch(e) { console.error("Pre-sync failed", e); }
+        }
+
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Saving Project...");
+        
+        fetch('/save_project', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ project_name: projName }) 
+        }).then(r => r.json()).then(d => {
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            if (d.success) { 
+                if (typeof updateStatus === 'function') updateStatus(d.message); 
+                session.activeProject = projName;
+                session.active_project = projName;
+                localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                if (typeof listProjects === 'function') listProjects(); 
+                
+                const saveBtn = document.getElementById('save-btn');
+                if (saveBtn) { saveBtn.textContent = "Saved"; saveBtn.disabled = true; }
+            } else {
+                if (typeof updateStatus === 'function') updateStatus(`Save Failed: ${d.error}`, true);
+            }
+        }).catch(err => {
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            if (typeof updateStatus === 'function') updateStatus(`Save Error: ${err.message}`, true);
+        });
+    };
+
+    function loadProjectByName(projectName) {
+        closeProjectMenu(); if (isVoiceActive) toggleVoiceEdit(voiceEditButton);
+        updateStatus(`Loading project '${projectName}'...`); showProgressOverlay("Loading..."); hideCodeStream(); 
+        fetch('/load_project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: projectName }) }).then(r => r.json()).then(data => {
+            hideProgressOverlay();
+            if (data.success) {
+                generatedFiles = data.files; currentChatHistory = data.prompts || []; 
+                chatDisplay.innerHTML = ''; loadPreview(data.current_page);
+                updatePreviewControls(); checkHistoryStatus(); updateStatus(data.message);
+            } else { updateStatus(`Load Failed: ${data.error}`, true); }
+        });
+    }
+    
+    function deleteProject(projectName) {
+        if(!confirm(`Delete '${projectName}'?`)) return;
+        fetch('/delete_project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: projectName }) }).then(r => r.json()).then(d => {
+            if (d.success) { updateStatus(d.message); listProjects(); } else updateStatus(`Delete Failed: ${d.error}`, true);
+        });
+    }
+
+    function openNewWindow() { if (isVoiceActive) toggleVoiceEdit(voiceEditButton); window.open(window.location.origin + `/preview/${currentPreviewFile}`, '_blank'); }
+
+    window.downloadWebsite = function() {
+        if (isVoiceActive) toggleVoiceEdit(voiceEditButton); updateStatus("Preparing download...");
+        fetch('/download', { method: 'POST' }).then(r => {
+            if (r.status === 403) {
+                return r.json().then(data => {
+                    if (data.needs_upgrade) {
+                        if(confirm(data.message + "\n\nClick OK to view upgrade plans.")) {
+                            if(typeof openPlanSelectionModal === 'function') openPlanSelectionModal();
+                        }
+                    } else {
+                        alert(data.error || "Permission denied.");
+                    }
+                    throw new Error("Upgrade Required");
+                });
+            }
+            if (!r.ok) throw new Error('Download failed');
+            
+            const disp = r.headers.get('Content-Disposition');
+            let filename = 'website.zip';
+            if (disp && disp.indexOf('attachment') !== -1) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
+                if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+            }
+            return r.blob().then(blob => ({ blob, filename }));
+        }).then(({blob, filename}) => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.style.display = 'none'; a.href = url; a.download = filename; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a); updateStatus("✅ Download started!");
+        }).catch(e => {
+            if(e.message !== "Upgrade Required") alert("Download Error: " + e.message);
+        });
+    }
+    
+    function toggleFloatingOptions() { const win = document.getElementById('floating-options'); win.style.display = win.style.display === 'flex' ? 'none' : 'flex'; }
+    
+    const floatHeader = document.getElementById('floating-options-header');
+    const floatWin = document.getElementById('floating-options');
+    let isDraggingOpt = false, optX = 0, optY = 0;
+    floatHeader.onmousedown = (e) => { isDraggingOpt = true; optX = e.clientX - floatWin.offsetLeft; optY = e.clientY - floatWin.offsetTop; };
+    window.onmousemove = (e) => { if(!isDraggingOpt) return; floatWin.style.left = (e.clientX - optX) + 'px'; floatWin.style.top = (e.clientY - optY) + 'px'; };
+    window.onmouseup = () => isDraggingOpt = false;
+
+    function toggleElementsSlider(e) {
+        if (e) e.stopPropagation();
+        const slider = document.getElementById('elements-slider');
+        const uiSlider = document.getElementById('ui-elements-slider'); 
+        const helpSlider = document.getElementById('help-slider');
+        const storeSlider = document.getElementById('store-slider');
+        const closeBtn = document.getElementById('sidebar-close-btn');
+        const addBtn = document.getElementById('sidebar-add-btn');
+        const overlay = document.getElementById('slider-overlay');
+        
+        if (uiSlider && uiSlider.classList.contains('active')) {
+            if (typeof closeUiElementsSlider === 'function') closeUiElementsSlider();
+            else uiSlider.classList.remove('active');
+        }
+        if (helpSlider && helpSlider.classList.contains('active')) {
+            if (typeof closeHelpSlider === 'function') closeHelpSlider();
+            else helpSlider.classList.remove('active');
+        }
+        if (storeSlider && storeSlider.classList.contains('active')) {
+            if (typeof closeStoreSlider === 'function') closeStoreSlider();
+            else storeSlider.classList.remove('active');
+        }
+
+        if (slider.classList.contains('open')) {
+            closeElementsSlider();
+        } else {
+            slider.classList.add('open');
+            if(closeBtn) closeBtn.style.display = 'flex';
+            if(addBtn) addBtn.style.display = 'none';
+            if(overlay) overlay.style.display = 'block';
+            setChatMode('minimized');
+            loadSidebarCategories(); 
+        }
+    }
+
+    function closeElementsSlider() {
+        const slider = document.getElementById('elements-slider');
+        const closeBtn = document.getElementById('sidebar-close-btn');
+        const addBtn = document.getElementById('sidebar-add-btn');
+        const overlay = document.getElementById('slider-overlay');
+        
+        if (slider) slider.classList.remove('open');
+        if (closeBtn) closeBtn.style.display = 'none';
+        if (addBtn) addBtn.style.display = 'flex';
+        if (overlay) overlay.style.display = 'none';
+    }
+
+    function loadSidebarCategories() {
+        fetch('/api/admin/templates/categories')
+        .then(r => r.json())
+        .then(data => {
+            const leftPane = document.getElementById('slider-categories');
+            if(!leftPane) return;
+            leftPane.innerHTML = '';
+            
+            const addCatBtn = document.getElementById('admin-add-category-btn');
+            if (currentUser && currentUser.role === 'admin' && addCatBtn) {
+                addCatBtn.style.display = 'flex';
+            }
+
+            if (data.categories) {
+                data.categories.forEach(c => {
+                    const catDiv = document.createElement('div');
+                    catDiv.className = 'category-item';
+                    catDiv.innerHTML = `<span>${c.name}</span>`;
+                    catDiv.onclick = () => {
+                        document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+                        catDiv.classList.add('active');
+                        loadSidebarTemplates(c.id);
+                    };
+                    leftPane.appendChild(catDiv);
+                });
+                if (data.categories.length > 0) {
+                    leftPane.firstChild.click(); 
+                }
+            }
+        }).catch(e => console.error("Error loading categories", e));
+    }
+
+    function loadSidebarTemplates(categoryId) {
+        const rightPane = document.getElementById('slider-templates');
+        if(!rightPane) return;
+        rightPane.innerHTML = '<div style="color:#999; text-align:center; margin-top:20px;">Loading templates...</div>';
+        
+        fetch(`/api/admin/templates/items?category_id=${categoryId}`)
+        .then(r => r.json())
+        .then(data => {
+            rightPane.innerHTML = '';
+            if (data.items && data.items.length > 0) {
+                data.items.forEach(item => {
+                    const card = document.createElement('div');
+                    card.className = 'template-card';
+                    card.onclick = () => loadTemplateAsProject(item);
+                    
+                    let editBtnHtml = '';
+                    if (currentUser && (currentUser.role === 'admin' || currentUser.role === 'user')) {
+                        editBtnHtml = `
+                            <div class="template-actions">
+                                <button class="template-action-btn template-edit-btn" title="Edit Template" onclick="editTemplateAction(event, ${item.id})">✏️</button>
+                            </div>
+                        `;
+                    }
+
+                    card.innerHTML = `
+                        <div class="template-img-wrapper">
+                            <img src="${item.thumbnail_url || 'https://via.placeholder.com/150'}" alt="Template">
+                        </div>
+                        <div class="template-info">${item.name}</div>
+                        ${editBtnHtml}
+                    `;
+                    rightPane.appendChild(card);
+                });
+            } else {
+                rightPane.innerHTML = '<div style="color:#999; text-align:center; margin-top:20px;">No templates in this category.</div>';
+            }
+        }).catch(e => {
+            console.error(e);
+            rightPane.innerHTML = '<div style="color:#dc3545; text-align:center; margin-top:20px;">Error loading templates.</div>';
+        });
+    }
+
+    function loadTemplateAsProject(itemData) {
+        closeElementsSlider();
+        if(isVoiceActive) toggleVoiceEdit(voiceEditButton);
+        
+        generatedFiles = {};
+        currentPreviewFile = null;
+        document.getElementById('page-dropdown').innerHTML = '<option value="" disabled selected>Pages...</option>';
+        chatDisplay.innerHTML = '';
+        currentChatHistory = [];
+        
+        updateStatus("Loading template...");
+        showProgressOverlay("Opening template...");
+        hideCodeStream();
+        
+        setTimeout(() => {
+            hideProgressOverlay();
+            try {
+                const files = typeof itemData.project_data_json === 'string' ? JSON.parse(itemData.project_data_json) : itemData.project_data_json;
+                generatedFiles = files;
+                
+                const pageKeys = Object.keys(generatedFiles).filter(f => f.endsWith('.html'));
+                if(pageKeys.length > 0) {
+                    currentPreviewFile = pageKeys.includes('index.html') ? 'index.html' : pageKeys[0];
+                    if(typeof loadPreview === 'function') loadPreview(currentPreviewFile);
+                    if(typeof updatePreviewControls === 'function') updatePreviewControls();
+                    if(typeof updateStatus === 'function') updateStatus(`Template '${itemData.name}' loaded successfully.`);
+                } else {
+                    if(typeof updateStatus === 'function') updateStatus(`Error: Template contains no valid HTML files.`, true);
+                }
+            } catch(e) {
+                console.error("Template parse error:", e);
+                if(typeof updateStatus === 'function') updateStatus(`Error loading template format.`, true);
+            }
+        }, 500); 
+    }
+
+    function editTemplateAction(event, templateId) {
+        event.stopPropagation(); 
+        if(typeof window.openAddTemplateModal === 'function') {
+            window.openAddTemplateModal(templateId);
+        } else {
+            alert('To edit this template, please access the Templates tab in the Admin CMS.');
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        if(typeof initDarkMode === 'function') initDarkMode(); 
+        
+        const voiceEditButton = document.getElementById('voice-edit-btn');
+        if (voiceEditButton && !('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) { 
+            voiceEditButton.disabled = true; 
+        }
+        
+        const promptInput = document.getElementById('prompt-input');
+        if (promptInput) {
+            promptInput.addEventListener('keydown', (e) => { 
+                if (e.key === 'Enter' && !e.shiftKey) { 
+                    e.preventDefault(); 
+                    if(typeof generateWebsite === 'function') generateWebsite(); 
+                } 
+            });
+        }
+        
+        const loginId = document.getElementById('login-id');
+        const loginPass = document.getElementById('login-pass');
+        if (loginId && loginPass) {
+            const handleEnter = (e) => { if (e.key === 'Enter' && typeof handleLogin === 'function') handleLogin(); };
+            loginId.addEventListener('keypress', handleEnter);
+            loginPass.addEventListener('keypress', handleEnter);
+        }
+        
+        if(typeof checkAuth === 'function') checkAuth(); 
+        if(typeof updatePreviewControls === 'function') updatePreviewControls();
+    });
+
+    // ==========================================
+    // GOAL 3 FIX: BULLETPROOF CATEGORY DELETE LOGIC
+    // ==========================================
+    
+    window.deleteCategory = window.deleteTemplateCategory = window.deleteAdminCategory = function(explicitId = null) {
+        let catId = explicitId;
+        let catName = "this category";
+        
+        // If no explicit ID passed (e.g. clicked from "Manage Categories" modal), grab from dropdown
+        if (!catId || typeof catId === 'object') {
+            let select = document.getElementById('manage-category-select') 
+                      || document.getElementById('edit-category-select') 
+                      || document.getElementById('new-template-category')
+                      || document.querySelector('select[id*="category"]');
+                      
+            if (!select || !select.value) {
+                alert("Please select a category from the dropdown to delete.");
+                return;
+            }
+            catId = select.value;
+            if (select.options && select.selectedIndex >= 0) {
+                catName = select.options[select.selectedIndex].text;
+            }
+        }
+        
+        if (!confirm(`⚠️ Are you absolutely sure you want to delete the category "${catName}"?\n\nThis will also PERMANENTLY DELETE all templates and elements inside it.`)) {
+            return;
+        }
+        
+        fetch(`/api/admin/templates/categories/${catId}`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Category deleted successfully.");
+                
+                // Clear the template cache so UI fetches fresh list
+                if(window.sidebarCache) window.sidebarCache.categories = null;
+                
+                // Refresh left sidebar UI
+                if(typeof loadAdminCategories === 'function') loadAdminCategories(); 
+                if(typeof loadSidebarCategories === 'function') loadSidebarCategories();
+                if(typeof loadTemplateCategories === 'function') loadTemplateCategories();
+                
+                // --- INSTANT UPDATE FOR MODAL DROPDOWNS ---
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    const manageCatSelect = document.getElementById('manage-category-select');
+                    const templateCatSelect = document.getElementById('new-template-category');
+                    if (manageCatSelect) {
+                        manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                        cats.forEach(c => manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                    if (templateCatSelect) {
+                        templateCatSelect.innerHTML = '<option value="" disabled selected>Select Category...</option>';
+                        cats.forEach(c => templateCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                });
+
+            } else {
+                alert("❌ Error deleting category: " + data.error);
+            }
+        })
+        .catch(err => {
+            alert("❌ Network error while deleting category.");
+            console.error(err);
+        });
+    };
+
+    window.promptRenameCategory = window.renameCategory = window.renameTemplateCategory = function() {
+        let select = document.getElementById('manage-category-select') 
+                  || document.getElementById('edit-category-select') 
+                  || document.getElementById('new-template-category')
+                  || document.querySelector('select[id*="category"]');
+                  
+        if (!select || !select.value) {
+            alert("Please select a category to rename.");
+            return;
+        }
+        
+        const catId = select.value;
+        const oldName = select.options[select.selectedIndex].text;
+        
+        const newName = prompt(`Enter new name for "${oldName}":`, oldName);
+        if (!newName || newName.trim() === '' || newName === oldName) {
+            return;
+        }
+        
+        fetch(`/api/admin/templates/categories/${catId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: newName.trim() })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Category renamed successfully.");
+                if(typeof loadAdminCategories === 'function') loadAdminCategories(); 
+                if(typeof loadSidebarCategories === 'function') loadSidebarCategories();
+                if(typeof loadTemplateCategories === 'function') loadTemplateCategories();
+                
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    const manageCatSelect = document.getElementById('manage-category-select');
+                    const templateCatSelect = document.getElementById('new-template-category');
+                    if (manageCatSelect) {
+                        manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                        cats.forEach(c => manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                    if (templateCatSelect) {
+                        templateCatSelect.innerHTML = '<option value="" disabled selected>Select Category...</option>';
+                        cats.forEach(c => templateCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                });
+            } else {
+                alert("❌ Error renaming category: " + data.error);
+            }
+        })
+        .catch(err => alert("Network error while renaming category."));
+    };
+
+    function deleteTemplate(id) {
+        if(!confirm("Permanently delete this template?")) return;
+        fetch(`/api/admin/templates/items/${id}`, {method: 'DELETE'})
+        .then(r=>r.json()).then(d => {
+            if(d.success) loadTemplates(currentTemplateCategoryId);
+            else alert(d.error);
+        });
+    }
+
+    function injectTemplate(item) {
+        if (item.is_full_project) {
+            if(!confirm(`Loading '${item.name}' will replace your entire current workspace. Continue?`)) return;
+            loadTemplateAsProject(item);
+        } else {
+            if(!item.content_html) return alert("This template has no HTML content.");
+            
+            captureState();
+            const iframe = document.getElementById('preview-frame');
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            const sel = doc.getSelection();
+            if (sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                const tempDiv = doc.createElement('div');
+                tempDiv.innerHTML = item.content_html;
+                Array.from(tempDiv.childNodes).reverse().forEach(node => {
+                    range.insertNode(node);
+                });
+            } else if (currentContextTarget) {
+                currentContextTarget.insertAdjacentHTML('afterend', item.content_html);
+                currentContextTarget = null;
+            } else {
+                doc.body.insertAdjacentHTML('beforeend', item.content_html);
+            }
+            
+            initEditor(iframe);
+            enableSaveButton();
+            captureState();
+            if(typeof updateStatus === 'function') updateStatus("✅ Element added to page.");
+            
+            closeElementsSlider();
+        }
+    }
+
+    function loadTemplateAsProject(itemData) {
+        closeElementsSlider();
+        
+        const voiceBtn = document.getElementById('voice-edit-btn');
+        if(typeof isVoiceActive !== 'undefined' && isVoiceActive && typeof toggleVoiceEdit === 'function') {
+            toggleVoiceEdit(voiceBtn);
+        }
+        
+        generatedFiles = {};
+        currentPreviewFile = null;
+        document.getElementById('page-dropdown').innerHTML = '<option value="" disabled selected>Pages...</option>';
+        chatDisplay.innerHTML = '';
+        currentChatHistory = [];
+        
+        if(typeof updateStatus === 'function') updateStatus("Loading template...");
+        if(typeof showProgressOverlay === 'function') showProgressOverlay("Opening template...");
+        if(typeof hideCodeStream === 'function') hideCodeStream();
+        
+        setTimeout(() => {
+            if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            try {
+                const files = typeof itemData.project_data_json === 'string' ? JSON.parse(itemData.project_data_json) : itemData.project_data_json;
+                generatedFiles = files;
+                
+                const pageKeys = Object.keys(generatedFiles).filter(f => f.endsWith('.html'));
+                if(pageKeys.length > 0) {
+                    currentPreviewFile = pageKeys.includes('index.html') ? 'index.html' : pageKeys[0];
+                    if(typeof loadPreview === 'function') loadPreview(currentPreviewFile);
+                    if(typeof updatePreviewControls === 'function') updatePreviewControls();
+                    if(typeof updateStatus === 'function') updateStatus(`Template '${itemData.name}' loaded successfully.`);
+                } else {
+                    if(typeof updateStatus === 'function') updateStatus(`Error: Template contains no valid HTML files.`, true);
+                }
+            } catch(e) {
+                console.error("Template parse error:", e);
+                if(typeof updateStatus === 'function') updateStatus(`Error loading template format.`, true);
+            }
+        }, 500); 
+    }
+
+    function editTemplateAction(event, templateId) {
+        event.stopPropagation();
+        if(typeof window.openAddTemplateModal === 'function') {
+            window.openAddTemplateModal(templateId);
+        } else {
+            alert('To edit this template, please access the Templates tab in the Admin CMS.');
+        }
+    }
+
+    // --- Admin Template Modals ---
+    let pendingProjectJson = null;
+
+    function openAddTemplateModal() {
+        closeElementsSlider();
+        document.getElementById('admin-template-modal').style.display = 'flex';
+        
+        pendingProjectJson = null;
+        document.getElementById('new-template-project-folder').value = '';
+        document.getElementById('folder-upload-summary').style.display = 'none';
+        document.getElementById('template-save-progress-container').style.display = 'none';
+
+        switchTemplateTab('category');
+    }
+
+    function switchTemplateTab(tab) {
+        const tabs = document.querySelectorAll('#admin-template-modal .sub-img-tab');
+        tabs.forEach(t => t.classList.remove('active'));
+        
+        if(tab === 'category') {
+            document.getElementById('tab-add-category').classList.add('active');
+            document.getElementById('form-add-category').style.display = 'block';
+            document.getElementById('form-add-item').style.display = 'none';
+            
+            const manageCatSelect = document.getElementById('manage-category-select');
+            if (manageCatSelect) {
+                manageCatSelect.innerHTML = '<option value="" disabled selected>Loading...</option>';
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                    cats.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.name;
+                        manageCatSelect.appendChild(opt);
+                    });
+                });
+            }
+
+        } else {
+            document.getElementById('tab-add-item').classList.add('active');
+            document.getElementById('form-add-category').style.display = 'none';
+            document.getElementById('form-add-item').style.display = 'block';
+            
+            document.getElementById('new-template-image').value = '';
+            document.getElementById('template-thumb-preview').innerHTML = '<span style="color:#aaa; font-size:10px;">None</span>';
+            document.getElementById('new-template-image').onchange = function(e) {
+                const file = e.target.files[0];
+                if(file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        document.getElementById('template-thumb-preview').innerHTML = `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+        }
+    }
+
+    function saveNewCategory() {
+        const name = document.getElementById('new-category-name').value.trim();
+        if(!name) return alert("Category name is required");
+        
+        fetch('/api/admin/templates/categories', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) {
+                document.getElementById('new-category-name').value = '';
+                currentTemplateCategoryId = d.category.id;
+                loadTemplateCategories();
+                switchTemplateTab('item'); 
+            } else {
+                alert("Error: " + d.error);
+            }
+        });
+    }
+
+    const folderInput = document.getElementById('new-template-project-folder');
+    if(folderInput) {
+        folderInput.addEventListener('change', async function(e) {
+            const files = e.target.files;
+            if(files.length === 0) return;
+            
+            const summary = document.getElementById('folder-upload-summary');
+            summary.style.display = 'block';
+            summary.style.color = '#007bff';
+            summary.textContent = `Packaging ${files.length} files...`;
+
+            let projectFiles = {};
+            const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+
+            for(let i=0; i<files.length; i++) {
+                const file = files[i];
+                if (file.webkitRelativePath.includes('node_modules/') || file.webkitRelativePath.includes('.git/')) continue;
+
+                let relativePath = file.webkitRelativePath || file.name;
+                if (relativePath.includes('/')) {
+                    relativePath = relativePath.substring(relativePath.indexOf('/') + 1);
+                }
+
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+                if(textExtensions.includes(ext)) {
+                    projectFiles[relativePath] = await file.text();
+                } else {
+                    const reader = new FileReader();
+                    projectFiles[relativePath] = await new Promise(res => {
+                        reader.onload = () => res(reader.result);
+                        reader.readAsDataURL(file);
+                    });
+                }
+            }
+            pendingProjectJson = JSON.stringify(projectFiles);
+            summary.style.color = '#28a745';
+            summary.textContent = `✅ Ready: ${Object.keys(projectFiles).length} files packaged for upload.`;
+        });
+    }
+
+    function saveNewTemplate() {
+        const name = document.getElementById('new-template-name').value.trim();
+        const categoryId = document.getElementById('new-template-category').value;
+        const contentHtml = document.getElementById('new-template-html').value.trim();
+        const fileInput = document.getElementById('new-template-image');
+
+        if(!name || !categoryId) return alert("Please provide a Name and select a Category.");
+        if(!contentHtml && !pendingProjectJson) return alert("Please provide either HTML Content OR upload a Full Project Folder.");
+
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('category_id', categoryId);
+        
+        if (contentHtml) formData.append('content_html', contentHtml);
+        if (pendingProjectJson) formData.append('project_data_json', pendingProjectJson);
+        
+        if(fileInput.files.length > 0) {
+            formData.append('thumbnail', fileInput.files[0]);
+        }
+
+        const btnSave = document.getElementById('btn-save-template');
+        const btnCancel = document.getElementById('btn-cancel-template');
+        const progContainer = document.getElementById('template-save-progress-container');
+        const progBar = document.getElementById('template-save-bar');
+        const progPercent = document.getElementById('template-save-percent');
+        const progStatus = document.getElementById('template-save-status');
+
+        btnSave.disabled = true;
+        btnCancel.disabled = true;
+        progContainer.style.display = 'block';
+        progBar.style.width = '0%';
+        progPercent.textContent = '0%';
+        
+        let progress = 0;
+        let pType = pendingProjectJson ? "Full Project" : "Element";
+        progStatus.textContent = `Uploading ${pType}...`;
+
+        const uploadInterval = setInterval(() => {
+            if(progress < 90) {
+                progress += Math.random() * 10;
+                if(progress > 90) progress = 90;
+                progBar.style.width = `${progress}%`;
+                progPercent.textContent = `${Math.round(progress)}%`;
+                if(progress > 50) progStatus.textContent = `Saving to database...`;
+            }
+        }, 300);
+
+        fetch('/api/admin/templates/items', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(d => {
+            clearInterval(uploadInterval);
+            progBar.style.width = '100%';
+            progPercent.textContent = '100%';
+            progStatus.textContent = "Complete!";
+
+            setTimeout(() => {
+                btnSave.disabled = false;
+                btnCancel.disabled = false;
+                
+                if(d.success) {
+                    safeCloseModal('admin-template-modal');
+                    document.getElementById('new-template-name').value = '';
+                    document.getElementById('new-template-html').value = '';
+                    document.getElementById('new-template-project-folder').value = '';
+                    document.getElementById('folder-upload-summary').style.display = 'none';
+                    pendingProjectJson = null;
+                    fileInput.value = '';
+                    
+                    const sidebarBtn = document.getElementById('sidebar-add-btn');
+                    if(sidebarBtn) sidebarBtn.click(); 
+                } else {
+                    alert("Error: " + d.error);
+                }
+            }, 500);
+        })
+        .catch(e => {
+            clearInterval(uploadInterval);
+            progContainer.style.display = 'none';
+            btnSave.disabled = false;
+            btnCancel.disabled = false;
+            alert("Error saving template.");
+        });
+    }
+
+    // --- PAYMENT & CHECKOUT LOGIC ---
+
+    function setupPreviewPaymentListeners() {
+        try {
+            const iframe = document.getElementById('preview-frame');
+            if (!iframe || !iframe.contentDocument) return;
+            
+            const doc = iframe.contentDocument;
+            const buyBtns = doc.querySelectorAll('.buy-btn');
+            
+            buyBtns.forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const name = btn.dataset.name || "Product";
+                    const amount = btn.dataset.amount || "0.00";
+                    if(typeof openPaymentModal === 'function') openPaymentModal(name, amount);
+                };
+                btn.style.cursor = 'pointer';
+                btn.title = "Click to test payment";
+            });
+        } catch (e) {
+            console.warn("⚠️ Cannot access iframe content for payment listeners", e);
+        }
+    }
+
+    // Handles ONLY In-Editor Mock Payments
+    function openPaymentModal(name, amount, metadata = null) {
+        window.currentPaymentAmount = parseFloat(amount) || 0;
+        window.currentItemName = name;
+        window.currentPaymentMetadata = metadata || { product_name: name, source: "preview_editor" };
+        
+        document.getElementById('pay-item-name').textContent = name;
+        document.getElementById('pay-amount-display').textContent = "$" + window.currentPaymentAmount.toFixed(2); 
+        document.getElementById('payment-modal').style.display = 'flex';
+        
+        loadCheckoutGateways();
+    }
+
+    function loadCheckoutGateways() {
+        const list = document.getElementById('payment-methods-list');
+        if(!list) return;
+        list.innerHTML = '<div style="text-align:center; color:#aaa;">Loading options...</div>';
+        
+        fetch('/api/admin/payment_gateways')
+            .then(r => r.json())
+            .then(data => {
+                list.innerHTML = '';
+                const currency = data.currency || 'USD';
+                document.getElementById('pay-amount-display').textContent = `${currency} ${(window.currentPaymentAmount || 0).toFixed(2)}`;
+
+                const activeGateways = data.gateways.filter(g => g.is_active);
+                if (activeGateways.length === 0) {
+                    list.innerHTML = '<div style="color:red; text-align:center;">No payment methods available.</div>';
+                    return;
+                }
+
+                activeGateways.forEach(gw => {
+                    const btn = document.createElement('button');
+                    btn.className = 'auth-btn';
+                    btn.style.marginBottom = '10px';
+                    btn.style.display = 'flex';
+                    btn.style.justifyContent = 'center';
+                    btn.style.alignItems = 'center';
+                    btn.style.gap = '10px';
+                    
+                    if (gw.code === 'paypal') {
+                        btn.style.background = '#ffc439'; btn.style.color = '#000'; btn.innerHTML = '🅿️ Pay with PayPal';
+                    } else if (gw.code === 'cashfree') {
+                        btn.style.background = '#f37121'; btn.style.color = '#fff'; btn.innerHTML = '💳 Pay with Cashfree';
+                    } else if (gw.code === 'ccavenue') {
+                        btn.style.background = '#005a9e'; btn.style.color = '#fff'; btn.innerHTML = '💳 Pay with CCAvenue';
+                    } else {
+                        btn.style.background = '#28a745'; btn.style.color = '#fff'; btn.innerHTML = `💳 Pay with ${gw.name}`;
+                    }
+                    
+                    btn.onclick = function() { initiateCheckout(gw.code, currency); };
+                    list.appendChild(btn);
+                });
+            })
+            .catch(e => {
+                list.innerHTML = `<div style="color:red; text-align:center;">Error loading gateways</div>`;
+            });
+    }
+
+    // --- FIX: Cache-Proof & Fool-Proof Checkout Initialization ---
+    // Safely reads plan_id and amounts from ANY source (Arguments, Globals, or the Button DOM)
+    function initiateCheckout(gatewayCode, arg2, arg3, arg4) {
+        let currency = 'USD';
+        let originalText = "Processing...";
+        let btnElement = document.activeElement || document.createElement('button');
+        
+        let finalAmount = window.currentPaymentAmount || 0;
+        let finalPlanId = window.selectedPlanId || null;
+        let metadata = window.currentPaymentMetadata || { source: "preview_editor" };
+
+        // Parameter Auto-Detection (bypasses browser caching issues)
+        if (arg2 instanceof HTMLElement) {
+            btnElement = arg2;
+            if (typeof arg3 === 'string') originalText = arg3;
+        } else if (typeof arg2 === 'string') {
+            currency = arg2;
+            if (arg3 instanceof HTMLElement) {
+                btnElement = arg3;
+                if (typeof arg4 === 'string') originalText = arg4;
+            }
+        }
+
+        // If the clicked button contains plan data, extract it
+        if (btnElement && btnElement.hasAttribute('data-price')) {
+            finalAmount = parseFloat(btnElement.getAttribute('data-price')) || finalAmount;
+            
+            const pid = btnElement.getAttribute('data-plan-id') || btnElement.getAttribute('data-plan_id');
+            if (pid) finalPlanId = parseInt(pid);
+            
+            if (btnElement.getAttribute('data-type') === 'plan_subscription') {
+                metadata = {
+                    type: 'plan_subscription',
+                    plan_id: finalPlanId,
+                    product_name: btnElement.getAttribute('data-name')
+                };
+            }
+        }
+
+        // Final sanity check: if it's a subscription but we lost the plan_id, grab the global one
+        if (!finalPlanId && window.selectedPlanId) {
+            finalPlanId = window.selectedPlanId;
+            metadata.type = 'plan_subscription';
+            metadata.plan_id = finalPlanId;
+        }
+
+        btnElement.disabled = true;
+        btnElement.textContent = "Connecting...";
+
+        if (finalAmount <= 0) {
+            alert("Error: Payment amount cannot be zero. Check your plan configuration in Admin CMS.");
+            btnElement.disabled = false;
+            btnElement.textContent = originalText;
+            return;
+        }
+
+        // Force Plan ID to be explicitly in the root of the JSON payload
+        const requestPayload = {
+            gateway_code: gatewayCode,
+            amount: finalAmount,
+            currency: currency,
+            metadata: metadata
+        };
+
+        if (finalPlanId) {
+            requestPayload.plan_id = parseInt(finalPlanId);
+        } else if (metadata && metadata.plan_id) {
+            requestPayload.plan_id = parseInt(metadata.plan_id);
+        }
+
+        fetch('/api/pay/initiate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(requestPayload)
+        })
+        .then(r => r.json())
+        .then(data => {
+            btnElement.disabled = false;
+            btnElement.textContent = originalText;
+            
+            if (data.success) {
+                if (data.action === 'redirect' && data.url) {
+                    window.location.href = data.url; 
+                } 
+                else if (data.action === 'form' && data.form_fields) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = data.action_url || data.url;
+                    form.style.display = 'none';
+
+                    for (const [key, value] of Object.entries(data.form_fields)) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = value;
+                        form.appendChild(input);
+                    }
+
+                    document.body.appendChild(form);
+                    form.submit();
+                } 
+            } else {
+                alert("Payment Initialization Failed: " + data.error);
+            }
+        })
+        .catch(e => {
+            btnElement.disabled = false;
+            btnElement.textContent = originalText;
+            alert("Network Error during checkout initiation.");
+            console.error(e);
+        });
+    }
+
+    // ==========================================
+    // CAROUSEL WIDGET FIXES
+    // ==========================================
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const buttons = document.querySelectorAll('button');
+        buttons.forEach(btn => {
+            if(btn.textContent.includes('Add Empty Image Row') || btn.getAttribute('onclick') === "addCarouselImageRow('')") {
+                btn.style.display = 'none';
+            }
+        });
+
+        const iframe = document.getElementById('preview-frame');
+        if(iframe) {
+            iframe.addEventListener('load', () => {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                doc.addEventListener('contextmenu', function(e) {
+                    const carouselTarget = e.target.closest('.eweb-carousel-container, .eweb-carousel-widget, .carousel');
+                    if(carouselTarget) {
+                        window.currentContextTarget = carouselTarget;
+                        setTimeout(() => {
+                            const menu = document.getElementById('custom-context-menu');
+                            if(menu && !menu.innerHTML.includes('Edit Carousel Images')) {
+                                menu.innerHTML += `<div class="ctx-divider"></div>`;
+                                menu.innerHTML += `<div class="ctx-item" onclick="window.parent.openEditCarouselModal(window.parent.currentContextTarget.closest('.eweb-carousel-container, .eweb-carousel-widget')); this.parentElement.style.display='none';"><span style="display:inline-block; width:20px;">🖼️</span> Edit Carousel Images</div>`;
+                                menu.innerHTML += `<div class="ctx-item ctx-danger" onclick="const t = window.parent.currentContextTarget.closest('.eweb-carousel-container, .eweb-carousel-widget, .eweb-block'); if(t) { t.remove(); if(typeof window.parent.captureState==='function') window.parent.captureState(); if(typeof window.parent.enableSaveButton==='function') window.parent.enableSaveButton(); } this.parentElement.style.display='none';"><span style="display:inline-block; width:20px;">🗑️</span> Delete Carousel</div>`;
+                            }
+                        }, 50);
+                    }
+                });
+            });
+        }
+    });
+
+    window.openEditCarouselModal = function(widget = null) {
+        window.activeCarouselWidget = widget;
+        window.__isAddingCarousel = !widget;
+
+        const list = document.getElementById('carousel-image-list');
+        if(list) list.innerHTML = '';
+
+        if (widget) {
+            const images = widget.querySelectorAll('img');
+            images.forEach(img => {
+                if(typeof window.addCarouselImageRow === 'function') {
+                    window.addCarouselImageRow(img.src);
+                }
+            });
+        }
+
+        const modal = document.getElementById('edit-carousel-modal');
+        if(modal) modal.style.display = 'flex';
+    };
+
+    window.saveCarousel = function() {
+        const rows = document.querySelectorAll('.carousel-img-url');
+        let itemsHtml = '';
+        rows.forEach(row => {
+            const url = row.value.trim();
+            if(url) {
+                itemsHtml += `<img src="${url}" style="height:250px; width:auto; max-width:80%; object-fit:cover; border-radius:8px; scroll-snap-align:start; flex-shrink:0;">`;
+            }
+        });
+
+        if(!itemsHtml) {
+            alert("Please add at least one image.");
+            return;
+        }
+
+        const containerHtml = `
+            <div class="eweb-block eweb-carousel-container" style="position:relative; width:100%; margin:15px auto; display:flex; align-items:center; padding:0 35px; box-sizing:border-box;">
+                <button contenteditable="false" class="carousel-nav-btn" style="position:absolute; left:0; z-index:10; background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; display:flex; justify-content:center; align-items:center;" onclick="this.nextElementSibling.scrollBy({left: -300, behavior: 'smooth'})">❮</button>
+                <div class="eweb-carousel-widget" style="width:100%; display:flex; overflow-x:auto; scroll-snap-type: x mandatory; gap:10px; scrollbar-width:none; -ms-overflow-style:none; padding-bottom:5px;">
+                    ${itemsHtml}
+                </div>
+                <button contenteditable="false" class="carousel-nav-btn" style="position:absolute; right:0; z-index:10; background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:30px; height:30px; cursor:pointer; display:flex; justify-content:center; align-items:center;" onclick="this.previousElementSibling.scrollBy({left: 300, behavior: 'smooth'})">❯</button>
+            </div>
+        `;
+
+        if (!window.activeCarouselWidget && window.__isAddingCarousel) {
+            if(typeof window.injectWidgetIntoEditor === 'function') {
+                window.injectWidgetIntoEditor(containerHtml);
+            }
+            const modal = document.getElementById('edit-carousel-modal');
+            if(modal) modal.style.display = 'none';
+            window.__isAddingCarousel = false;
+            return;
+        }
+
+        if (window.activeCarouselWidget) {
+            let container = window.activeCarouselWidget.closest('.eweb-carousel-container');
+
+            if(container) {
+                container.outerHTML = containerHtml;
+            } else {
+                window.activeCarouselWidget.outerHTML = containerHtml;
+            }
+        }
+
+        if(typeof window.captureState === 'function') window.captureState();
+        if(typeof window.enableSaveButton === 'function') window.enableSaveButton();
+        if(typeof window.updateStatus === 'function') window.updateStatus("✅ Carousel updated.");
+        document.getElementById('edit-carousel-modal').style.display = 'none';
+        window.activeCarouselWidget = null;
+    };
+
+    // FIX 2: GLOBAL ANTI-AUTOPLAY FOR MODAL VIDEOS
+    setInterval(function() {
+        document.querySelectorAll('.auth-modal video, .modal video').forEach(v => {
+            if (!v.paused && !v.hasAttribute('data-user-played')) {
+                v.muted = true;
+                v.pause();
+            }
+        });
+    }, 1000);
+
+    document.addEventListener('play', function(e) {
+        if (e.target.closest('.modal') || e.target.closest('.auth-modal')) {
+            e.target.setAttribute('data-user-played', 'true');
+        }
+    }, true);
+
+    // =========================================================
+    // GOAL 3 FIX: FTP IMPORT HOOKS
+    // =========================================================
+
+    window.executeFtpImport = function() {
+        const btn = document.getElementById('ftp-imp-submit-btn');
+        const status = document.getElementById('ftp-imp-status');
+        
+        const projNameInput = document.getElementById('ftp-imp-name');
+        const projNameVal = projNameInput && projNameInput.value ? projNameInput.value : 'Imported_FTP_Site';
+        window._pendingFtpProjectName = projNameVal;
+        
+        const payload = {
+            project_name: projNameVal,
+            ftp_host: document.getElementById('ftp-imp-host').value.trim(),
+            ftp_user: document.getElementById('ftp-imp-user').value.trim(),
+            ftp_pass: document.getElementById('ftp-imp-pass').value,
+            target_dir: document.getElementById('ftp-imp-dir').value.trim(),
+            save_credentials: document.getElementById('ftp-imp-save-creds').checked
+        };
+
+        if (!payload.ftp_host || !payload.ftp_user) {
+            alert("Host and Username are required.");
+            return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Connecting & Downloading (Please Wait...)';
+        status.style.display = 'block';
+        status.style.color = '#007bff';
+        status.innerHTML = 'Connecting to server. This may take a minute for large sites...';
+
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Connecting to Web Server...");
+
+        fetch('/api/import_ftp', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        })
+        .then(r => r.json())
+        .then(d => {
+            btn.disabled = false;
+            btn.innerHTML = '⬇️ Connect & Import Files';
+            if (d.success) {
+                document.getElementById('ftp-import-modal').style.display = 'none';
+                
+                if (d.files) {
+                    finishImportProcess(d.files);
+                } else {
+                    status.style.color = 'green';
+                    status.innerHTML = '✅ Import Complete! Reloading workspace...';
+                    setTimeout(() => window.location.reload(), 1500);
+                }
+            } else {
+                status.style.color = 'red';
+                status.innerHTML = '❌ Error: ' + d.error;
+                if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            }
+        })
+        .catch(e => {
+            btn.disabled = false;
+            btn.innerHTML = '⬇️ Connect & Import Files';
+            status.style.color = 'red';
+            status.innerHTML = '❌ Network error during import. It might have timed out.';
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+        });
+    };
+
+    async function handleFolderImport(fileList) {
+        if (fileList.length === 0) return;
+        
+        if (Object.keys(generatedFiles).length > 0) {
+            if(!confirm("Importing a NEW template will close the current project. Continue?")) {
+                document.getElementById('folder-import-input').value = ''; 
+                return;
+            }
+        }
+
+        generatedFiles = {}; 
+        currentChatHistory = []; 
+        currentPreviewFile = null;
+        
+        const chatDisplay = document.getElementById('chat-display');
+        if(chatDisplay) chatDisplay.innerHTML = '';
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            iframe.contentDocument.documentElement.innerHTML = '<head></head><body></body>';
+        }
+
+        updateStatus("Importing files...");
+        
+        const progOverlay = document.getElementById('progress-overlay');
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+        if(progOverlay) progOverlay.style.display = 'flex';
+        if(progText) progText.textContent = "Reading Files...";
+        if(progPercent) progPercent.textContent = "10%";
+        
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Importing Project...");
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(10, "Reading Files...");
+        
+        if (fileList.length === 1 && fileList[0].name.toLowerCase().endsWith('.zip')) {
+            await handleZipImport(fileList[0], true); 
+            return;
+        }
+
+        const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+        
+        let pendingFiles = {}; 
+        let htmlCount = 0;
+
+        for (let i = 0; i < fileList.length; i++) {
+            const file = fileList[i];
+            
+            let relativePath = file.webkitRelativePath || file.name;
+            if (relativePath.includes('/')) {
+                relativePath = relativePath.substring(relativePath.indexOf('/') + 1);
+            }
+            const filename = relativePath;
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+            if (textExtensions.includes(ext)) {
+                try {
+                    const text = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsText(file);
+                    });
+                    pendingFiles[filename] = text;
+                    if(ext === '.html' || ext === '.php') htmlCount++;
+                } catch(e) {}
+            } else {
+                try {
+                    const base64Data = await new Promise((resolve, reject) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.onerror = reject;
+                        reader.readAsDataURL(file);
+                    });
+                    pendingFiles[filename] = base64Data;
+                } catch(e) {
+                    console.warn(`Skipped file ${filename}: ${e}`);
+                }
+            }
+        }
+        
+        await finishImportProcess(pendingFiles);
+    }
+
+    async function handleZipImport(zipFile, skipConfirm = false) {
+        if (typeof JSZip === 'undefined') {
+            alert("Error: JSZip library is required to import zip files. Please contact the administrator.");
+            const zipInput = document.getElementById('zip-import-input');
+            if (zipInput) zipInput.value = '';
+            const folderInput = document.getElementById('folder-import-input');
+            if (folderInput) folderInput.value = '';
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+            return;
+        }
+
+        if (!skipConfirm && Object.keys(generatedFiles).length > 0) {
+            if(!confirm("Importing a NEW template will close the current project. Continue?")) {
+                const zipInput = document.getElementById('zip-import-input');
+                if (zipInput) zipInput.value = '';
+                return;
+            }
+        }
+
+        generatedFiles = {}; 
+        currentChatHistory = []; 
+        currentPreviewFile = null;
+        
+        const chatDisplay = document.getElementById('chat-display');
+        if(chatDisplay) chatDisplay.innerHTML = '';
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            iframe.contentDocument.documentElement.innerHTML = '<head></head><body></body>';
+        }
+
+        const progOverlay = document.getElementById('progress-overlay');
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+        if(progOverlay) progOverlay.style.display = 'flex';
+        if(progText) progText.textContent = "Extracting ZIP...";
+        if(progPercent) progPercent.textContent = "20%";
+
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(20, "Extracting ZIP...");
+        
+        try {
+            const zip = new JSZip();
+            const contents = await zip.loadAsync(zipFile);
+            
+            let pendingFiles = {};
+            const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+            const fileNames = Object.keys(contents.files);
+            
+            let topLevelFolder = null;
+            const rootFiles = fileNames.filter(n => !n.includes('/'));
+            if (rootFiles.length === 0 && fileNames.length > 0) {
+                const firstPath = fileNames[0].split('/')[0];
+                const allUnderFirst = fileNames.every(n => n.startsWith(firstPath + '/'));
+                if (allUnderFirst) topLevelFolder = firstPath + '/';
+            }
+
+            for (let i = 0; i < fileNames.length; i++) {
+                const filename = fileNames[i];
+                const fileObj = contents.files[filename];
+                
+                if (fileObj.dir) continue; 
+                
+                let relativePath = filename;
+                if (topLevelFolder && relativePath.startsWith(topLevelFolder)) {
+                    relativePath = relativePath.substring(topLevelFolder.length);
+                }
+                
+                const ext = '.' + relativePath.split('.').pop().toLowerCase();
+                
+                if (textExtensions.includes(ext)) {
+                    const text = await fileObj.async("string");
+                    pendingFiles[relativePath] = text;
+                } else {
+                    const base64Data = await fileObj.async("base64");
+                    let mime = 'application/octet-stream';
+                    if (ext === '.png') mime = 'image/png';
+                    else if (ext === '.jpg' || ext === '.jpeg') mime = 'image/jpeg';
+                    else if (ext === '.gif') mime = 'image/gif';
+                    else if (ext === '.webp') mime = 'image/webp';
+                    
+                    pendingFiles[relativePath] = `data:${mime};base64,${base64Data}`;
+                }
+            }
+            
+            await finishImportProcess(pendingFiles);
+            
+        } catch (e) {
+            console.error("ZIP Extraction Error:", e);
+            alert("Failed to extract ZIP file. It might be corrupted.");
+            
+            const zipInput = document.getElementById('zip-import-input');
+            if (zipInput) zipInput.value = '';
+            const folderInput = document.getElementById('folder-import-input');
+            if (folderInput) folderInput.value = '';
+            
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+        }
+    }
+
+    async function finishImportProcess(pendingFiles) {
+        const fileKeys = Object.keys(pendingFiles);
+        if (fileKeys.length === 0) {
+            alert("No valid files found.");
+            
+            const zipInput = document.getElementById('zip-import-input');
+            if (zipInput) zipInput.value = '';
+            const folderInput = document.getElementById('folder-import-input');
+            if (folderInput) folderInput.value = '';
+            
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+            return;
+        }
+
+        updateStatus(`Syncing ${fileKeys.length} files...`);
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(40, "Syncing to Database...");
+        
+        const progText = document.getElementById('progress-text');
+        const progPercent = document.getElementById('progress-percent');
+
+        const chunkSize = 10;
+        for (let i = 0; i < fileKeys.length; i += chunkSize) {
+            const chunk = {};
+            const keysChunk = fileKeys.slice(i, i + chunkSize);
+            keysChunk.forEach(k => { chunk[k] = pendingFiles[k]; });
+            
+            const isFirstChunk = (i === 0);
+            
+            const payload = {
+                files: chunk,
+                partial: !isFirstChunk,
+                is_new_project: isFirstChunk
+            };
+
+            await fetch('/api/sync_state', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(payload)
+            });
+            
+            const percent = 40 + Math.round(((i + keysChunk.length) / fileKeys.length) * 60);
+            if (typeof updateProgressCircle === 'function') updateProgressCircle(percent, `Syncing... ${percent}%`);
+            
+            if(progPercent) progPercent.textContent = percent + '%';
+            if(progText) progText.textContent = `Syncing... ${percent}%`;
+            updateStatus(`Syncing... ${percent}%`);
+        }
+
+        if (typeof updateProgressCircle === 'function') updateProgressCircle(100, "Done!");
+        if(progPercent) progPercent.textContent = '100%';
+        if(progText) progText.textContent = 'Done!';
+        
+        generatedFiles = pendingFiles; 
+        
+        if (typeof enableSaveButton === 'function') enableSaveButton();
+        updatePreviewControls(); 
+        
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        if (window._pendingFtpProjectName) {
+            session.activeProject = window._pendingFtpProjectName;
+            session.active_project = window._pendingFtpProjectName;
+            window._pendingFtpProjectName = null;
+        } else {
+            session.activeProject = null;
+            session.active_project = null;
+        }
+        localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+        let startPage = 'index.html';
+        if (!generatedFiles['index.html']) {
+            if(generatedFiles['index.php']) startPage = 'index.php';
+            else {
+                const anyPage = Object.keys(generatedFiles).find(f => f.endsWith('.html') || f.endsWith('.php'));
+                if(anyPage) startPage = anyPage;
+            }
+        }
+        
+        updateStatus("Import complete.");
+        if(startPage && generatedFiles[startPage]) loadPreview(startPage);
+        else updatePageDropdown();
+        
+        const folderInput = document.getElementById('folder-import-input');
+        if (folderInput) folderInput.value = '';
+        const zipInput = document.getElementById('zip-import-input');
+        if (zipInput) zipInput.value = '';
+        
+        setTimeout(() => { 
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay(); 
+            const progOverlay = document.getElementById('progress-overlay');
+            if(progOverlay) progOverlay.style.display = 'none';
+        }, 800);
+    }
+</script>

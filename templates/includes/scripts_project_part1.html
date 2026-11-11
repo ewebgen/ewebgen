@@ -1,0 +1,959 @@
+<script>
+    // ==========================================
+    // 4. GENERATION & PROJECT MANAGEMENT
+    // ==========================================
+
+    console.log("✅ scripts_project.html loaded successfully");
+
+    // --- GOAL 2 FIX: Horizontal Progress Step Updater ---
+    window.updateGenerationSteps = function(percent, codeStr) {
+        let step = 1; // Connecting
+        let barWidth = 0;
+        
+        if (percent > 5) { step = 2; barWidth = 25; } // Architecture
+        if (codeStr.includes('styles.css') || codeStr.includes('<style') || percent > 35) { step = 3; barWidth = 50; } // Styling
+        if (codeStr.includes('<img') || codeStr.includes('background-image') || percent > 65) { step = 4; barWidth = 75; } // Assets
+        if (percent >= 95) { step = 5; barWidth = 100; } // Finishing
+        
+        const pb = document.getElementById('gen-steps-progress-bar');
+        if (pb) pb.style.width = barWidth + '%';
+
+        for (let i = 1; i <= 5; i++) {
+            let el = document.getElementById('gen-step-' + i);
+            if (el) {
+                if (i < step) {
+                    el.className = 'gen-step completed';
+                } else if (i === step) {
+                    el.className = 'gen-step active';
+                } else {
+                    el.className = 'gen-step pending';
+                }
+            }
+        }
+    };
+
+    function showGenerationErrorModal(errorMessage) {
+        let modal = document.getElementById('dynamic-generation-error-modal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'dynamic-generation-error-modal';
+            modal.style.cssText = 'position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.75); z-index:999999; display:flex; justify-content:center; align-items:center; backdrop-filter: blur(5px);';
+            modal.innerHTML = `
+                <div style="background:#fff; border-radius:12px; width:90%; max-width:550px; box-shadow: 0 15px 40px rgba(0,0,0,0.4); overflow:hidden; display:flex; flex-direction:column; animation: errFadeIn 0.3s ease;">
+                    <div style="background:#dc3545; color:#fff; padding:15px 25px; display:flex; justify-content:space-between; align-items:center;">
+                        <h3 style="margin:0; font-size:1.3em; display:flex; align-items:center; gap:10px;">
+                            <span style="font-size:1.2em;">⚠️</span> Generation Failed
+                        </h3>
+                        <button onclick="document.getElementById('dynamic-generation-error-modal').style.display='none'" style="background:none; border:none; color:#fff; font-size:1.8em; cursor:pointer; padding:0; line-height:1; transition: opacity 0.2s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">&times;</button>
+                    </div>
+                    <div style="padding:25px; color:#333; font-size:1em; max-height:350px; overflow-y:auto; background:#f8f9fa;">
+                        <p style="margin-top:0; font-weight:bold; color:#495057;">The AI encountered a problem while building your website:</p>
+                        <div id="dynamic-generation-error-text" style="font-family:monospace; background:#e9ecef; padding:15px; border-radius:6px; border:1px solid #ced4da; white-space:pre-wrap; word-break:break-word; color:#c62828; font-size:0.9em; line-height:1.4;"></div>
+                    </div>
+                    <div style="padding:15px 25px; background:#fff; border-top:1px solid #eee; text-align:right;">
+                        <button onclick="document.getElementById('dynamic-generation-error-modal').style.display='none'" class="auth-btn" style="background:#6c757d; color:#fff; border:none; padding:10px 25px; border-radius:6px; cursor:pointer; font-weight:bold; width:auto; margin:0;">Close</button>
+                    </div>
+                </div>
+            `;
+            
+            if (!document.getElementById('dynamic-err-modal-style')) {
+                const style = document.createElement('style');
+                style.id = 'dynamic-err-modal-style';
+                style.innerHTML = `@keyframes errFadeIn { from { opacity: 0; transform: scale(0.95) translateY(-10px); } to { opacity: 1; transform: scale(1) translateY(0); } }`;
+                document.head.appendChild(style);
+            }
+            document.body.appendChild(modal);
+        }
+        
+        document.getElementById('dynamic-generation-error-text').innerHTML = errorMessage;
+        modal.style.display = 'flex';
+    }
+
+    function updatePreviewControls() {
+        const hasFiles = Object.keys(generatedFiles).length > 0;
+        
+        const saveAsBtn = document.getElementById('save-as-btn');
+        if(saveAsBtn) saveAsBtn.disabled = !hasFiles;
+
+        const dlBtn = document.getElementById('download-zip-btn');
+        if(dlBtn) dlBtn.disabled = !hasFiles;
+        
+        const newWinBtn = document.getElementById('open-new-window-btn');
+        if(newWinBtn) newWinBtn.disabled = !hasFiles;
+
+        if(pageDropdown) pageDropdown.disabled = !hasFiles;
+        
+        const deployBtn = document.getElementById('deploy-btn');
+        if(deployBtn) deployBtn.disabled = !hasFiles;
+
+        const saveBtn = document.getElementById('save-btn');
+        if(saveBtn) {
+            if (saveBtn.textContent !== "Saved" && saveBtn.textContent !== "Saving...") {
+                saveBtn.disabled = !hasFiles; 
+            }
+        }
+        
+        const importBtn = document.getElementById('import-btn');
+        if(importBtn) importBtn.disabled = false;
+
+        if (hasFiles) isEditing = true;
+
+        const voiceBtn = document.getElementById('voice-edit-btn');
+        if(voiceBtn) voiceBtn.disabled = !hasFiles;
+
+        const fontBtn = document.getElementById('font-btn');
+        if(fontBtn) fontBtn.disabled = !hasFiles;
+
+        const imgBtn = document.getElementById('add-img-btn');
+        if(imgBtn) imgBtn.disabled = false; 
+
+        const optBtn = document.getElementById('options-btn');
+        if(optBtn) optBtn.disabled = !hasFiles;
+        
+        const codeBtn = document.getElementById('code-view-btn');
+        if(codeBtn) codeBtn.disabled = !hasFiles;
+    }
+
+    function loadPreview(filename) {
+        return new Promise((resolve) => {
+            window.lastValidRange = null; 
+            
+            window.isSwitchingPage = true; 
+            window.localHistory = []; 
+            window.localHistoryIndex = -1;
+            
+            if (typeof updateUndoRedoButtons === 'function') updateUndoRedoButtons();
+            if (typeof checkHistoryStatus === 'function') checkHistoryStatus();
+
+            if (generatedFiles[filename]) {
+                const iframe = document.getElementById('preview-frame');
+                iframe.removeAttribute('srcdoc'); 
+                
+                const url = `/preview/${filename}?t=` + new Date().getTime();
+
+                currentPreviewFile = filename;
+                if(typeof updatePageDropdown === 'function') updatePageDropdown(filename);
+                
+                iframe.onload = () => { 
+                    window.isSwitchingPage = false; 
+                    
+                    if(typeof initEditor === 'function') initEditor(iframe); 
+                    if(typeof fixHeroDisplay === 'function') fixHeroDisplay();
+                    if(typeof fixRelativeLinks === 'function') fixRelativeLinks(iframe.contentDocument);
+
+                    window.localHistory = []; 
+                    window.localHistoryIndex = -1;
+                    
+                    if(typeof captureState === 'function') captureState();
+                    if(typeof updateUndoRedoButtons === 'function') updateUndoRedoButtons();
+                    if(typeof setupPreviewPaymentListeners === 'function') setupPreviewPaymentListeners();
+                    
+                    isEditing = true;
+                    if(typeof updatePreviewControls === 'function') updatePreviewControls();
+                    resolve(); 
+                };
+                
+                setTimeout(() => {
+                    iframe.src = url;
+                }, 50);
+            } else { 
+                window.isSwitchingPage = false;
+                resolve(); 
+            }
+        });
+    }
+    
+    function updatePageDropdown(activeFile) {
+        if(!pageDropdown) return;
+        pageDropdown.innerHTML = ''; 
+        const files = Object.keys(generatedFiles).filter(name => name.endsWith('.html') || name.endsWith('.php')).sort();
+        files.forEach(filename => {
+            const option = document.createElement('option');
+            option.value = filename;
+            option.textContent = filename.replace('.html', '').toUpperCase();
+            if (filename === activeFile) option.selected = true;
+            pageDropdown.appendChild(option);
+        });
+        const sep = document.createElement('option'); sep.disabled = true; sep.textContent = '──────────'; pageDropdown.appendChild(sep);
+        const addOpt = document.createElement('option'); addOpt.value = '__NEW_PAGE__'; addOpt.textContent = '➕ Add New Page...'; addOpt.style.fontWeight = 'bold'; addOpt.style.color = '#28a745'; pageDropdown.appendChild(addOpt);
+        
+        if (files.length > 1) {
+             const delOpt = document.createElement('option');
+             delOpt.value = '__DELETE_PAGE__';
+             delOpt.textContent = '🗑️ Delete Current Page';
+             delOpt.style.fontWeight = 'bold';
+             delOpt.style.color = '#dc3545';
+             pageDropdown.appendChild(delOpt);
+        }
+    }
+
+    async function runLiveConstructionSequence(files) {
+        if(typeof hideProgressOverlay === 'function') hideProgressOverlay(); 
+        const pages = Object.keys(files).filter(f => f.endsWith('.html'));
+        if (pages.length === 0) return;
+        isBuildingSequenceActive = true;
+        updateStatus("✨ Rendering Final Frontend UI...");
+        const tourOrder = pages.filter(p => p !== 'index.html');
+        if(pages.includes('index.html')) tourOrder.push('index.html');
+        
+        for (let i = 0; i < tourOrder.length; i++) {
+            if (!isBuildingSequenceActive) break; 
+            await loadPreview(tourOrder[i]);
+            if (!isBuildingSequenceActive) break;
+            const iframe = document.getElementById('preview-frame');
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const elements = Array.from(doc.body.children);
+            elements.forEach(el => { el.style.opacity = '0'; el.style.transform = 'translateY(10px)'; el.style.transition = 'opacity 0.3s ease, transform 0.3s ease'; });
+            for (const el of elements) {
+                if (!isBuildingSequenceActive) break;
+                el.style.opacity = '1'; el.style.transform = 'translateY(0)';
+                await wait(150); 
+            }
+            await wait(800);
+        }
+        if (isBuildingSequenceActive) updateStatus("Website generation complete. Ready for edits.");
+        isBuildingSequenceActive = false;
+    }
+
+    let previewThrottleTimer = null;
+    let latestStreamedCode = "";
+
+    function updateLivePreview(jsonStreamText) {
+        if (typeof appConfigData !== 'undefined' && !(appConfigData.show_live_preview === true || appConfigData.show_live_preview === 'true')) {
+            return; 
+        }
+
+        latestStreamedCode = jsonStreamText;
+        if (previewThrottleTimer) return;
+
+        previewThrottleTimer = setTimeout(() => {
+            previewThrottleTimer = null; 
+
+            const iframe = document.getElementById('preview-frame');
+            if (!iframe) return;
+            const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+            const cssKeyStr = '"styles.css":';
+            const cssStartIdx = latestStreamedCode.indexOf(cssKeyStr);
+            if (cssStartIdx !== -1) {
+                const contentStartIdx = latestStreamedCode.indexOf('"', cssStartIdx + cssKeyStr.length);
+                if (contentStartIdx !== -1) {
+                    let partialCss = latestStreamedCode.substring(contentStartIdx + 1);
+                    const nextKeyIdx = partialCss.indexOf('", "');
+                    if (nextKeyIdx !== -1) partialCss = partialCss.substring(0, nextKeyIdx);
+
+                    let liveCss = partialCss.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+                    liveCss = liveCss.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
+                    currentCssBuffer = liveCss;
+                }
+            }
+
+            const htmlKeyStr = '"index.html":';
+            const htmlStartIdx = latestStreamedCode.indexOf(htmlKeyStr);
+            if (htmlStartIdx !== -1) {
+                const contentStartIdx = latestStreamedCode.indexOf('"', htmlStartIdx + htmlKeyStr.length);
+                if (contentStartIdx !== -1) {
+                    let partialRaw = latestStreamedCode.substring(contentStartIdx + 1);
+                    const nextKeyIdx = partialRaw.indexOf('", "');
+                    if (nextKeyIdx !== -1) partialRaw = partialRaw.substring(0, nextKeyIdx);
+
+                    let liveHtml = partialRaw.replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t').replace(/\\\\/g, '\\');
+                    liveHtml = liveHtml.replace(/```[a-zA-Z]*\n?/g, '').replace(/```/g, '');
+                    liveHtml = liveHtml.replace(/<link[^>]+href=["']styles\.css["'][^>]*>/gi, '');
+                    
+                    if (currentCssBuffer) {
+                        if (liveHtml.includes('</head>')) {
+                            liveHtml = liveHtml.replace('</head>', `<style id="live-styles">${currentCssBuffer}</style></head>`);
+                        } else {
+                            liveHtml += `<style id="live-styles">${currentCssBuffer}</style>`;
+                        }
+                    } else if (!liveHtml.includes('<style id="live-styles">')) {
+                        liveHtml += '<style id="live-styles">body{font-family:sans-serif; padding:20px; transition:all 0.3s;} section{border:1px dashed #ccc; padding:10px; margin-bottom:10px; opacity:0.8;} img{max-width:100%; height:auto; background:#eee; min-height:100px; display:block;}</style>';
+                    }
+
+                    iframeDoc.documentElement.innerHTML = liveHtml;
+                }
+            }
+        }, 800); 
+    }
+
+    function checkProjectLimit() {
+        return fetch('/api/check_project_limit')
+            .then(r => r.json())
+            .then(data => {
+                if (!data.allowed) {
+                    const modal = document.getElementById('limit-reached-modal');
+                    if(modal) modal.style.display = 'flex';
+                    else alert("Project Limit Reached. Please upgrade or delete old projects.");
+                    return false;
+                }
+                return true;
+            })
+            .catch(() => true);
+    }
+
+    async function generateWebsite() {
+        let rawPrompt = promptInput.value.trim();
+        if (!rawPrompt) { updateStatus("Please enter a prompt.", true); return; }
+        
+        if (typeof checkProjectLimit === 'function') {
+            const canProceed = await checkProjectLimit();
+            if(!canProceed) {
+                updateStatus("❌ Project Limit Reached. Cannot generate.", true);
+                return;
+            }
+        }
+        
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) toggleVoiceEdit(voiceEditButton);
+
+        const lowerPrompt = rawPrompt.toLowerCase();
+        // FIX: "page" removed - "add a new page" must edit the current site, not start a new one
+        const isNewWebsiteRequest = /(create|build|generate|make|design)\b.{0,20}\b(new|another|fresh|different)\b.{0,20}\b(website|site|web site)\b|start\s+over|from\s+scratch/i.test(lowerPrompt);
+
+        // FIX (issue: closed template was re-generated): decide "fresh vs edit" from whether a real
+        // website is loaded in the workspace - not from the iframe, which holds editor toolbars/
+        // welcome content even when no template is open. A fresh session is sent as is_new_generation
+        // so the server drops the old template instead of feeding it back to the AI.
+        const hasRealPage = (html) => {
+            if (!html || typeof html !== 'string' || html.startsWith('data:')) return false;
+            const text = html.replace(/<(script|style|head)[\s\S]*?<\/\1>/gi, ' ')
+                             .replace(/<[^>]+>/g, ' ').replace(/&nbsp;|[✥▼+]/g, ' ').replace(/\s+/g, ' ').trim();
+            return text.length > 40 || /<img\b/i.test(html);
+        };
+        const loadedPages = Object.keys(generatedFiles || {}).filter(f => /\.(html|php)$/i.test(f) && hasRealPage(generatedFiles[f]));
+        let isFreshSession = loadedPages.length === 0 || window._workspaceClosed === true;
+
+        const iframe = document.getElementById('preview-frame');
+
+        if (window._forceNewWebsite === true) {
+            isFreshSession = true;
+            window._forceNewWebsite = false; 
+        }
+        window._workspaceClosed = false;
+
+        let is_new_generation = false;
+        let promptToSend = rawPrompt;
+
+        if (isNewWebsiteRequest || isFreshSession) {
+            console.log("🧹 [Intent] Reset triggered by user");
+            const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+            session.activeProject = null;
+            session.active_project = null;
+            localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+            currentChatHistory = [];
+            generatedFiles = {}; 
+            updateStatus("Starting a new website project...");
+            is_new_generation = true; 
+            
+            if (!lowerPrompt.includes("create a new website") && !lowerPrompt.includes("create new website")) {
+                promptToSend = "Create a new website: " + rawPrompt;
+            }
+            
+            window.isSwitchingPage = true;
+            window.localHistory = [];
+            window.localHistoryIndex = -1;
+            
+            if (iframe) {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                if(doc) { doc.open(); doc.write(''); doc.close(); }
+            }
+            if (typeof updatePageDropdown === 'function') updatePageDropdown();
+        } else if (Object.keys(generatedFiles).length > 0) {
+            if(currentChatHistory.length === 0 || !currentChatHistory.some(msg => msg.parts[0].text.includes("[SYSTEM NOTE]"))) {
+                 currentChatHistory.push({ 
+                     role: "user", 
+                     parts: [{ text: "[SYSTEM NOTE] We are modifying the existing loaded template/website. Keep the current layout and overall structure, just apply the specific changes requested in the next prompts." }] 
+                 });
+            }
+        }
+
+        currentChatHistory.push({ role: "user", parts: [{ text: promptToSend }] });
+        appendMessage('user', promptToSend);
+        promptInput.value = '';
+
+        abortController = new AbortController();
+        const signal = abortController.signal;
+        if(typeof showProgressOverlay === 'function') showProgressOverlay("Connecting...");
+        updateStatus("AI is developing the UI...");
+
+        const codeView = document.getElementById('code-stream-view');
+        if (codeView) { codeView.style.display = 'none'; }
+
+        let fastPercent = 0;
+        if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+        window.fastProgressInterval = setInterval(() => {
+            if (fastPercent < 85) {
+                fastPercent += Math.floor(Math.random() * 4) + 1;
+                if (fastPercent > 85) fastPercent = 85;
+                if(typeof updateProgressCircle === 'function') updateProgressCircle(fastPercent, "Connecting & Building...");
+            }
+        }, 300);
+
+        try {
+            const response = await fetch('/generate', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ history: currentChatHistory, is_new_generation: is_new_generation }),
+                signal: signal
+            });
+            
+            if (!response.ok) {
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.message || errData.error || `HTTP error! status: ${response.status}`);
+            }
+            
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            let fullStreamedCode = '';
+
+            while (true) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                const chunk = decoder.decode(value, { stream: true });
+                buffer += chunk;
+                const lines = buffer.split('\n\n');
+                buffer = lines.pop(); 
+
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const jsonStr = line.substring(6);
+                        try {
+                            const eventData = JSON.parse(jsonStr);
+                            
+                            if (eventData.type === 'error') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+                                if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                                if (codeView) codeView.style.display = 'none';
+                                
+                                if (typeof showGenerationErrorModal === 'function') showGenerationErrorModal(eventData.message);
+                                else { updateStatus(`API Error: ${eventData.message}`, true); alert(eventData.message); }
+                                
+                                if (typeof chatDisplay !== 'undefined' && chatDisplay) {
+                                    const lastAiMsg = chatDisplay.lastElementChild;
+                                    if(lastAiMsg && lastAiMsg.classList.contains('ai-message')) {
+                                        lastAiMsg.innerHTML = `⚠️ Generation stopped due to an error.`;
+                                        lastAiMsg.style.color = "#dc3545";
+                                    }
+                                }
+                                return; 
+                            }
+                            else if (eventData.type === 'queue') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+                                if(typeof updateProgressCircle === 'function') updateProgressCircle(0, "Queue Position: " + eventData.position);
+                                updateStatus(`Server busy. Waiting in queue... Position: ${eventData.position}`);
+                                if (codeView) codeView.style.display = 'none';
+                            }
+                            else if (eventData.type === 'chunk') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval); 
+                                fullStreamedCode += eventData.content;
+                                if(typeof updateLivePreview === 'function') updateLivePreview(fullStreamedCode);
+                                
+                                const pSpan = document.getElementById('progress-percent');
+                                const currentPercent = pSpan ? (parseInt(pSpan.innerText) || 0) : 0;
+                                const estimatedTotalLength = 35000; 
+                                let calculatedPercent = Math.min(95, Math.floor((fullStreamedCode.length / estimatedTotalLength) * 100));
+                                let nextPercent = Math.max(currentPercent, calculatedPercent);
+                                if (nextPercent === currentPercent && currentPercent < 95) nextPercent += 1; 
+
+                                if(typeof updateProgressCircle === 'function') updateProgressCircle(nextPercent, "Writing Code...");
+                                if (typeof window.updateGenerationSteps === 'function') window.updateGenerationSteps(nextPercent, fullStreamedCode);
+                            } 
+                            else if (eventData.type === 'complete') {
+                                if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+                                if(typeof updateProgressCircle === 'function') updateProgressCircle(100, "Finishing...");
+                                if (typeof window.updateGenerationSteps === 'function') window.updateGenerationSteps(100, fullStreamedCode);
+
+                                if (codeView) codeView.style.display = 'none'; 
+                                generatedFiles = eventData.files;
+                                updatePreviewControls();
+                                if(typeof listProjects === 'function') listProjects();
+                                updateStatus("Code received. Polishing Preview...");
+                                runLiveConstructionSequence(generatedFiles);
+                            }
+                        } catch (e) { }
+                    }
+                }
+            }
+        } catch (error) {
+            if (window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+            if (error.name === 'AbortError') { 
+                console.log('Fetch aborted'); 
+            } else { 
+                if(typeof hideProgressOverlay === 'function') hideProgressOverlay(); 
+                if (typeof showGenerationErrorModal === 'function') showGenerationErrorModal(error.message);
+                else { updateStatus(`Error: ${error.message}`, true); alert(error.message); }
+                
+                if (typeof chatDisplay !== 'undefined' && chatDisplay) {
+                    const lastAiMsg = chatDisplay.lastElementChild;
+                    if(lastAiMsg && lastAiMsg.classList.contains('ai-message')) {
+                        lastAiMsg.innerHTML = `⚠️ <b>Generation Stopped.</b><br>Please view the error popup for details.`;
+                        lastAiMsg.style.color = "#dc3545";
+                    }
+                }
+            }
+        }
+    }
+
+    function undoAction() {
+        if (localHistoryIndex > 0) {
+            localHistoryIndex--;
+            if(typeof restoreHTML === 'function') restoreHTML(localHistory[localHistoryIndex]);
+            updateStatus("Undo successful.");
+            if(typeof checkHistoryStatus === 'function') checkHistoryStatus();
+        }
+    }
+
+    function redoAction() {
+        if (localHistoryIndex < localHistory.length - 1) {
+            localHistoryIndex++;
+            if(typeof restoreHTML === 'function') restoreHTML(localHistory[localHistoryIndex]);
+            updateStatus("Redo successful.");
+            if(typeof checkHistoryStatus === 'function') checkHistoryStatus();
+        }
+    }
+
+    function restoreHTML(html) {
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        doc.body.innerHTML = html;
+        if (typeof initEditor === 'function') initEditor(iframe); 
+        document.getElementById('save-btn').disabled = false;
+    }
+
+    // =========================================================================
+    // GOAL 1 & 2 FIX: ROBUST "SAVE AS" AND BACKEND SYNC LOGIC
+    // =========================================================================
+    
+    function _performSaveProjectAs(projName, skipReload) {
+        if (typeof showProgressOverlay === 'function') showProgressOverlay("Saving Project Workspace...");
+        
+        fetch('/save_project', { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify({ project_name: projName }) 
+        })
+        .then(r => r.json())
+        .then(d => { 
+            if (d.success) { 
+                if (typeof updateProgressCircle === 'function') updateProgressCircle(100, "Done!");
+                if (typeof updateStatus === 'function') updateStatus(d.message); 
+                
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                session.activeProject = projName; 
+                session.active_project = projName; // Fallback sync
+                localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+
+                if (typeof listProjects === 'function') listProjects(); 
+
+                setTimeout(() => {
+                    if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+                    const saveBtn = document.getElementById('save-btn');
+                    if (saveBtn) {
+                        saveBtn.textContent = "Saved";
+                        saveBtn.disabled = true;
+                    }
+                    // Skip reload on 'Save As' triggers to preserve visual editor state
+                    if (!skipReload && typeof loadProjectByName === 'function') {
+                        loadProjectByName(projName);
+                    }
+                }, 500);
+
+            } else { 
+                if (typeof updateStatus === 'function') updateStatus(`Save Failed: ${d.error}`, true); 
+                setTimeout(() => { if (typeof hideProgressOverlay === 'function') hideProgressOverlay(); }, 800);
+            }
+        })
+        .catch(err => {
+            if (typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            if (typeof updateStatus === 'function') updateStatus(`Save Error: ${err.message}`, true);
+        });
+    }
+
+    async function saveProject(isSaveAs = false, skipReload = true) {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        if (typeof checkProjectLimit === 'function') {
+            const canProceed = await checkProjectLimit();
+            if(!canProceed) return;
+        }
+
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        const currentName = session.activeProject || session.active_project || "MyWebsite";
+
+        let projName = "MyProject";
+        if (isSaveAs || (!session.activeProject && !session.active_project)) {
+            projName = prompt("Enter a name for your project to save it to your workspace:", currentName);
+        } else {
+            projName = currentName; 
+        }
+        
+        if (!projName) return; 
+        
+        if (typeof updateStatus === 'function') updateStatus("Syncing edits before saving...");
+
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe ? (iframe.contentDocument || iframe.contentWindow.document) : null;
+        let newBody = "";
+        
+        if (doc) {
+            if (typeof getCleanFullContent === 'function') {
+                newBody = getCleanFullContent(doc);
+            } else {
+                const clone = doc.body.cloneNode(true);
+                clone.querySelectorAll('.bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar').forEach(c => c.remove());
+                newBody = clone.innerHTML;
+            }
+        }
+
+        const previewFile = typeof currentPreviewFile !== 'undefined' && currentPreviewFile ? currentPreviewFile : 'index.html';
+
+        if (newBody) {
+            fetch('/save', {
+                method: 'POST', headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: previewFile, new_body_content: newBody })
+            }).then(r => r.json()).then(data => {
+                _performSaveProjectAs(projName, skipReload);
+            }).catch(err => {
+                _performSaveProjectAs(projName, skipReload); 
+            });
+        } else {
+            _performSaveProjectAs(projName, skipReload);
+        }
+    }
+
+    function saveContent() {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if (btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        
+        const iframe = document.getElementById('preview-frame');
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        let newBodyContent = "";
+        
+        if (typeof getCleanFullContent === 'function') {
+            newBodyContent = getCleanFullContent(doc);
+        } else {
+            const clone = doc.body.cloneNode(true);
+            clone.querySelectorAll('.bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar').forEach(c => c.remove());
+            newBodyContent = clone.innerHTML;
+        }
+
+        if(typeof currentPreviewFile !== 'undefined' && currentPreviewFile) {
+            if (typeof generatedFiles !== 'undefined') {
+                generatedFiles[currentPreviewFile] = newBodyContent;
+            }
+        }
+
+        const session = typeof getLocalSession === 'function' ? getLocalSession() : (JSON.parse(localStorage.getItem('ai_web_builder_session')) || {});
+        
+        if (!session.activeProject && !session.active_project) {
+            if (typeof updateStatus === 'function') updateStatus("Please name your project to save edits...");
+            if (typeof saveProject === 'function') {
+                saveProject(true, true); // Trigger the "Save As" flow and skip reload
+            }
+            return; 
+        }
+
+        if (typeof updateStatus === 'function') updateStatus(`Saving ${currentPreviewFile}...`);
+
+        const saveBtn = document.getElementById('save-btn');
+        if (saveBtn) {
+            saveBtn.textContent = "Saving...";
+            saveBtn.disabled = true;
+        }
+
+        fetch('/save', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: typeof currentPreviewFile !== 'undefined' ? currentPreviewFile : 'index.html', new_body_content: newBodyContent })
+        }).then(response => response.json()).then(data => {
+            if (data.success) {
+                if (typeof updateStatus === 'function') updateStatus(`Saved ${typeof currentPreviewFile !== 'undefined' ? currentPreviewFile : 'index.html'}.`);
+                if (saveBtn) {
+                    saveBtn.textContent = "Saved";
+                    saveBtn.disabled = true; 
+                }
+                if (data.saved_content) { 
+                    if (typeof isRestoring !== 'undefined') window.isRestoring = true;
+                    if(typeof initEditor === 'function') initEditor(iframe); 
+                    setTimeout(() => { if (typeof isRestoring !== 'undefined') window.isRestoring = false; }, 300);
+                }
+            } else { 
+                if (typeof updateStatus === 'function') updateStatus(`Save Failed: ${data.error}`, true); 
+                if (typeof enableSaveButton === 'function') enableSaveButton();
+            }
+        }).catch(err => {
+            if (typeof updateStatus === 'function') updateStatus(`Save Error: ${err.message}`, true);
+            if (typeof enableSaveButton === 'function') enableSaveButton();
+        });
+    }
+
+    function toggleProjectMenu(e) {
+        if (e) e.stopPropagation();
+        const menu = document.getElementById('project-menu');
+        if (menu.style.display === 'block') {
+            menu.style.display = 'none';
+        } else { 
+            const searchInput = document.getElementById('project-search-input');
+            if (searchInput) {
+                searchInput.value = ''; // Reset the search box when opening
+            }
+            if(typeof listProjects === 'function') listProjects(); 
+            menu.style.display = 'block'; 
+        }
+    }
+    
+    function closeProjectMenu() { 
+        const menu = document.getElementById('project-menu');
+        if(menu) menu.style.display = 'none'; 
+    }
+
+    function filterProjects() {
+        const input = document.getElementById('project-search-input');
+        if(!input) return;
+        const query = input.value.toLowerCase();
+        const items = document.querySelectorAll('.project-list-content .project-item');
+        let visibleCount = 0;
+        
+        items.forEach(item => {
+            const nameSpan = item.querySelector('.project-name-span');
+            if (nameSpan) {
+                const name = nameSpan.textContent.toLowerCase();
+                if (name.includes(query)) {
+                    item.style.display = 'flex'; // maintain flex layout for the project item
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            }
+        });
+        
+        const menuContent = document.querySelector('.project-list-content');
+        let noMsg = document.getElementById('project-search-no-msg');
+        
+        if (visibleCount === 0 && items.length > 0) {
+            if (!noMsg) {
+                noMsg = document.createElement('div');
+                noMsg.id = 'project-search-no-msg';
+                noMsg.style.cssText = 'padding:10px; color:#aaa; font-size:0.9em; text-align:center;';
+                noMsg.textContent = 'No projects match your search.';
+                menuContent.appendChild(noMsg);
+            } else {
+                noMsg.style.display = 'block';
+            }
+        } else if (noMsg) {
+            noMsg.style.display = 'none';
+        }
+    }
+
+    function listProjects() {
+        fetch('/list_projects').then(r => r.json()).then(data => {
+            const menuContent = document.querySelector('.project-list-content');
+            if(!menuContent) return;
+            menuContent.innerHTML = ''; 
+            if (data.projects.length === 0) { menuContent.innerHTML = '<div style="padding:10px; color:#aaa; font-size:0.9em;">No projects saved.</div>'; return; }
+            data.projects.forEach(project => {
+                const itemDiv = document.createElement('div'); itemDiv.className = 'project-item';
+                
+                const nameSpan = document.createElement('span'); 
+                nameSpan.className = 'project-name-span'; 
+                nameSpan.textContent = project; 
+                nameSpan.onclick = () => { if(typeof loadProjectByName === 'function') loadProjectByName(project); };
+                
+                const controlsDiv = document.createElement('div');
+                controlsDiv.style.display = 'flex';
+                controlsDiv.style.alignItems = 'center';
+
+                const editBtn = document.createElement('button'); 
+                editBtn.className = 'edit-project-btn'; 
+                editBtn.innerHTML = '✎';
+                editBtn.title = "Rename Project";
+                editBtn.onclick = (e) => { e.stopPropagation(); renameProject(project); };
+
+                const deleteBtn = document.createElement('button'); 
+                deleteBtn.className = 'delete-project-btn'; 
+                deleteBtn.innerHTML = '✕'; 
+                deleteBtn.title = "Delete Project";
+                deleteBtn.onclick = (e) => { e.stopPropagation(); deleteProject(project); };
+                
+                controlsDiv.appendChild(editBtn);
+                controlsDiv.appendChild(deleteBtn);
+
+                itemDiv.appendChild(nameSpan); 
+                itemDiv.appendChild(controlsDiv); 
+                menuContent.appendChild(itemDiv);
+            });
+            if(typeof filterProjects === 'function') filterProjects();
+        });
+    }
+
+    function renameProject(oldName) {
+        const newName = prompt("Enter new name for project:", oldName);
+        if (!newName || newName === oldName) return;
+
+        fetch('/rename_project', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ old_name: oldName, new_name: newName })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (d.success) {
+                if(typeof updateStatus === 'function') updateStatus(d.message);
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                if(session.activeProject === oldName) {
+                    session.activeProject = newName;
+                    localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                }
+                if(typeof listProjects === 'function') listProjects();
+            } else {
+                if(typeof updateStatus === 'function') updateStatus(`Rename Failed: ${d.error}`, true);
+            }
+        })
+        .catch(err => { if(typeof updateStatus === 'function') updateStatus("Error renaming project.", true); });
+    }
+
+    function loadProjectByName(name) {
+        closeProjectMenu(); 
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if(btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        if(typeof updateStatus === 'function') updateStatus(`Loading project '${name}'...`); 
+        if(typeof showProgressOverlay === 'function') showProgressOverlay("Loading..."); 
+        if(typeof hideCodeStream === 'function') hideCodeStream(); 
+        
+        fetch('/load_project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: name }) }).then(r => r.json()).then(data => {
+            if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            if (data.success) {
+                
+                window.isSwitchingPage = true;
+                window.localHistory = [];
+                window.localHistoryIndex = -1;
+
+                generatedFiles = data.files; currentChatHistory = data.prompts || []; 
+                if(document.getElementById('chat-display')) document.getElementById('chat-display').innerHTML = ''; 
+                
+                if (typeof enableSaveButton === 'function') enableSaveButton();
+                
+                if(typeof loadPreview === 'function') loadPreview(data.current_page); 
+                if(typeof updatePreviewControls === 'function') updatePreviewControls(); 
+                
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                session.activeProject = name;
+                localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                
+                if(typeof checkHistoryStatus === 'function') checkHistoryStatus(); 
+                if(typeof updateStatus === 'function') updateStatus(data.message);
+            } else { if(typeof updateStatus === 'function') updateStatus(`Load Failed: ${data.error}`, true); }
+        });
+    }
+    
+    function deleteProject(name) {
+        if(!confirm(`Delete '${name}'?`)) return;
+        fetch('/delete_project', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ project_name: name }) })
+        .then(r => r.json()).then(d => { 
+            if (d.success) { 
+                if(typeof updateStatus === 'function') updateStatus(d.message); 
+                
+                const session = typeof getLocalSession === 'function' ? getLocalSession() : {};
+                if(session.activeProject === name) {
+                    session.activeProject = null;
+                    localStorage.setItem('ai_web_builder_session', JSON.stringify(session));
+                }
+                
+                if(typeof listProjects === 'function') listProjects(); 
+            } else { 
+                if(typeof updateStatus === 'function') updateStatus(`Error: ${d.error}`, true); 
+            } 
+        });
+    }
+
+    function openNewWindow() { 
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if(btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        window.open(window.location.origin + `/preview/${typeof currentPreviewFile !== 'undefined' ? currentPreviewFile : 'index.html'}`, '_blank'); 
+    }
+
+    window.downloadWebsite = function() {
+        if (typeof isVoiceActive !== 'undefined' && isVoiceActive) {
+            const btn = document.getElementById('voice-edit-btn');
+            if(btn && typeof toggleVoiceEdit === 'function') toggleVoiceEdit(btn);
+        }
+        if(typeof updateStatus === 'function') updateStatus("Preparing download...");
+        
+        fetch('/download', { method: 'POST' }).then(r => {
+            if (r.status === 403) {
+                return r.json().then(data => {
+                    if (data.needs_upgrade) {
+                        if(confirm(data.message + "\n\nClick OK to view upgrade plans.")) {
+                            if(typeof openPlanSelectionModal === 'function') openPlanSelectionModal();
+                        }
+                    } else {
+                        alert(data.error || "Permission denied.");
+                    }
+                    throw new Error("Upgrade Required");
+                });
+            }
+            if (!r.ok) throw new Error('Download failed');
+            
+            const disp = r.headers.get('Content-Disposition');
+            let filename = 'website.zip';
+            if (disp && disp.indexOf('attachment') !== -1) {
+                const matches = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/.exec(disp);
+                if (matches != null && matches[1]) filename = matches[1].replace(/['"]/g, '');
+            }
+            return r.blob().then(blob => ({ blob, filename }));
+        }).then(({blob, filename}) => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.style.display = 'none'; a.href = url; a.download = filename; document.body.appendChild(a); a.click(); window.URL.revokeObjectURL(url); document.body.removeChild(a); 
+            if(typeof updateStatus === 'function') updateStatus("✅ Download started!");
+        }).catch(e => {
+            if(e.message !== "Upgrade Required") alert("Download Error: " + e.message);
+        });
+    }
+
+    function stopGeneration() {
+        if (typeof abortController !== 'undefined' && abortController) { abortController.abort(); abortController = null; }
+        if (typeof progressInterval !== 'undefined' && progressInterval) { clearInterval(progressInterval); progressInterval = null; }
+        if (typeof window.fastProgressInterval !== 'undefined' && window.fastProgressInterval) clearInterval(window.fastProgressInterval);
+        
+        if(typeof isBuildingSequenceActive !== 'undefined') isBuildingSequenceActive = false; 
+        
+        const textSpan = document.getElementById('progress-text');
+        if(textSpan) textSpan.textContent = "Stopped";
+        
+        const stopBtn = document.getElementById('stop-gen-btn');
+        if(stopBtn) {
+            stopBtn.disabled = true;
+            stopBtn.textContent = "Generation Stopped";
+        }
+        
+        const genBtn = document.getElementById('generate-btn');
+        if(genBtn) genBtn.disabled = false;
+        
+        if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+        if(typeof updateStatus === 'function') updateStatus("⚠️ Stopped by user.", true);
+        
+        const chatDisplay = document.getElementById('chat-display');
+        if (chatDisplay) {
+            const lastAiMsg = chatDisplay.lastElementChild;
+            if(lastAiMsg && lastAiMsg.classList.contains('ai-message')) {
+                lastAiMsg.innerHTML = "⚠️ Generation stopped by user.";
+                lastAiMsg.style.color = "#dc3545";
+            }
+        }
+    }
+
+    function getLocalSession() {
+        try { return JSON.parse(localStorage.getItem('ai_web_builder_session')) || {}; }
+        catch (e) { return {}; }
+    }
+</script>

@@ -1,0 +1,136 @@
+<script>
+    window._sterilizeWorkspaceForNewLoad = function() {
+        // Debounce: Prevent back-to-back duplicate purges within 500ms
+        if (window._isSterilizing) return;
+        window._isSterilizing = true;
+        setTimeout(() => { window._isSterilizing = false; }, 500);
+
+        console.log("🧹 [Sterilizer] Auto-closing old template & purging workspace memory...");
+
+        // 1. PURGE PAGE MEMORY DICTIONARY & RESET POINTER
+        if (typeof generatedFiles !== 'undefined') {
+            generatedFiles = {}; 
+            window.generatedFiles = generatedFiles;
+        }
+        if (typeof currentPreviewFile !== 'undefined') {
+            currentPreviewFile = 'index.html';
+            window.currentPreviewFile = 'index.html';
+        }
+
+        // 2. KILL THE UNDO / REDO GHOST STACK
+        if (typeof localHistory !== 'undefined') {
+            localHistory = []; window.localHistory = [];
+            localHistoryIndex = -1; window.localHistoryIndex = -1;
+        }
+
+        // 3. RESET VIRTUAL CODE CURSOR (From our Goal 2 Find/Replace fix)
+        if (typeof window._frCodeCursor !== 'undefined') {
+            window._frCodeCursor.matchStart = -1;
+            window._frCodeCursor.index = 0;
+        }
+
+        // 4. PURGE THE TOP-BAR PAGE SELECTOR DROPDOWN
+        const pageDropdown = document.getElementById('page-dropdown');
+        if (pageDropdown) {
+            pageDropdown.innerHTML = '<option value="index.html" selected>index.html</option>';
+        }
+
+        // 5. PURGE AI CHAT PROMPT HISTORY (Preserve the welcome message only)
+        if (typeof currentChatHistory !== 'undefined') {
+            currentChatHistory = []; window.currentChatHistory = [];
+        }
+        const chatDisplay = document.getElementById('chat-display');
+        if (chatDisplay) {
+            const welcomeMsg = chatDisplay.firstElementChild;
+            chatDisplay.innerHTML = '';
+            if (welcomeMsg && welcomeMsg.classList.contains('ai-message')) {
+                chatDisplay.appendChild(welcomeMsg);
+            }
+        }
+
+        // 6. BLANK OUT THE RAW CODE EDITOR
+        const codeArea = document.getElementById('code-editor-area');
+        if (codeArea) codeArea.value = '';
+
+        // 7. STERILIZE THE LIVE IFRAME CANVAS
+        const iframe = document.getElementById('preview-frame');
+        if (iframe) {
+            try {
+                const doc = iframe.contentDocument || iframe.contentWindow.document;
+                doc.open();
+                doc.write('<!DOCTYPE html><html><head></head><body style="background:#f8f9fa; display:flex; justify-content:center; align-items:center; height:100vh; margin:0;"><div style="color:#6c757d; font-family:sans-serif; font-size:13px; font-weight:500;">⏳ Auto-closing previous template...</div></body></html>');
+                doc.close();
+            } catch(e) {
+                iframe.srcdoc = '<!DOCTYPE html><html><body><div style="padding:20px; color:#888;">⏳ Loading...</div></body></html>';
+            }
+        }
+
+        if (typeof updateStatus === 'function') {
+            updateStatus("Previous workspace closed. Loading new template...", false);
+        }
+    };
+
+
+    // =========================================================================
+    // DEPLOYING THE 3-LAYER INTERCEPTION WEB
+    // =========================================================================
+
+    function attachSterilizerHooks() {
+        // LAYER A: Monkey-Patch known explicit EWebGen loader functions
+        const knownLoaders = [
+            'loadProject', 'openProject', 'loadTemplate', 'selectTemplate', 
+            'handleZipImport', 'handleFolderImport', 'importProject', 'loadTemplateItem',
+            'loadSystemTemplate', 'triggerImport', 'insertSavedSection', 'loadProjectData'
+        ];
+
+        knownLoaders.forEach(fnName => {
+            if (typeof window[fnName] === 'function' && !window[fnName]._isHooked) {
+                const originalFn = window[fnName];
+                window[fnName] = function(...args) {
+                    window._sterilizeWorkspaceForNewLoad();
+                    return originalFn.apply(this, args);
+                };
+                window[fnName]._isHooked = true;
+            }
+        });
+
+        // LAYER B: Capture-Phase Click Sniffer (Catches anonymous HTML inline UI clicks)
+        document.addEventListener('click', function(e) {
+            if (!e.target) return;
+            
+            // CSS targets that indicate a user clicked a new template card or project to open
+            const isTemplateCard = e.target.closest('.template-item, .template-card, .system-template, [data-template-id], .project-item, .category-template-item');
+            const isImportBtn = e.target.closest('#zip-import-input, #confirm-import-btn, [onclick*="Import"]');
+
+            if (isTemplateCard || isImportBtn) {
+                window._sterilizeWorkspaceForNewLoad();
+            }
+        }, true); // TRUE = Capture Phase (Executes BEFORE the element's actual onclick can trigger!)
+
+        // LAYER C: Network Sniffer (Intercepts backend fetch requests for templates)
+        if (window.fetch && !window.fetch._isHooked) {
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const resource = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+                
+                const isWorkspaceLoad = (resource.includes('/load') || resource.includes('/import') || resource.includes('/get_project')) && !resource.includes('/thumbnail');
+                const isTemplateFetch = resource.includes('/api/templates/items/') && !resource.includes('DELETE');
+
+                if (isWorkspaceLoad || isTemplateFetch) {
+                    window._sterilizeWorkspaceForNewLoad();
+                }
+                return originalFetch.apply(this, args);
+            };
+            window.fetch._isHooked = true;
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => { setTimeout(attachSterilizerHooks, 300); });
+    } else {
+        setTimeout(attachSterilizerHooks, 300);
+    }
+
+    // Persistent heartbeat: Re-attach hooks every 2 seconds in case dynamic sidebars redraw
+    setInterval(attachSterilizerHooks, 2000);
+</script>

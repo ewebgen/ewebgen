@@ -1,0 +1,997 @@
+<script>
+    // ==========================================
+    // 3. EDITOR UI & TOOLBARS (Updated)
+    // ==========================================
+
+    // FEATURE 11 FIX: Add specific spacing between sidebar icons
+    document.addEventListener("DOMContentLoaded", () => {
+        const style = document.createElement('style');
+        style.textContent = `
+            #editor-sidebar .sidebar-btn {
+                margin-bottom: 15px !important;
+                padding: 12px 5px !important;
+            }
+            
+            #font-toolbar {
+                position: fixed !important;
+                display: none;
+                flex-direction: row !important;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                z-index: 10005;
+                width: max-content !important;
+                max-width: 95vw !important;
+                padding: 0;
+                overflow: visible !important;
+            }
+            
+            #font-toolbar-content {
+                display: flex;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                gap: 8px;
+                padding: 8px 15px !important;
+                overflow: visible !important;
+                align-items: center;
+            }
+            
+            .font-tool-group {
+                display: flex;
+                flex-wrap: nowrap !important;
+                gap: 2px;
+                width: auto !important;
+                border-right: none !important;
+                padding-right: 0 !important;
+            }
+            
+            body.dark-mode #font-toolbar {
+                background: #2d2d2d;
+                border-color: #444;
+            }
+            
+            #color-palette-container {
+                position: absolute !important;
+                top: 100% !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                margin-top: 10px !important;
+                z-index: 10006 !important;
+                background: white;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                padding: 10px;
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            }
+            body.dark-mode #color-palette-container {
+                background: #2d2d2d;
+                border-color: #444;
+            }
+        `;
+        document.head.appendChild(style);
+        
+        injectFloatingToolbar();
+        
+        if (typeof handleTopBarResponsive === 'function') {
+            handleTopBarResponsive(); 
+        }
+    });
+
+    // GOALS 4 & 5: Horizontal Scroll and Auto-Hide (Removed "More" Dropdown)
+    function handleTopBarResponsive() {
+        const controlBar = document.getElementById('control-bar');
+        
+        if (!controlBar) return;
+        
+        // Auto-hide Top Menu Logic for smaller screens
+        if (window.innerWidth < 950) {
+            if (!controlBar.classList.contains('autohidden') && !controlBar.dataset.manualToggle) {
+                controlBar.classList.add('autohidden');
+                const pullTab = document.getElementById('mobile-menu-pull');
+                if (pullTab) pullTab.innerHTML = '▼ Show Menu';
+            }
+        } else {
+            controlBar.classList.remove('autohidden');
+            controlBar.dataset.manualToggle = "";
+        }
+    }
+
+    window.addEventListener('resize', handleTopBarResponsive);
+
+    function toggleMobileTopBar() {
+        const controlBar = document.getElementById('control-bar');
+        const pullTab = document.getElementById('mobile-menu-pull');
+        if (controlBar) {
+            controlBar.dataset.manualToggle = "true";
+            if (controlBar.classList.contains('autohidden')) {
+                controlBar.classList.remove('autohidden');
+                if (pullTab) pullTab.innerHTML = '▲ Hide Menu';
+            } else {
+                controlBar.classList.add('autohidden');
+                if (pullTab) pullTab.innerHTML = '▼ Show Menu';
+            }
+        }
+    }
+
+    function injectFloatingToolbar() {
+        if (document.getElementById('font-toolbar')) return;
+        const toolbarHTML = `
+            <div id="font-toolbar">
+                <div id="font-toolbar-content">
+                    <div class="font-tool-group">
+                        <select id="font-family-select" onchange="applyFontCommand('fontName', this.value)" title="Font Family">
+                            <option value="" disabled selected>Font</option>
+                            <option value="Arial">Arial</option>
+                            <option value="Georgia">Georgia</option>
+                            <option value="Times New Roman">Times New Roman</option>
+                            <option value="Verdana">Verdana</option>
+                            <option value="Courier New">Courier New</option>
+                            <option value="Tahoma">Tahoma</option>
+                            <option value="Trebuchet MS">Trebuchet MS</option>
+                            <option value="Impact">Impact</option>
+                            <option value="Comic Sans MS">Comic Sans MS</option>
+                        </select>
+                        <select id="font-size-select" onchange="window.applyFontSizePx(this.value)" title="Font Size">
+                            <option value="" disabled selected>Size</option>
+                            <option value="8">8</option>
+                            <option value="9">9</option>
+                            <option value="10">10</option>
+                            <option value="11">11</option>
+                            <option value="12">12</option>
+                            <option value="14">14</option>
+                            <option value="16">16</option>
+                            <option value="18">18</option>
+                            <option value="20">20</option>
+                            <option value="22">22</option>
+                            <option value="24">24</option>
+                            <option value="26">26</option>
+                            <option value="28">28</option>
+                            <option value="36">36</option>
+                            <option value="48">48</option>
+                            <option value="72">72</option>
+                        </select>
+                    </div>
+                    <div class="font-tool-group">
+                        <button class="font-tool-icon" onclick="applyFontCommand('bold')" title="Bold (Ctrl+B)"><b>B</b></button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('italic')" title="Italic (Ctrl+I)"><i>I</i></button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('underline')" title="Underline (Ctrl+U)"><u>U</u></button>
+                    </div>
+                    <div class="font-tool-group">
+                        <button class="font-tool-icon" onclick="renderColorPalette(); selectedColorType='foreColor'; document.getElementById('color-palette-container').style.display='flex';" title="Text Color"><span style="color:red; font-weight:bold;">A</span></button>
+                        <button class="font-tool-icon" onclick="renderColorPalette(); selectedColorType='hiliteColor'; document.getElementById('color-palette-container').style.display='flex';" title="Highlight Color"><span style="background:yellow; padding:0 2px;">ab</span></button>
+                    </div>
+                    <div class="font-tool-group">
+                        <button class="font-tool-icon" onclick="applyFontCommand('justifyLeft')" title="Align Left">⬅️</button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('justifyCenter')" title="Align Center">↔️</button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('justifyRight')" title="Align Right">➡️</button>
+                    </div>
+                    <div class="font-tool-group">
+                        <button class="font-tool-icon" onclick="applyFontCommand('insertUnorderedList')" title="Bullet List">●</button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('insertOrderedList')" title="Numbered List">1.</button>
+                    </div>
+                    <div class="font-tool-group">
+                        <button class="font-tool-icon" onclick="window.openUnifiedLinkModal(null)" title="Insert/Edit Link">🔗</button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('unlink')" title="Remove Link">🚫🔗</button>
+                    </div>
+                    <div class="font-tool-group">
+                        <button id="format-painter-btn" class="font-tool-icon" onclick="toggleFormatPainter()" title="Format Painter">🖌️</button>
+                        <button class="font-tool-icon" onclick="applyFontCommand('removeFormat')" title="Clear Formatting">🚫</button>
+                    </div>
+                    
+                    <button class="close-font-toolbar-btn" onclick="closeFontToolbar()" style="background: transparent; border: none; color: #dc3545; font-size: 24px; line-height: 1; font-weight: bold; cursor: pointer; margin-left: 10px; padding: 0 5px; transition: color 0.2s;" title="Close Toolbar">&times;</button>
+
+                </div>
+                
+                <div id="color-palette-container" style="display:none; width: max-content;">
+                    <div class="palette-row">
+                        <div class="palette-label">Standard Colors</div>
+                        <div class="palette-swatch" style="background:#000000;" onclick="selectColor(this, '#000000', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#434343;" onclick="selectColor(this, '#434343', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#666666;" onclick="selectColor(this, '#666666', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#999999;" onclick="selectColor(this, '#999999', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#cccccc;" onclick="selectColor(this, '#cccccc', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#efefef;" onclick="selectColor(this, '#efefef', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#ffffff; border:1px solid #ccc;" onclick="selectColor(this, '#ffffff', selectedColorType)"></div>
+                    </div>
+                    <div class="palette-row">
+                        <div class="palette-label">Theme Colors</div>
+                        <div class="palette-swatch" style="background:#ea9999;" onclick="selectColor(this, '#ea9999', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#f9cb9c;" onclick="selectColor(this, '#f9cb9c', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#ffe599;" onclick="selectColor(this, '#ffe599', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#b6d7a8;" onclick="selectColor(this, '#b6d7a8', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#a2c4c9;" onclick="selectColor(this, '#a2c4c9', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#9fc5e8;" onclick="selectColor(this, '#9fc5e8', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#b4a7d6;" onclick="selectColor(this, '#b4a7d6', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#d5a6bd;" onclick="selectColor(this, '#d5a6bd', selectedColorType)"></div>
+                    </div>
+                    <div class="palette-row">
+                        <div class="palette-label">Primary Colors</div>
+                        <div class="palette-swatch" style="background:#ff0000;" onclick="selectColor(this, '#ff0000', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#ff9900;" onclick="selectColor(this, '#ff9900', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#ffff00;" onclick="selectColor(this, '#ffff00', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#00ff00;" onclick="selectColor(this, '#00ff00', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#00ffff;" onclick="selectColor(this, '#00ffff', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#0000ff;" onclick="selectColor(this, '#0000ff', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#9900ff;" onclick="selectColor(this, '#9900ff', selectedColorType)"></div>
+                        <div class="palette-swatch" style="background:#ff00ff;" onclick="selectColor(this, '#ff00ff', selectedColorType)"></div>
+                    </div>
+                    <div class="custom-color-input-container">
+                        <input type="color" id="custom-hex-input" class="hex-input" onchange="selectColor(this, this.value, selectedColorType)" title="Custom HEX Color">
+                        <button id="apply-color-btn" class="ok-btn" disabled onclick="applySelectedColor()">Apply Color</button>
+                        <button class="ok-btn" style="background:#6c757d;" onclick="document.getElementById('color-palette-container').style.display='none'">Close</button>
+                    </div>
+                </div>
+            </div>
+        `;
+        document.body.insertAdjacentHTML('beforeend', toolbarHTML);
+    }
+
+    function toggleFontToolbar() {
+        if (!isEditing) { alert("Please generate a site first."); return; }
+        const toolbar = document.getElementById('font-toolbar');
+        const btn = document.getElementById('font-btn');
+        
+        if (toolbar.style.display === 'flex') {
+            toolbar.style.display = 'none';
+        } else {
+            const rect = btn.getBoundingClientRect();
+            toolbar.style.setProperty('position', 'fixed', 'important'); 
+            toolbar.style.top = (rect.bottom + 5) + 'px';
+            toolbar.style.left = (rect.left - 100) + 'px'; 
+            toolbar.style.display = 'flex';
+            if (typeof renderColorPalette === 'function') renderColorPalette();
+        }
+    }
+
+    function closeFontToolbar() {
+        const toolbar = document.getElementById('font-toolbar');
+        if(toolbar) toolbar.style.display = 'none';
+        
+        const palette = document.getElementById('color-palette-container');
+        if(palette) palette.style.display = 'none';
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            const sel = iframe.contentDocument.getSelection();
+            if (sel) sel.removeAllRanges();
+        }
+    }
+
+    function showContextMenu(e, element, doc) {
+        closeFontToolbar();
+
+        let menu = doc.getElementById('custom-context-menu');
+        if(!menu) { menu = doc.createElement('div'); menu.id = 'custom-context-menu'; doc.body.appendChild(menu); }
+        
+        window.currentContextTarget = element;
+        window.currentContextDoc = doc;
+
+        const sel = doc.getSelection();
+
+        // RESTORE SELECTION LOGIC
+        if ((!sel || sel.isCollapsed) && window.lastValidRange) {
+            try {
+                const rect = window.lastValidRange.getBoundingClientRect();
+                if (e.clientX >= (rect.left - 5) && e.clientX <= (rect.right + 5) && 
+                    e.clientY >= (rect.top - 5) && e.clientY <= (rect.bottom + 5)) {
+                    sel.removeAllRanges();
+                    sel.addRange(window.lastValidRange);
+                } else {
+                    window.lastValidRange = null; 
+                }
+            } catch(ex) { console.warn("Could not restore selection range", ex); }
+        }
+
+        const hasText = !sel.isCollapsed && sel.rangeCount > 0 && sel.toString().trim().length > 0;
+        
+        let targetCarousel = element.closest('.eweb-carousel-container, .eweb-carousel-widget, .carousel');
+        let targetVideo = element.closest('.eweb-video-widget, video, iframe, .eweb-video-overlay, .ratio');
+        let targetImage = element.closest('img, .image-wrapper-editable, .eweb-image-widget');
+        
+        if (targetCarousel) targetImage = null; 
+        if (targetVideo && targetVideo.classList.contains('eweb-video-overlay')) {
+            targetVideo = targetVideo.parentElement.querySelector('video, iframe');
+        } else if (targetVideo && targetVideo.classList.contains('ratio')) {
+            targetVideo = targetVideo.querySelector('video, iframe');
+        }
+        
+        const isBuyBtn = element.classList.contains('buy-btn');
+
+        let html = ``;
+
+        // 1. CAROUSEL OPTIONS
+        if (targetCarousel) {
+            html += `<div class="menu-header" style="padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center; border-radius: 6px 6px 0 0;">Carousel Options</div>`;
+            html += `<div class="context-menu-item" style="padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="
+                const c = window.parent.currentContextTarget.closest('.eweb-carousel-container, .eweb-carousel-widget, .carousel');
+                if(c) {
+                    const imgs = Array.from(c.querySelectorAll('img')).map(img => img.src);
+                    if(typeof window.parent.openEditCarouselModal === 'function') window.parent.openEditCarouselModal(c, imgs);
+                    else if(typeof window.openEditCarouselModal === 'function') window.openEditCarouselModal(c, imgs);
+                    else if(typeof openEditCarouselModal === 'function') openEditCarouselModal(c, imgs);
+                }
+                document.getElementById('custom-context-menu').style.display='none';
+            ">🎠 Edit Carousel Images</div>`;
+            
+            html += `<div class="context-menu-item" style="padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #dc3545;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="
+                if(typeof window.parent.captureState === 'function') window.parent.captureState();
+                if(window.parent.confirm('Delete this Carousel?')) { 
+                    const c = window.parent.currentContextTarget.closest('.eweb-carousel-container, .eweb-carousel-widget, .carousel');
+                    if(c) c.remove(); 
+                    if(window.parent.document.getElementById('save-btn')) window.parent.document.getElementById('save-btn').disabled = false; 
+                    if(typeof window.parent.captureState === 'function') window.parent.captureState(); 
+                }
+                document.getElementById('custom-context-menu').style.display='none';
+            ">🗑️ Delete Carousel</div>`;
+        }
+        
+        // 2. IMAGE OPTIONS
+        else if (targetImage) {
+            html += `<div class="menu-header" style="padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center; border-radius: 6px 6px 0 0;">Image Options</div>`;
+            
+            html += `<div class="context-menu-item" style="padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="
+                const t = window.parent.currentContextTarget.closest('.image-wrapper-editable, .eweb-image-widget, img') || window.parent.currentContextTarget;
+                let url = '';
+                if(t) {
+                    if(t.tagName === 'IMG') url = t.src;
+                    else { const img = t.querySelector('img'); if(img) url = img.src; }
+                }
+                if(typeof window.parent.openEditImageModal === 'function') window.parent.openEditImageModal(t, url);
+                else if(typeof window.openEditImageModal === 'function') window.openEditImageModal(t, url);
+                else if(typeof openEditImageModal === 'function') openEditImageModal(t, url);
+                
+                document.getElementById('custom-context-menu').style.display='none';
+            ">🖼️ Edit / Change Image</div>`;
+            
+            html += `<button id="ctx-cut-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">✂️ Cut Image</button>`;
+            html += `<button id="ctx-copy-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📋 Copy Image</button>`;
+            html += `<button id="ctx-paste-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📥 Paste (Replace)</button>`;
+            html += `<button id="ctx-add-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🖼️ Add New Image</button>`;
+            html += `<button id="ctx-unified-link-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🔗 Link to URL / Hyperlink</button>`;
+            html += `<button id="ctx-del-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#dc3545; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🗑️ Delete Image</button>`; 
+        } 
+        
+        // 3. VIDEO OPTIONS
+        else if (targetVideo) { 
+            html += `<div class="menu-header" style="padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center; border-radius: 6px 6px 0 0;">Video Options</div>`;
+            html += `<div class="context-menu-item" style="padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #333;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="
+                const v = window.parent.currentContextTarget.closest('.eweb-video-widget, .ratio') || window.parent.currentContextTarget;
+                let url = '';
+                let isYT = false;
+                if(v) {
+                    const vid = v.querySelector('video');
+                    const ifr = v.querySelector('iframe');
+                    if(vid) url = vid.src;
+                    else if(ifr) { url = ifr.src; isYT = true; }
+                }
+                if(typeof window.parent.openEditVideoModal === 'function') window.parent.openEditVideoModal(v, url, isYT);
+                else if(typeof window.openEditVideoModal === 'function') window.openEditVideoModal(v, url, isYT);
+                else if(typeof openEditVideoModal === 'function') openEditVideoModal(v, url, isYT);
+                
+                document.getElementById('custom-context-menu').style.display='none';
+            ">🎥 Edit Video Source</div>`;
+            
+            html += `<div class="context-menu-item" style="padding: 8px 15px; cursor: pointer; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 8px; font-size: 13px; color: #dc3545;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'" onclick="
+                if(typeof window.parent.captureState === 'function') window.parent.captureState();
+                if(window.parent.confirm('Delete this video?')) {
+                    const wrapper = window.parent.currentContextTarget.closest('.eweb-video-wrapper, .eweb-video-widget, .ratio');
+                    if (wrapper) wrapper.remove(); else window.parent.currentContextTarget.remove();
+                    if(window.parent.document.getElementById('save-btn')) window.parent.document.getElementById('save-btn').disabled = false;
+                    if(typeof window.parent.captureState === 'function') window.parent.captureState();
+                }
+                document.getElementById('custom-context-menu').style.display='none';
+            ">🗑️ Delete Video</div>`;
+        }
+        
+        // 4. TEXT OPTIONS
+        else if (hasTextSelection) {
+            html += `<div class="menu-header" style="padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center; border-radius: 6px 6px 0 0;">Text Options</div>`;
+            html += `<button id="ctx-cut-txt" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">✂️ Cut</button>`;
+            html += `<button id="ctx-copy-txt" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📋 Copy</button>`;
+            html += `<button id="ctx-paste-txt" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📥 Paste</button>`;
+            html += `<button id="ctx-unified-link-txt" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🔗 Link to URL / Hyperlink</button>`;
+            if(element.closest('a')) html += `<button id="ctx-unlink" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🔗 Remove Link</button>`;
+        } 
+        
+        // 5. GENERAL OPTIONS
+        else {
+            html += `<div class="menu-header" style="padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center; border-radius: 6px 6px 0 0;">Insert Options</div>`;
+            html += `<button id="ctx-add-element-gen" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">➕ +Add Widget</button>`;
+            html += `<button id="ctx-add-saved-gen" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">💾 Add Saved Section Here</button>`;
+
+            html += `<div class="menu-header" style="padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center; border-radius: 6px 6px 0 0;">General Options</div>`;
+            html += `<button id="ctx-add-img-gen" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🖼️ Add Image Here</button>`;
+            
+            html += `<button id="ctx-add-logo-gen" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">✨ Add Logo Here (200x70)</button>`;
+            
+            const heroEl = element.closest('header, section, footer, .eweb-section');
+            const blockEl = element.closest('.col, .col-md-4, .col-md-6, .card, .grid-item, .eweb-column, .eweb-block');
+            const targetBgElement = heroEl || blockEl || element;
+            const hasHeroSlider = targetBgElement.querySelector('.eweb-hero-slider');
+
+            if (targetBgElement.tagName === 'SECTION' || targetBgElement.tagName === 'HEADER' || targetBgElement.tagName === 'FOOTER' || targetBgElement.classList.contains('col') || targetBgElement.classList.contains('eweb-column') || targetBgElement.classList.contains('eweb-block')) {
+                
+                html += `<button id="ctx-set-bg-img" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🌄 Set Background Image</button>`;
+                html += `<button id="ctx-set-bg-col" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🎨 Set Background Color</button>`;
+              
+                if (hasHeroSlider) {
+                    html += `<button id="ctx-edit-hero-slider" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">✏️ Edit Image Slideshow</button>`;
+                } else {
+                    html += `<button id="ctx-add-hero-slider" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🎞️ Add Image Slideshow</button>`;
+                }
+
+                html += `<button id="ctx-remove-bg" style="color:#e74c3c; display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; border-bottom:1px solid #eee; font-weight:bold;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">🚫 Remove Background / Hero Image</button>`;
+            }
+            html += `<button id="ctx-paste-gen" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📥 Paste Text</button>`;
+            html += `<button id="ctx-paste-sec-gen" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📋 Paste Image/Section (From Clipboard)</button>`;
+        }
+
+        if (isBuyBtn) {
+            html += `<div class="menu-header" style="margin-top:5px;border-top:1px solid #eee; padding: 5px; font-size: 11px; font-weight: bold; color: #888; background: #f8f9fa; border-bottom: 1px solid #ddd; text-align: center;">Commerce</div><button id="ctx-edit-product" style="display:block; width:100%; text-align:left; padding:8px 15px; background:none; border:none; cursor:pointer; font-size:13px; color:#333; border-bottom:1px solid #eee;" onmouseover="this.style.background='#f0f0f0'" onmouseout="this.style.background='transparent'">📝 Edit Product Details</button>`;
+        }
+
+        menu.innerHTML = html;
+        
+        const menuWidth = 200;
+        let menuHeight = 280;
+        if(targetCarousel || targetVideo) menuHeight = 160; 
+        else if (targetImage) menuHeight = 290;
+        
+        let x = e.clientX;
+        let y = e.clientY;
+        
+        const winWidth = doc.defaultView.innerWidth;
+        const winHeight = doc.defaultView.innerHeight;
+
+        if (x + menuWidth > winWidth) x -= menuWidth;
+        if (y + menuHeight > winHeight) y -= menuHeight;
+        
+        menu.style.left = x + 'px';
+        menu.style.top = y + 'px';
+        menu.style.display = 'block'; 
+
+        // Event Listeners for Images
+        if(targetImage && !targetCarousel && !targetVideo) {
+            const wrapper = targetImage.closest('.image-wrapper-editable');
+            menu.querySelector('#ctx-cut-img').onclick = () => { if(typeof window.captureState === 'function') window.captureState(); if(wrapper){ window.copySection(wrapper); wrapper.remove(); } else { window.copySection(targetImage); targetImage.remove(); } menu.style.display='none'; if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false; if(typeof window.captureState === 'function') window.captureState(); };
+            
+            menu.querySelector('#ctx-copy-img').onclick = () => { if(wrapper) window.copySection(wrapper); else window.copySection(targetImage); menu.style.display='none'; };
+            
+            menu.querySelector('#ctx-paste-img').onclick = async () => { 
+                menu.style.display = 'none';
+                try {
+                    const clipboardItems = await navigator.clipboard.read();
+                    for (const item of clipboardItems) {
+                        const imageTypes = item.types.filter(type => type.startsWith('image/'));
+                        if (imageTypes.length > 0) {
+                            if(typeof window.captureState === 'function') window.captureState(); 
+                            const blob = await item.getType(imageTypes[0]);
+                            const reader = new FileReader();
+                            reader.onload = (e) => {
+                                targetImage.src = e.target.result;
+                                if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false;
+                                if(typeof window.captureState === 'function') window.captureState();
+                                if(typeof updateStatus === 'function') updateStatus("✅ Image pasted from clipboard.");
+                            };
+                            reader.readAsDataURL(blob);
+                            return; 
+                        }
+                    }
+                } catch (err) {
+                    console.log("Clipboard API image read failed/unsupported. Falling back.", err);
+                }
+
+                if (window._ewebCopiedHTML && window._ewebCopiedHTML.includes('<img')) {
+                    if(typeof window.captureState === 'function') window.captureState(); 
+                    const temp = doc.createElement('div');
+                    temp.innerHTML = window._ewebCopiedHTML;
+                    const copiedImg = temp.querySelector('img');
+                    if (copiedImg) {
+                        targetImage.src = copiedImg.src;
+                        if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false;
+                        if(typeof window.captureState === 'function') window.captureState();
+                        if(typeof updateStatus === 'function') updateStatus("✅ Image replaced from local copy.");
+                        return; 
+                    }
+                }
+                
+                if(typeof window.captureState === 'function') window.captureState(); 
+                window.currentImageToReplace = targetImage; 
+                let fileInput = document.getElementById('image-upload-input') || (window.parent && window.parent.document.getElementById('image-upload-input')); 
+                if(fileInput) fileInput.click(); 
+            };
+
+            menu.querySelector('#ctx-add-img').onclick = () => { if(typeof window.captureState === 'function') window.captureState(); window.insertImageInDoc(doc); menu.style.display='none'; };
+            
+            menu.querySelector('#ctx-del-img').onclick = () => { 
+                if(typeof window.captureState === 'function') window.captureState(); 
+                if(window.parent.confirm("Delete this image?")) { if(wrapper) wrapper.remove(); else targetImage.remove(); if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false; if(typeof window.captureState === 'function') window.captureState(); } 
+                menu.style.display='none'; 
+            };
+
+            menu.querySelector('#ctx-unified-link-img').onclick = () => {
+                menu.style.display='none';
+                window.openUnifiedLinkModal(targetImage);
+            };
+        }
+
+        // TEXT LISTENER 
+        if(hasTextSelection && !targetCarousel && !targetVideo && !targetImage) {
+            const savedRange = sel.getRangeAt(0).cloneRange();
+            const iframe = document.getElementById('preview-frame');
+
+            const executeWithSelection = (cmd, val = null) => {
+                if(iframe && iframe.contentWindow) iframe.contentWindow.focus();
+                const currentSel = doc.getSelection();
+                currentSel.removeAllRanges();
+                currentSel.addRange(savedRange);
+                doc.execCommand(cmd, false, val);
+            };
+
+            menu.querySelector('#ctx-cut-txt').onclick = () => { if(typeof window.captureState === 'function') window.captureState(); executeWithSelection('cut'); menu.style.display='none'; if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false; if(typeof window.captureState === 'function') window.captureState(); };
+            menu.querySelector('#ctx-copy-txt').onclick = () => { executeWithSelection('copy'); menu.style.display='none'; };
+            menu.querySelector('#ctx-paste-txt').onclick = async () => { 
+                try { 
+                    const text = await navigator.clipboard.readText(); 
+                    if(text) { if(typeof window.captureState === 'function') window.captureState(); executeWithSelection('insertText', text); if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false; if(typeof window.captureState === 'function') window.captureState(); } 
+                } catch(err) { alert("Browser prevented paste. Use Ctrl+V."); } 
+                menu.style.display='none'; 
+            };
+
+            menu.querySelector('#ctx-unified-link-txt').onclick = () => {
+                    menu.style.display='none';
+                    window.lastValidRange = savedRange;
+                    window.openUnifiedLinkModal(null); 
+            };
+
+            const unlink = menu.querySelector('#ctx-unlink');
+            if(unlink) unlink.onclick = () => { if(typeof window.captureState === 'function') window.captureState(); executeWithSelection('unlink'); if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false; if(typeof window.captureState === 'function') window.captureState(); menu.style.display='none'; };
+        }
+
+        if(!targetImage && !targetVideo && !targetCarousel && !hasTextSelection) {
+            
+            const heroEl = element.closest('header, section, footer, .eweb-section');
+            const blockEl = element.closest('.col, .col-md-4, .col-md-6, .card, .grid-item, .eweb-column, .eweb-block');
+            const targetBgElement = heroEl || blockEl || element;
+            const hasHeroSlider = targetBgElement ? targetBgElement.querySelector('.eweb-hero-slider') : null;
+
+            const addElementBtn = menu.querySelector('#ctx-add-element-gen');
+            if(addElementBtn) {
+                addElementBtn.onclick = () => {
+                    window.__insertTarget = element.closest('.col, .col-md-4, .col-md-6, .eweb-column, .eweb-block, section, .eweb-section') || element; 
+                    
+                    const addBtnSidebar = document.getElementById('sidebar-add-btn') || (window.parent && window.parent.document.getElementById('sidebar-add-btn'));
+                    const elementsSlider = document.getElementById('elements-slider') || document.getElementById('ui-elements-slider') || (window.parent && (window.parent.document.getElementById('elements-slider') || window.parent.document.getElementById('ui-elements-slider')));
+                    const overlay = document.getElementById('slider-overlay') || (window.parent && window.parent.document.getElementById('slider-overlay'));
+
+                    if (typeof window.toggleUIElementsSlider === 'function') {
+                        window.toggleUIElementsSlider();
+                    } else if (window.parent && typeof window.parent.toggleUIElementsSlider === 'function') {
+                        window.parent.toggleUIElementsSlider();
+                    } else if (addBtnSidebar) {
+                        addBtnSidebar.click();
+                    } else if (elementsSlider) {
+                        elementsSlider.classList.add('open');
+                        if(overlay) overlay.style.display = 'block';
+                    }
+                    menu.style.display = 'none';
+                    if(typeof updateStatus === 'function') updateStatus("Click an element in the sidebar to insert it here.");
+                };
+            }
+
+            const addSavedBtn = menu.querySelector('#ctx-add-saved-gen');
+            if(addSavedBtn) {
+                addSavedBtn.onclick = () => {
+                    window.__insertTarget = element.closest('.col, .col-md-4, .col-md-6, .eweb-column, .eweb-block, section, .eweb-section') || element; 
+                    if(typeof loadSavedSectionsUI === 'function') loadSavedSectionsUI();
+                    const savedModal = document.getElementById('insert-saved-modal') || (window.parent && window.parent.document.getElementById('insert-saved-modal'));
+                    if(savedModal) savedModal.style.display = 'flex';
+                    menu.style.display = 'none';
+                    if(typeof updateStatus === 'function') updateStatus("Click a saved section/template to insert it here.");
+                };
+            }
+
+            const addImgGenBtn = menu.querySelector('#ctx-add-img-gen');
+            if (addImgGenBtn) {
+                addImgGenBtn.onclick = () => { 
+                    if(typeof window.captureState === 'function') window.captureState(); 
+                    window.insertImageInDoc(doc); 
+                    menu.style.display='none'; 
+                };
+            }
+
+            const addLogoGenBtn = menu.querySelector('#ctx-add-logo-gen');
+            if (addLogoGenBtn) {
+                addLogoGenBtn.onclick = () => {
+                    if(typeof window.captureState === 'function') window.captureState();
+                    if(typeof window.initiateLogoInsert === 'function') {
+                        window.initiateLogoInsert(doc);
+                    } else if (window.parent && typeof window.parent.initiateLogoInsert === 'function') {
+                        window.parent.initiateLogoInsert(doc);
+                    }
+                    menu.style.display='none';
+                };
+            }
+            
+            // BACKGROUND IMAGE
+            const setBgImgBtn = menu.querySelector('#ctx-set-bg-img');
+            if (setBgImgBtn) {
+                setBgImgBtn.onclick = () => {
+                    if(typeof window.captureState === 'function') window.captureState();
+                    window.currentBgElementToReplace = targetBgElement;
+                    
+                    let fileInput = document.getElementById('image-upload-input') || (window.parent && window.parent.document.getElementById('image-upload-input'));
+                    if (fileInput) {
+                        fileInput.click();
+                    }
+                    menu.style.display='none';
+                };
+            }
+
+            // BACKGROUND COLOR
+            const setBgColBtn = menu.querySelector('#ctx-set-bg-col');
+            if (setBgColBtn) {
+                setBgColBtn.onclick = () => {
+                    if(typeof window.captureState === 'function') window.captureState();
+                    window.currentBgElementToReplace = targetBgElement;
+                    let bgInput = document.getElementById('dynamic-bg-color-picker');
+                    if(!bgInput) {
+                        bgInput = document.createElement('input');
+                        bgInput.type = 'color';
+                        bgInput.id = 'dynamic-bg-color-picker';
+                        bgInput.style.position = 'absolute';
+                        bgInput.style.opacity = '0';
+                        bgInput.style.pointerEvents = 'none';
+                        document.body.appendChild(bgInput);
+                        bgInput.addEventListener('input', (ev) => { if (window.currentBgElementToReplace) window.currentBgElementToReplace.style.backgroundColor = ev.target.value; });
+                        bgInput.addEventListener('change', (ev) => {
+                            if (window.currentBgElementToReplace) {
+                                window.currentBgElementToReplace.style.backgroundColor = ev.target.value;
+                                if(typeof updateStatus === 'function') updateStatus('Background color updated.');
+                                if(typeof enableSaveButton === 'function') enableSaveButton();
+                                if(typeof window.captureState === 'function') window.captureState();
+                                window.currentBgElementToReplace = null;
+                            }
+                        });
+                    }
+                    try { bgInput.showPicker(); } catch(ex) { bgInput.click(); }
+                    menu.style.display='none';
+                };
+            }
+
+            // --- HERO SLIDESHOW LOGIC CLICKS ---
+            const setHeroSliderBtn = menu.querySelector('#ctx-add-hero-slider');
+            if (setHeroSliderBtn) {
+                setHeroSliderBtn.onclick = () => {
+                    if(typeof window.captureState === 'function') window.captureState();
+                    window.currentBgElementToReplace = targetBgElement;
+                    if (typeof window.openHeroSliderModal === 'function') window.openHeroSliderModal(doc, false);
+                    else if (window.parent && typeof window.parent.openHeroSliderModal === 'function') window.parent.openHeroSliderModal(doc, false);
+                    menu.style.display='none';
+                };
+            }
+
+            const editHeroSliderBtn = menu.querySelector('#ctx-edit-hero-slider');
+            if (editHeroSliderBtn) {
+                editHeroSliderBtn.onclick = () => {
+                    if(typeof window.captureState === 'function') window.captureState();
+                    window.currentBgElementToReplace = targetBgElement;
+                    if (typeof window.openHeroSliderModal === 'function') window.openHeroSliderModal(doc, true);
+                    else if (window.parent && typeof window.parent.openHeroSliderModal === 'function') window.parent.openHeroSliderModal(doc, true);
+                    menu.style.display='none';
+                };
+            }
+            
+            // --- FIX: AGGRESSIVE REMOVE BACKGROUND / HERO IMAGE ---
+            const removeBgBtn = menu.querySelector('#ctx-remove-bg');
+            if (removeBgBtn) {
+                removeBgBtn.onclick = () => {
+                    if(typeof window.captureState === 'function') window.captureState();
+                    
+                    // 1. Force remove inline styles
+                    targetBgElement.style.setProperty('background-image', 'none', 'important');
+                    targetBgElement.style.setProperty('background-color', 'transparent', 'important');
+                    targetBgElement.style.setProperty('background', 'transparent', 'important');
+                    
+                    // 2. Strip conflicting classes
+                    const bgClasses = Array.from(targetBgElement.classList).filter(c => c.startsWith('bg-'));
+                    if(bgClasses.length > 0) targetBgElement.classList.remove(...bgClasses);
+                    
+                    // 3. Destroy specific absolute-positioned children acting as background layers
+                    Array.from(targetBgElement.children).forEach(child => {
+                        const style = window.getComputedStyle(child);
+                        if (style.position === 'absolute' && (style.zIndex === '-1' || style.zIndex === '0' || child.classList.contains('overlay') || child.classList.contains('bg-image') || child.tagName === 'IMG')) {
+                            // Don't accidentally hide the whole container or text
+                            if (!child.classList.contains('container') && !child.classList.contains('row') && !child.classList.contains('eweb-hero-slider')) {
+                                child.style.display = 'none';
+                            }
+                        }
+                    });
+
+                    // 4. Delete the Slideshow if present
+                    const slider = targetBgElement.querySelector('.eweb-hero-slider');
+                    if (slider) slider.remove();
+                    
+                    // 5. Clean up shadow wrappers
+                    targetBgElement.classList.remove('hero-fallback');
+                    targetBgElement.querySelectorAll('.hero-text-shadow').forEach(t => t.classList.remove('hero-text-shadow'));
+                    
+                    if(typeof updateStatus === 'function') updateStatus('Background/Hero Image removed.');
+                    if(typeof enableSaveButton === 'function') enableSaveButton();
+                    if(typeof window.captureState === 'function') window.captureState();
+                    menu.style.display='none';
+                };
+            }
+
+            menu.querySelector('#ctx-paste-sec-gen').onclick = () => { if(typeof window.captureState === 'function') window.captureState(); window.pasteSection(element, 'beforeend'); menu.style.display='none'; };
+            
+            menu.querySelector('#ctx-paste-gen').onclick = async () => {
+                menu.style.display = 'none';
+                try { 
+                    const text = await navigator.clipboard.readText(); 
+                    if(text) { 
+                        if(typeof window.captureState === 'function') window.captureState();
+                        
+                        const textContainer = element.closest('p, h1, h2, h3, h4, h5, h6, span, div, a, li, td, th') || element;
+                        
+                        if (textContainer) {
+                            const textNode = doc.createTextNode(text);
+                            textContainer.appendChild(textNode);
+                        }
+                        
+                        if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled=false; 
+                        if(typeof window.captureState === 'function') window.captureState();
+                        if(typeof updateStatus === 'function') updateStatus("✅ Text pasted.");
+                    } 
+                } catch(err) { alert("Browser prevented clipboard read. Please click inside a text block and use Ctrl+V."); } 
+            };
+        }
+
+        if (isBuyBtn) {
+            menu.querySelector('#ctx-edit-product').onclick = () => { editProductDetails(element); menu.style.display='none'; };
+        }
+    };
+
+    function openGradientModal() {
+        let gradModal = document.getElementById('gradient-editor-modal');
+        if (!gradModal) {
+            gradModal = document.createElement('div');
+            gradModal.id = 'gradient-editor-modal';
+            gradModal.className = 'auth-modal';
+            gradModal.style.cssText = 'display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.7); z-index:20000; justify-content:center; align-items:center;';
+            gradModal.innerHTML = `
+                <div class="auth-box" style="background:#fff; padding:20px; border-radius:8px; width:350px;">
+                    <h3 style="margin-top:0;">🌈 Background Gradient</h3>
+                    <div style="display:flex; gap:15px; margin-top:15px; align-items:center;">
+                        <input type="color" id="grad-col-1" value="#0d6efd" style="width:50px; height:40px; cursor:pointer; padding:0; border:none;">
+                        <span>to</span>
+                        <input type="color" id="grad-col-2" value="#00c6ff" style="width:50px; height:40px; cursor:pointer; padding:0; border:none;">
+                    </div>
+                    <div style="margin-top:20px;">
+                        <label>Angle: <span id="grad-angle-val">90°</span></label>
+                        <input type="range" id="grad-angle" min="0" max="360" value="90" style="width:100%;" oninput="document.getElementById('grad-angle-val').textContent = this.value + '°'">
+                    </div>
+                    <div style="margin-top:20px; display:flex; gap:10px; justify-content:flex-end;">
+                        <button onclick="document.getElementById('gradient-editor-modal').style.display='none'" style="padding:8px 15px; border:none; background:#ccc; border-radius:4px; cursor:pointer; color:#333;">Cancel</button>
+                        <button onclick="applyGradientFromModal()" style="padding:8px 15px; background:#007bff; color:#fff; border:none; border-radius:4px; cursor:pointer;">Apply Gradient</button>
+                    </div>
+                </div>
+            `;
+            document.body.appendChild(gradModal);
+        }
+        gradModal.style.display = 'flex';
+    }
+
+    window.applyGradientFromModal = function() {
+        if (!currentBgElementToReplace) return;
+        const c1 = document.getElementById('grad-col-1').value;
+        const c2 = document.getElementById('grad-col-2').value;
+        const ang = document.getElementById('grad-angle').value;
+        
+        currentBgElementToReplace.style.backgroundImage = `linear-gradient(${ang}deg, ${c1}, ${c2})`;
+        currentBgElementToReplace.style.backgroundColor = 'transparent';
+        currentBgElementToReplace.classList.remove('hero-fallback');
+        currentBgElementToReplace.querySelectorAll('.hero-text-shadow').forEach(t => t.classList.remove('hero-text-shadow'));
+        
+        document.getElementById('gradient-editor-modal').style.display = 'none';
+        if(typeof updateStatus === 'function') updateStatus('Gradient Background Applied.');
+        if(typeof enableSaveButton === 'function') enableSaveButton();
+        if(typeof captureState === 'function') captureState();
+        currentBgElementToReplace = null;
+    };
+
+    function editProductDetails(el) {
+        if (!el) el = currentContextTarget;
+        if (!el || !el.classList.contains('buy-btn')) { alert("No product button selected."); return; }
+        
+        const currentName = el.dataset.name || "Product";
+        const currentPrice = el.dataset.amount || "0.00";
+        
+        const newName = prompt("Edit Product Name:", currentName);
+        if (newName === null) return;
+        
+        const newPrice = prompt("Edit Price (e.g. 19.99):", currentPrice);
+        if (newPrice === null) return;
+        
+        el.dataset.name = newName;
+        el.dataset.amount = newPrice;
+        
+        if(typeof updateStatus === 'function') updateStatus("✅ Product details updated.");
+        if(typeof enableSaveButton === 'function') enableSaveButton();
+        if(typeof captureState === 'function') captureState();
+    }
+
+    // --- GOAL 1 FIX: UPDATE HREF SAFELY IN EXISTING BUTTONS/LINKS ---
+    let pendingLinkTarget = null; 
+    
+    window.openUnifiedLinkModal = function(targetImage) { 
+        pendingLinkTarget = targetImage; 
+        
+        if (!targetImage && !window.lastValidRange) { 
+            alert("Please highlight the text or select the button you want to link first."); 
+            return; 
+        } 
+        
+        document.getElementById('hyperlink-modal').style.display = 'flex'; 
+        const pageSelect = document.getElementById('link-page-select'); 
+        pageSelect.innerHTML = ''; 
+        
+        const pages = Object.keys(generatedFiles).filter(f => f.endsWith('.html')); 
+        
+        if(pages.length === 0) { 
+            const o = document.createElement('option'); o.text = "No pages available"; pageSelect.appendChild(o); 
+        } else { 
+            pages.forEach(p => { 
+                const o = document.createElement('option'); o.value = p; o.text = p; pageSelect.appendChild(o); 
+            }); 
+        } 
+        
+        let existingUrl = ''; 
+        
+        if (targetImage) { 
+            const parentA = targetImage.closest('a'); 
+            if (parentA) existingUrl = parentA.getAttribute('href'); 
+        } else { 
+            if (typeof window.lastValidRange !== 'undefined' && window.lastValidRange) { 
+                const node = window.lastValidRange.commonAncestorContainer; 
+                const parentEl = node.nodeType === 1 ? node : node.parentElement; 
+                const closestA = parentEl.closest('a'); 
+                if (closestA) existingUrl = closestA.getAttribute('href'); 
+            } else { 
+                if(!targetImage) { 
+                    console.warn("No valid text selection found."); 
+                } 
+            } 
+        } 
+        
+        const urlInput = document.getElementById('link-url-input'); 
+        const urlRadio = document.querySelector('input[name="link-type"][value="url"]'); 
+        const pageRadio = document.querySelector('input[name="link-type"][value="page"]'); 
+        
+        if (existingUrl && pages.includes(existingUrl)) { 
+            pageRadio.checked = true; 
+            window.handleLinkOptionChange('page'); 
+            pageSelect.value = existingUrl; 
+            urlInput.value = ''; 
+        } else { 
+            urlRadio.checked = true; 
+            window.handleLinkOptionChange('url'); 
+            urlInput.value = existingUrl || ''; 
+        } 
+    };
+    
+    window.closeHyperlinkModal = function() { 
+        document.getElementById('hyperlink-modal').style.display = 'none'; 
+    };
+    
+    window.handleLinkOptionChange = function(type) { 
+        const groupUrl = document.getElementById('group-url'); 
+        const groupPage = document.getElementById('group-page'); 
+        
+        if (type === 'url') { 
+            groupUrl.classList.remove('disabled'); 
+            groupPage.classList.add('disabled'); 
+            document.getElementById('link-url-input').disabled = false; 
+            document.getElementById('link-url-target').disabled = false; 
+            document.getElementById('link-page-select').disabled = true; 
+            document.querySelector('input[name="link-type"][value="url"]').checked = true; 
+        } else { 
+            groupUrl.classList.add('disabled'); 
+            groupPage.classList.remove('disabled'); 
+            document.getElementById('link-url-input').disabled = true; 
+            document.getElementById('link-url-target').disabled = true; 
+            document.getElementById('link-page-select').disabled = false; 
+            document.querySelector('input[name="link-type"][value="page"]').checked = true; 
+        } 
+    };
+    
+    window.applyUnifiedLink = function() { 
+        if(typeof window.captureState === 'function') window.captureState(); 
+        
+        const type = document.querySelector('input[name="link-type"]:checked').value; 
+        let finalUrl = '', targetMode = '_self', isGlobal = false; 
+        
+        if (type === 'url') { 
+            finalUrl = document.getElementById('link-url-input').value.trim(); 
+            const m = document.getElementById('link-url-target').value; 
+            if (m === '_global_blank') { 
+                targetMode = '_blank'; isGlobal = true; 
+            } else { 
+                targetMode = m; 
+            } 
+        } else { 
+            finalUrl = document.getElementById('link-page-select').value; 
+            targetMode = '_self'; 
+        } 
+        
+        if (!finalUrl) { alert("Enter URL or select page."); return; } 
+        
+        const iframe = document.getElementById('preview-frame'); 
+        const doc = window.currentContextDoc || iframe.contentDocument || iframe.contentWindow.document; 
+        
+        if (isGlobal) {
+            doc.querySelectorAll('a').forEach(a => a.target = '_blank'); 
+        }
+        
+        if (window.pendingLinkTarget) { 
+            // Handles image target updates
+            const wrapper = window.pendingLinkTarget.closest('.image-wrapper-editable'); 
+            let a = wrapper ? wrapper.closest('a') : window.pendingLinkTarget.closest('a'); 
+            if (a) { 
+                a.href = finalUrl; 
+                a.target = targetMode; 
+            } else { 
+                a = doc.createElement('a'); 
+                a.href = finalUrl; 
+                a.target = targetMode; 
+                const targetNode = wrapper || window.pendingLinkTarget;
+                targetNode.parentNode.insertBefore(a, targetNode); 
+                a.appendChild(targetNode); 
+            } 
+        } else { 
+            if (window.lastValidRange) { 
+                if(iframe.contentWindow) iframe.contentWindow.focus(); 
+                
+                const sel = iframe.contentWindow.getSelection(); 
+                sel.removeAllRanges(); 
+                sel.addRange(window.lastValidRange); 
+                
+                // --- GOAL 1 FIX: Safe update for existing anchors (e.g. Buttons) ---
+                let anchorNode = window.lastValidRange.commonAncestorContainer;
+                let parentA = anchorNode.nodeType === 1 ? anchorNode.closest('a') : anchorNode.parentElement.closest('a');
+                
+                if (parentA) {
+                    parentA.href = finalUrl;
+                    parentA.target = targetMode;
+                } else {
+                    // Create new inline link
+                    doc.execCommand('createLink', false, finalUrl); 
+                    
+                    const newSel = iframe.contentWindow.getSelection(); 
+                    if (newSel.rangeCount > 0) { 
+                        let anchor = newSel.anchorNode; 
+                        let link = anchor.nodeType === 1 ? anchor : anchor.parentElement;
+                        if(link.tagName !== 'A') link = link.closest('a'); 
+                        
+                        if (link) {
+                            link.target = targetMode; 
+                        } else { 
+                            const links = doc.querySelectorAll('a[href="'+finalUrl+'"]'); 
+                            if(links.length) links[links.length-1].target = targetMode; 
+                        } 
+                    } 
+                }
+            } else { 
+                alert("Please highlight the text you want to link first."); 
+                window.closeHyperlinkModal(); 
+                return; 
+            } 
+        } 
+        
+        if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); 
+        if(typeof window.captureState === 'function') window.captureState(); 
+        window.closeHyperlinkModal(); 
+        if(typeof updateStatus === 'function') updateStatus("✅ Link applied."); 
+    };
+</script>

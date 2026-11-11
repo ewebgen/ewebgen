@@ -1,0 +1,1166 @@
+<script>
+    function escapeHtml(unsafe) {
+        return unsafe
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
+    let selectedColor = null;
+    let selectedColorType = 'foreColor';
+    let voiceSilenceTimer = null; 
+    let currentVoiceDuration = 2000; 
+
+    let selectedImageSrc = null;
+    let galleryImages = []; 
+    let generatedImageBlobUrl = null; 
+    
+    let isRestoring = false; 
+    let editorObserver = null;
+
+    // ==============================================================================
+    // CRITICAL FIX: Weighted DOM-String Algorithm & Hybrid Minified-Scroll Engine
+    // ==============================================================================
+    window.highlightCodeFromPreview = function(payload) {
+        const codeArea = document.getElementById('code-editor-area');
+        if (!codeArea) return;
+
+        const source = codeArea.value;
+        if (!source) return;
+
+        const tagName = (payload.tagName || '').toLowerCase();
+        if (!tagName) return;
+
+        // 1. Gather targeting data from payload
+        const targetId = payload.id || (payload.attributes ? payload.attributes.id : null);
+        
+        let rawClasses = payload.className || (payload.attributes ? payload.attributes.className : '');
+        let targetClasses = [];
+        if (rawClasses) {
+            targetClasses = rawClasses
+                .replace(/section-hover|subsection-hover|image-wrapper-editable|eweb-column-hover|eweb-is-dragging/g, '')
+                .split(/\s+/)
+                .filter(c => c.trim().length > 0);
+        }
+        
+        let targetSrc = payload.attributes ? (payload.attributes.src || payload.attributes.href) : null;
+        if (targetSrc && targetSrc.startsWith('http') && targetSrc.includes(window.location.host)) {
+            targetSrc = targetSrc.split(window.location.host)[1];
+        }
+
+        const targetText = payload.text ? payload.text.trim() : null;
+        const normalizedTargetText = targetText ? targetText.replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ') : '';
+
+        let bestIndex = -1;
+        let bestScore = -1;
+        let matchLength = 0;
+
+        // Helper: Translates HTML entities (like &#128205; or &amp;) into literal characters
+        const decodeHTMLEntities = (text) => {
+            try {
+                const txt = document.createElement('textarea');
+                txt.innerHTML = text;
+                return txt.value;
+            } catch(e) { return text; }
+        };
+
+        // 2. Search all instances of the clicked HTML tag
+        const tagRegex = new RegExp(`<${tagName}(?:\\s+[^>]*)?>`, 'gi');
+        let match;
+        
+        while ((match = tagRegex.exec(source)) !== null) {
+            let score = 0;
+            const tagStr = match[0]; 
+            const startIndex = match.index;
+            
+            // Extract a 2000 char chunk to evaluate the element's content
+            const chunk = source.substring(startIndex, startIndex + 2000);
+            
+            // Strip nested HTML tags (like <span>) and decode entities so text matches perfectly
+            let textOnlyChunk = chunk.replace(/<[^>]*>?/gm, ' ');
+            textOnlyChunk = decodeHTMLEntities(textOnlyChunk).replace(/[\r\n\t]+/g, ' ').replace(/\s+/g, ' ').trim();
+
+            // SCORE: ID (Highest Weight)
+            if (targetId && (tagStr.includes(`id="${targetId}"`) || tagStr.includes(`id='${targetId}'`))) {
+                score += 100;
+            }
+
+            // SCORE: Classes (Stackable Weight)
+            if (targetClasses.length > 0) {
+                let classMatchCount = 0;
+                targetClasses.forEach(cls => {
+                    if (tagStr.includes(cls)) classMatchCount++;
+                });
+                if (classMatchCount > 0) score += (classMatchCount * 20);
+            }
+
+            // SCORE: Src/Href (Crucial for Media/Links)
+            if (targetSrc && (tagStr.includes(targetSrc) || decodeHTMLEntities(tagStr).includes(targetSrc))) {
+                score += 80;
+            }
+
+            // SCORE: Inner Text (Medium Weight)
+            if (normalizedTargetText && normalizedTargetText.length > 1) {
+                if (textOnlyChunk.includes(normalizedTargetText)) {
+                    score += 60;
+                } else if (normalizedTargetText.length > 15 && textOnlyChunk.includes(normalizedTargetText.substring(0, 15))) {
+                    score += 30; // Partial text match if severely truncated
+                }
+            }
+
+            if (score > bestScore && score > 0) {
+                bestScore = score;
+                bestIndex = startIndex;
+                matchLength = tagStr.length;
+            }
+        }
+
+        // 3. Absolute Fallbacks if scoring failed
+        if (bestIndex === -1 && targetText && targetText.length > 5) {
+            let rawIndex = source.indexOf(targetText);
+            if (rawIndex !== -1) {
+                bestIndex = rawIndex;
+                matchLength = targetText.length;
+            } else {
+                const smallChunk = targetText.substring(0, 15).trim();
+                rawIndex = source.indexOf(smallChunk);
+                if (rawIndex !== -1) {
+                    bestIndex = rawIndex;
+                    matchLength = smallChunk.length;
+                }
+            }
+        }
+        
+        if (bestIndex === -1 && tagName) {
+             const firstMatch = new RegExp(`<${tagName}[\\s>]`, 'i').exec(source);
+             if(firstMatch) {
+                 bestIndex = firstMatch.index;
+                 matchLength = firstMatch[0].length;
+             }
+        }
+
+        // 4. Hybrid Scroll & Highlight Execution
+        if (bestIndex !== -1) {
+            codeArea.focus({preventScroll: true});
+            codeArea.setSelectionRange(bestIndex, bestIndex + matchLength);
+            
+            const textBefore = source.substring(0, bestIndex);
+            const lineCount = textBefore.split('\n').length;
+            const totalLines = source.split('\n').length;
+
+            let scrollAmount = 0;
+            
+            // HYBRID MATH: Detect Minified Files (e.g., Webflow exports) vs Formatted Files
+            if (totalLines < 50 && source.length > 5000) {
+                // Proportional math for wrapped, minified code
+                const scrollRatio = bestIndex / source.length;
+                scrollAmount = (codeArea.scrollHeight * scrollRatio) - (codeArea.clientHeight / 2);
+            } else {
+                // Pixel-perfect line-height math for standard code
+                const computedStyle = window.getComputedStyle(codeArea);
+                let lineHeight = parseInt(computedStyle.lineHeight);
+                if (isNaN(lineHeight)) lineHeight = parseInt(computedStyle.fontSize) * 1.2 || 21;
+                scrollAmount = (lineCount * lineHeight) - (codeArea.clientHeight / 2);
+            }
+            
+            codeArea.scrollTop = Math.max(0, scrollAmount);
+            
+            // Visual Flash Feedback
+            const origBg = codeArea.style.backgroundColor;
+            const isDark = document.body.classList.contains('dark-mode');
+            codeArea.style.backgroundColor = isDark ? '#003366' : '#e6f7ff';
+            
+            setTimeout(() => {
+                codeArea.style.transition = 'background-color 0.5s ease';
+                codeArea.style.backgroundColor = origBg;
+                setTimeout(() => { 
+                    codeArea.style.transition = ''; 
+                    codeArea.style.backgroundColor = ''; 
+                }, 500);
+            }, 300);
+        }
+    };
+
+    // ==============================================================================
+    // CRITICAL FIX: Ensure DOCTYPE and Viewport Meta are explicitly saved to prevent 
+    // Quirks Mode rendering and Mobile View collapse (Footer Overlap Bug)
+    // ==============================================================================
+    function getCleanFullContent(doc) {
+        if (!doc || !doc.documentElement) return "";
+        
+        const clone = doc.documentElement.cloneNode(true);
+        
+        // 1. Force explicitly inject Viewport and Charset for Mobile Safeties
+        let head = clone.querySelector('head');
+        if (!head) {
+            head = clone.ownerDocument.createElement('head');
+            clone.insertBefore(head, clone.firstChild);
+        }
+        
+        let viewportMeta = head.querySelector('meta[name="viewport"]');
+        if (!viewportMeta) {
+            viewportMeta = clone.ownerDocument.createElement('meta');
+            viewportMeta.name = "viewport";
+            viewportMeta.content = "width=device-width, initial-scale=1.0";
+            head.insertBefore(viewportMeta, head.firstChild);
+        }
+        
+        let charsetMeta = head.querySelector('meta[charset]');
+        if (!charsetMeta) {
+            charsetMeta = clone.ownerDocument.createElement('meta');
+            charsetMeta.setAttribute('charset', 'UTF-8');
+            head.insertBefore(charsetMeta, head.firstChild);
+        }
+
+        const artifacts = clone.querySelectorAll(
+            '.bg-control-container, .bg-edit-btn, .image-overlay-controls, .resize-handle, .section-action-bar, .column-action-bar, .widget-action-bar, #custom-context-menu, .ui-helper, .artifact, #editor-styles, #live-styles, #dark-mode-sync, .bg-edit-container, .gradient-popup, .add-section-btn, .section-resize-handle, .reformatted, .eweb-drop-indicator, .eweb-drag-hover, .left-add-plus-btn, .inline-add-widget-btn, .eweb-plus-btn-top, .eweb-plus-btn-bottom'
+        );
+        artifacts.forEach(el => el.remove());
+        
+        clone.querySelectorAll('.section-hover, .subsection-hover, .eweb-column-hover').forEach(el => 
+            el.classList.remove('section-hover', 'subsection-hover', 'eweb-column-hover')
+        );
+        
+        clone.querySelectorAll('.image-wrapper-editable').forEach(wrapper => {
+            const img = wrapper.querySelector('img');
+            if (img) {
+                wrapper.parentNode.replaceChild(img, wrapper);
+            } else {
+                wrapper.remove(); 
+            }
+        });
+
+        clone.querySelectorAll('*[contenteditable]').forEach(el => el.removeAttribute('contenteditable'));
+        clone.querySelectorAll('*[class=""]').forEach(el => el.removeAttribute('class'));
+        
+        clone.querySelectorAll('.eweb-section, .eweb-row, .eweb-column, .eweb-block').forEach(el => {
+            el.style.border = '';
+            el.removeAttribute('data-empty');
+            if(el.getAttribute('style') === '') el.removeAttribute('style');
+        });
+
+        if (clone.querySelector('body')) {
+            clone.querySelector('body').style.outline = '';
+            clone.querySelector('body').removeAttribute('data-editor-events-bound');
+        }
+
+        let finalHtml = clone.outerHTML;
+        
+        // 2. Force DOCTYPE injection to prevent Flexbox/Footer layout breakdown
+        if (!finalHtml.trim().toLowerCase().startsWith('<!doctype')) {
+            finalHtml = "<!DOCTYPE html>\n" + finalHtml;
+        }
+        
+        return finalHtml;
+    }
+
+    // --- GOAL 2 FIX: Horizontal Progress Step Updater ---
+    window.updateGenerationSteps = function(percent, codeStr) {
+        let step = 1; // Connecting
+        let barWidth = 0;
+        
+        if (percent > 5) { step = 2; barWidth = 25; } // Architecture
+        if (codeStr.includes('styles.css') || codeStr.includes('<style') || percent > 35) { step = 3; barWidth = 50; } // Styling
+        if (codeStr.includes('<img') || codeStr.includes('background-image') || percent > 65) { step = 4; barWidth = 75; } // Assets
+        if (percent >= 95) { step = 5; barWidth = 100; } // Finishing
+        
+        const pb = document.getElementById('gen-steps-progress-bar');
+        if (pb) pb.style.width = barWidth + '%';
+
+        for (let i = 1; i <= 5; i++) {
+            let el = document.getElementById('gen-step-' + i);
+            if (el) {
+                if (i < step) {
+                    el.className = 'gen-step completed';
+                } else if (i === step) {
+                    el.className = 'gen-step active';
+                } else {
+                    el.className = 'gen-step pending';
+                }
+            }
+        }
+    };
+
+    window.undoAction = function() {
+        if (localHistoryIndex > 0) {
+            localHistoryIndex--;
+            window.restoreHTML(localHistory[localHistoryIndex]);
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof updateStatus === 'function') updateStatus("⏪ Undid last action.");
+        }
+    };
+
+    window.redoAction = function() {
+        if (localHistoryIndex < localHistory.length - 1) {
+            localHistoryIndex++;
+            window.restoreHTML(localHistory[localHistoryIndex]);
+            if (typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+            if (typeof updateStatus === 'function') updateStatus("⏩ Redid last action.");
+        }
+    };
+
+    window.updateUndoRedoButtons = function() {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if(undoBtn) undoBtn.disabled = (localHistoryIndex <= 0);
+        if(redoBtn) redoBtn.disabled = (localHistoryIndex >= localHistory.length - 1);
+    };
+
+    document.addEventListener('keydown', (e) => {
+        if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+            e.preventDefault(); 
+            e.stopPropagation();
+            const saveBtn = document.getElementById('save-btn');
+            if(saveBtn && !saveBtn.disabled) saveBtn.click(); 
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+            e.preventDefault(); 
+            e.stopPropagation();
+            if (e.shiftKey) { window.redoAction(); } 
+            else { window.undoAction(); } 
+        }
+        if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
+            e.preventDefault(); 
+            e.stopPropagation();
+            window.redoAction(); 
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const undoBtn = document.getElementById('undo-btn');
+        const redoBtn = document.getElementById('redo-btn');
+        if(undoBtn) undoBtn.onclick = window.undoAction;
+        if(redoBtn) redoBtn.onclick = window.redoAction;
+    });
+
+    function enableEditing(iframeDoc) {
+        iframeDoc.body.contentEditable = 'true';
+        iframeDoc.body.spellcheck = false;
+        iframeDoc.designMode = 'on'; 
+        isEditing = true;
+        
+        if (typeof updatePreviewControls === 'function') updatePreviewControls();
+        if (typeof updateStatus === 'function') updateStatus(`Editing mode ON for ${currentPreviewFile}. Right-click for options.`);
+
+        // --- FIX: ROBUST DROP-DOWN MENU FIX & AUTO-CLOSER ---
+        let menuFixStyle = iframeDoc.getElementById('ewebgen-menu-fix');
+        if (!menuFixStyle) {
+            menuFixStyle = iframeDoc.createElement('style');
+            menuFixStyle.id = 'ewebgen-menu-fix';
+            menuFixStyle.innerHTML = `
+                /* Force Nav to overlay instead of push */
+                nav { z-index: 9999 !important; position: relative; }
+                nav ul { list-style: none; padding: 0; margin: 0; }
+                nav li { position: relative; }
+                
+                /* Aggressively hide dropdowns by default so they don't stick open */
+                nav li > ul, 
+                .dropdown-menu, 
+                .nav-item > .dropdown-menu, 
+                .sub-menu, 
+                .submenu, 
+                [class*="dropdown-menu"], 
+                nav li > div[class*="dropdown"] {
+                    position: absolute !important;
+                    top: 100% !important;
+                    left: 0 !important;
+                    min-width: 200px;
+                    z-index: 10000 !important;
+                    display: none !important;
+                    background: #fff;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                    border: 1px solid #eee;
+                    border-radius: 4px;
+                }
+                
+                /* Only show dropdowns strictly on hover, overriding inline AI bugs */
+                nav li:hover > ul, 
+                .dropdown:hover > .dropdown-menu, 
+                .nav-item:hover > .dropdown-menu, 
+                li:hover > .sub-menu, 
+                li:hover > .submenu, 
+                [class*="dropdown"]:hover > [class*="dropdown-menu"], 
+                nav li:hover > div[class*="dropdown"], 
+                .dropdown-menu.show {
+                    display: block !important;
+                }
+                
+                header { z-index: 9998 !important; position: relative; }
+                .hero, .hero-section { z-index: 1 !important; position: relative; }
+            `;
+            iframeDoc.head.appendChild(menuFixStyle);
+        }
+
+        fetch('/api/admin/get_settings').then(r => r.json()).then(d => {
+             if(d.voice_silence_duration) currentVoiceDuration = parseInt(d.voice_silence_duration);
+        }).catch(e => console.log("Using default voice duration"));
+
+        if(typeof updateCodePaneContent === 'function') updateCodePaneContent();
+
+        iframeDoc.body.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                const saveBtn = document.getElementById('save-btn');
+                if(saveBtn && !saveBtn.disabled) saveBtn.click(); 
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'z' || e.key === 'Z')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                if (e.shiftKey) { window.redoAction(); } 
+                else { window.undoAction(); } 
+            }
+            if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || e.key === 'Y')) { 
+                e.preventDefault(); 
+                e.stopPropagation();
+                window.redoAction(); 
+            }
+        });
+        
+        iframeDoc.body.addEventListener('click', (e) => {
+            if (e.target.classList.contains('buy-btn')) {
+                e.preventDefault();
+            }
+        });
+    }
+    
+    // --- GOAL FIX: CORRECT FONT PALETTE BEHAVIOR ---
+    function renderColorPalette() {
+        const container = document.getElementById('color-palette-container');
+        if (container) { 
+            clearSwatchSelection(); 
+        }
+        selectedColor = null;
+        const btn = document.getElementById('apply-color-btn');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = "Apply Color";
+        }
+    }
+    
+    function selectColor(element, color, type) { clearSwatchSelection(); element.classList.add('selected'); selectedColor = color; selectedColorType = type; const btn = document.getElementById('apply-color-btn'); btn.disabled = false; btn.textContent = type === 'foreColor' ? "Apply Text Color" : "Apply Highlight"; document.getElementById('custom-hex-input').value = color; }
+    function clearSwatchSelection() { document.querySelectorAll('.palette-swatch').forEach(el => el.classList.remove('selected')); }
+    function applySelectedColor() { if (selectedColor) { applyFontCommand(selectedColorType, selectedColor); if(typeof updateStatus === 'function') updateStatus(`Applied ${selectedColorType === 'foreColor' ? 'text' : 'highlight'} color.`); } }
+
+    function rgb2hex(rgb) {
+        if (!rgb || !rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/)) return '#ffffff';
+        function hex(x) { return ("0" + parseInt(x).toString(16)).slice(-2); }
+        const match = rgb.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+        return "#" + hex(match[1]) + hex(match[2]) + hex(match[3]);
+    }
+    
+    window.applyFontSizePx = function(size) {
+        if (!size) return;
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        const win = iframe.contentWindow;
+
+        win.focus();
+        if (window.lastValidRange) {
+            const sel = win.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(window.lastValidRange);
+        }
+
+        const sel = win.getSelection();
+        if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
+
+        if(typeof captureState === 'function') captureState();
+
+        const range = sel.getRangeAt(0);
+
+        let container = range.commonAncestorContainer;
+        if (container.nodeType !== 1) container = container.parentElement;
+
+        let targetNode = null;
+
+        if (range.toString() === container.innerText && ['SPAN', 'B', 'I', 'U', 'STRONG', 'EM', 'A', 'P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(container.tagName)) {
+            container.style.fontSize = size + 'px';
+            targetNode = container;
+        } else {
+            const span = doc.createElement('span');
+            span.style.fontSize = size + 'px';
+
+            try {
+                range.surroundContents(span);
+                targetNode = span;
+            } catch(err) {
+                const contents = range.extractContents();
+                span.appendChild(contents);
+                range.insertNode(span);
+                targetNode = span;
+            }
+        }
+
+        if (targetNode) {
+            const newRange = doc.createRange();
+            newRange.selectNodeContents(targetNode);
+            sel.removeAllRanges();
+            sel.addRange(newRange);
+            window.lastValidRange = newRange.cloneRange();
+        }
+
+        if(typeof enableSaveButton === 'function') enableSaveButton();
+        if(typeof captureState === 'function') captureState();
+
+        if (typeof handleTextSelection === 'function') {
+            setTimeout(() => handleTextSelection(doc), 10);
+        }
+    };
+    
+    function handleTextSelection(iframeDoc) {
+        const sel = iframeDoc.getSelection();
+        const toolbar = document.getElementById('font-toolbar') || document.getElementById('formattingToolbar');
+        
+        const palette = document.getElementById('color-palette-container');
+        if(palette) palette.style.display = 'none';
+        
+        if (!toolbar) return; 
+
+        if (!sel || sel.isCollapsed || sel.toString().trim().length === 0) {
+            toolbar.style.setProperty('display', 'none', 'important');
+            toolbar.classList.remove('active');
+            return;
+        }
+
+        if (typeof isFormatPainterActive !== 'undefined' && isFormatPainterActive) {
+            if(typeof applyCopiedFormats === 'function') applyCopiedFormats(iframeDoc);
+            return;
+        }
+
+        const range = sel.getRangeAt(0);
+
+        try {
+            let targetNode = range.startContainer;
+            if (targetNode && targetNode.nodeType === 3) { 
+                targetNode = targetNode.parentElement;
+            }
+            if (targetNode) {
+                const computedStyle = iframeDoc.defaultView.getComputedStyle(targetNode);
+                const sizeSelect = document.getElementById('font-size-select');
+                
+                if (sizeSelect && computedStyle && computedStyle.fontSize) {
+                    let pxSize = Math.round(parseFloat(computedStyle.fontSize));
+                    if (!isNaN(pxSize)) {
+                        let sizeStr = pxSize.toString();
+                        
+                        let optionExists = Array.from(sizeSelect.options).some(opt => opt.value === sizeStr);
+                        
+                        if (!optionExists) {
+                            let tempOpt = sizeSelect.querySelector('.temp-size-option');
+                            if (tempOpt) tempOpt.remove();
+                            
+                            const newOpt = document.createElement('option');
+                            newOpt.value = sizeStr;
+                            newOpt.textContent = pxSize + 'px';
+                            newOpt.className = 'temp-size-option';
+                            sizeSelect.appendChild(newOpt);
+                        }
+                        
+                        sizeSelect.value = sizeStr;
+                    }
+                }
+                
+                const fontSelect = document.getElementById('font-family-select') || document.getElementById('font-family');
+                if (fontSelect && computedStyle && computedStyle.fontFamily) {
+                    let currentFont = computedStyle.fontFamily.replace(/['"]/g, '').split(',')[0].trim();
+                    Array.from(fontSelect.options).forEach(opt => {
+                        if (opt.value && currentFont.toLowerCase().includes(opt.value.toLowerCase())) {
+                            fontSelect.value = opt.value;
+                        }
+                    });
+                }
+            }
+        } catch(e) { console.error("Error reading font properties:", e); }
+
+        const rect = range.getBoundingClientRect();
+        
+        if (rect && (rect.width > 0 || rect.height > 0)) {
+            const iframeRect = document.getElementById('preview-frame').getBoundingClientRect();
+            
+            const toolbarHeight = toolbar.offsetHeight || 50;
+            const toolbarWidth = toolbar.offsetWidth || 400;
+            
+            let topPos = iframeRect.top + rect.top - toolbarHeight - 15;
+            if (topPos < 60) topPos = iframeRect.top + rect.bottom + 15; 
+
+            let leftPos = iframeRect.left + rect.left + (rect.width / 2) - (toolbarWidth / 2);
+            
+            if (leftPos < 20) leftPos = 20;
+            if (leftPos + toolbarWidth > window.innerWidth - 20) leftPos = window.innerWidth - toolbarWidth - 20;
+
+            toolbar.style.setProperty('top', topPos + 'px', 'important');
+            toolbar.style.setProperty('left', leftPos + 'px', 'important');
+        }
+
+        toolbar.style.setProperty('display', 'flex', 'important');
+        toolbar.classList.add('active');
+        toolbar.style.setProperty('position', 'fixed', 'important');
+        toolbar.style.setProperty('z-index', '10005', 'important');
+    }
+
+    function initEditor(iframe) {
+        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+        if (!iframeDoc.body) { iframe.onload = () => initEditor(iframe); return; }
+        
+        const staleControls = iframeDoc.querySelectorAll('.bg-control-container, .section-action-bar, .column-action-bar, .widget-action-bar, .bg-edit-btn, .eweb-drop-indicator');
+        staleControls.forEach(el => el.remove());
+
+        enableEditing(iframeDoc);
+        
+        if (!iframeDoc.body.dataset.editorEventsBound) {
+            iframeDoc.body.addEventListener('input', () => { 
+                if(window.typingTimer) clearTimeout(window.typingTimer); 
+                window.typingTimer = setTimeout(() => { if(typeof window.captureState === 'function') window.captureState(); }, 400); 
+                if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); 
+            });
+            
+            iframeDoc.addEventListener('selectionchange', () => { 
+                const sel = iframeDoc.getSelection(); 
+                if (sel && sel.rangeCount > 0 && !sel.isCollapsed) lastValidRange = sel.getRangeAt(0).cloneRange(); 
+            });
+
+            iframeDoc.addEventListener('mouseup', () => { setTimeout(() => handleTextSelection(iframeDoc), 50); });
+
+            iframeDoc.addEventListener('mousedown', (e) => {
+                if(e.target.closest('.section-action-bar') || e.target.closest('.column-action-bar') || e.target.closest('.widget-action-bar') || e.target.closest('.bg-control-container')) return;
+                const sel = iframeDoc.getSelection();
+                if(!sel || sel.isCollapsed) {
+                    const toolbar = document.getElementById('font-toolbar');
+                    if(toolbar) {
+                        toolbar.style.display = 'none';
+                        toolbar.classList.remove('active');
+                    }
+                }
+            });
+
+            iframeDoc.body.addEventListener('keydown', (e) => {
+                if (e.key === 'Delete' || e.key === 'Backspace') {
+                    const sel = iframeDoc.getSelection();
+                    if (!sel.rangeCount || !sel.isCollapsed) return;
+                    const focusNode = sel.focusNode; let target = null;
+                    if (focusNode) {
+                        if(focusNode.nodeType === 1 && focusNode.classList.contains('image-wrapper-editable')) target = focusNode;
+                        else if (focusNode.parentElement && focusNode.parentElement.classList.contains('image-wrapper-editable')) target = focusNode.parentElement;
+                    }
+                    if (target) { e.preventDefault(); if(typeof window.captureState === 'function') window.captureState(); target.remove(); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); if(typeof window.updateStatus === 'function') window.updateStatus("🗑️ Image deleted."); }
+                }
+            });
+            
+            iframeDoc.addEventListener('click', (e) => { 
+                const cm = iframeDoc.getElementById('custom-context-menu'); 
+                if(cm) cm.style.display = 'none'; 
+                const parentProfileMenu = window.parent.document.getElementById('profile-menu');
+                if(parentProfileMenu) parentProfileMenu.style.display = 'none';
+                
+                const inlineMenu = window.parent.document.getElementById('inline-widget-menu') || document.getElementById('inline-widget-menu');
+                if(inlineMenu) inlineMenu.style.display = 'none';
+
+                let target = e.target;
+                if (target.closest('.bg-control-container') || target.closest('.section-action-bar') || target.closest('.column-action-bar') || target.closest('.widget-action-bar') || target.closest('.resize-handle') || target.classList.contains('bg-edit-btn') || target.classList.contains('action-btn')) { return; }
+
+                if (target.nodeType === 3) target = target.parentNode;
+
+                let exactText = target.innerText ? target.innerText.trim() : "";
+                exactText = exactText.replace(/\s+/g, ' ');
+
+                const tagName = target.tagName;
+                const attributes = {};
+                if(target.id) attributes.id = target.id;
+                if(target.className) {
+                    const cleanClass = target.className.replace(/section-hover|subsection-hover|image-wrapper-editable|eweb-column-hover/g, '').trim();
+                    if(cleanClass) attributes.className = cleanClass;
+                }
+                if(target.getAttribute('src')) attributes.src = target.getAttribute('src');
+                if(target.getAttribute('href')) attributes.href = target.getAttribute('href');
+
+                const payload = { tagName: tagName, text: exactText.substring(0, 100), attributes: attributes, id: target.id || null, className: target.className || null };
+                if (window.highlightCodeFromPreview) window.highlightCodeFromPreview(payload);
+                else if (window.parent && window.parent.highlightCodeFromPreview) window.parent.highlightCodeFromPreview(payload);
+            });
+
+            iframe.contentWindow.highlightElementInPreview = function(data) {
+                let target = null;
+                if (data.id) target = iframeDoc.getElementById(data.id);
+                if (!target && data.tagName) {
+                    const elements = iframeDoc.getElementsByTagName(data.tagName);
+                    if (elements.length > 0) target = elements[0];
+                }
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    const origOutline = target.style.outline;
+                    const origTransition = target.style.transition;
+                    target.style.transition = 'outline 0.3s ease-out';
+                    target.style.outline = '3px solid #ff4757';
+                    setTimeout(() => { target.style.outline = origOutline; target.style.transition = origTransition; }, 1500);
+                }
+            };
+
+            iframeDoc.addEventListener('contextmenu', (e) => { e.preventDefault(); if(typeof showContextMenu === 'function') showContextMenu(e, e.target, iframeDoc); });
+            iframeDoc.body.dataset.editorEventsBound = 'true';
+            
+            iframeDoc.body.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                iframeDoc.querySelectorAll('.eweb-drop-indicator').forEach(el => el.remove());
+                iframeDoc.querySelectorAll('.eweb-drag-hover').forEach(el => el.classList.remove('eweb-drag-hover'));
+
+                const target = e.target;
+                
+                let dropZone = null;
+                if (target.closest('.eweb-column') || target.closest('.eweb-block')) {
+                    dropZone = target.closest('.eweb-column') || target.closest('.eweb-block');
+                    dropZone.classList.add('eweb-drag-hover');
+                    
+                    const indicator = iframeDoc.createElement('div');
+                    indicator.className = 'eweb-drop-indicator';
+                    
+                    const widget = target.closest('.eweb-widget');
+                    if (widget) {
+                        const rect = widget.getBoundingClientRect();
+                        if (e.clientY < rect.top + rect.height / 2) {
+                            widget.parentNode.insertBefore(indicator, widget);
+                        } else {
+                            widget.parentNode.insertBefore(indicator, widget.nextSibling);
+                        }
+                    } else {
+                        dropZone.appendChild(indicator);
+                    }
+                } else if (target.tagName === 'BODY' || target.closest('.eweb-section')) {
+                    const section = target.closest('.eweb-section');
+                    const indicator = iframeDoc.createElement('div');
+                    indicator.className = 'eweb-drop-indicator';
+                    indicator.style.height = '8px';
+                    indicator.style.background = '#28a745';
+                    
+                    if (section) {
+                        const rect = section.getBoundingClientRect();
+                        if (e.clientY < rect.top + rect.height / 2) {
+                            section.parentNode.insertBefore(indicator, section);
+                        } else {
+                            section.parentNode.insertBefore(indicator, section.nextSibling);
+                        }
+                    } else {
+                        iframeDoc.body.appendChild(indicator);
+                    }
+                }
+            });
+
+            iframeDoc.body.addEventListener('dragleave', (e) => {
+                if (e.target.classList && (e.target.classList.contains('eweb-column') || e.target.classList.contains('eweb-block'))) {
+                    e.target.classList.remove('eweb-drag-hover');
+                }
+            });
+
+            iframeDoc.body.addEventListener('drop', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
+                const content = e.dataTransfer.getData('application/ewebgen-element');
+                const type = e.dataTransfer.getData('application/ewebgen-type');
+                if (!content) return;
+
+                if(typeof window.captureState === 'function') window.captureState();
+
+                const indicator = iframeDoc.querySelector('.eweb-drop-indicator');
+                const tempDiv = iframeDoc.createElement('div');
+                tempDiv.innerHTML = content;
+                const elementToInsert = tempDiv.firstElementChild;
+
+                if (indicator) {
+                    indicator.parentNode.insertBefore(elementToInsert, indicator);
+                    indicator.remove();
+                } else {
+                    const col = e.target.closest('.eweb-column') || e.target.closest('.eweb-block');
+                    if (col && type === 'widget') {
+                        col.removeAttribute('data-empty');
+                        const btn = col.querySelector('.inline-add-widget-btn');
+                        if (btn) {
+                            col.insertBefore(elementToInsert, btn);
+                        } else {
+                            col.appendChild(elementToInsert);
+                        }
+                    } else {
+                        iframeDoc.body.appendChild(elementToInsert);
+                    }
+                }
+
+                iframeDoc.querySelectorAll('.eweb-drag-hover').forEach(el => el.classList.remove('eweb-drag-hover'));
+                
+                if (typeof window.executeInjectedScripts === 'function') {
+                    window.executeInjectedScripts(iframeDoc.body, iframeDoc);
+                }
+                
+                if (typeof window.initEditor === 'function') window.initEditor(iframe); 
+                if(document.getElementById('save-btn')) document.getElementById('save-btn').disabled = false;
+                if(typeof window.captureState === 'function') window.captureState();
+            });
+        }
+
+        if (editorObserver) {
+            editorObserver.disconnect();
+        }
+
+        editorObserver = new MutationObserver((mutations) => {
+            if (isRestoring) return; 
+            
+            let shouldCapture = false;
+            mutations.forEach(m => {
+                if (m.target && m.target.classList) {
+                    if (m.target.classList.contains('bg-control-container') || 
+                        m.target.classList.contains('section-action-bar') ||
+                        m.target.classList.contains('column-action-bar') ||
+                        m.target.classList.contains('widget-action-bar') ||
+                        m.target.classList.contains('section-hover') ||
+                        m.target.classList.contains('subsection-hover') ||
+                        m.target.classList.contains('eweb-column-hover') ||
+                        m.target.classList.contains('eweb-drop-indicator') ||
+                        m.target.classList.contains('resize-handle')) {
+                        return;
+                    }
+                }
+                shouldCapture = true;
+            });
+            
+            if (shouldCapture) {
+                if(window.typingTimer) clearTimeout(window.typingTimer);
+                window.typingTimer = setTimeout(() => { 
+                    if(typeof window.captureState === 'function') window.captureState(); 
+                }, 400); // 400ms for more accurate step-by-step history tracking
+                if(typeof window.enableSaveButton === 'function') window.enableSaveButton();
+            }
+        });
+        
+        if (window.editorObserver) {
+            window.editorObserver.observe(iframeDoc.body, { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['style', 'src', 'href', 'class'] });
+        }
+
+        if (!iframeDoc.getElementById('editor-styles')) {
+            const editorStyle = iframeDoc.createElement('style');
+            editorStyle.id = 'editor-styles';
+            editorStyle.textContent = `
+                body { min-height: 100vh; padding-bottom: 100px; }
+                .eweb-section, .eweb-block { position: relative; transition: outline 0.2s; border: 1px dashed rgba(204, 204, 204, 0.6); }
+                .eweb-column { position: relative; transition: outline 0.2s; border: 1px dashed rgba(0, 123, 255, 0.5); min-height: 50px; }
+                .eweb-column[data-empty="true"] { background: rgba(0, 123, 255, 0.03); }
+                .eweb-widget { position: relative; transition: outline 0.2s; margin-bottom: 15px; }
+                
+                .eweb-section:hover, .eweb-block:hover { outline: 2px solid #28a745 !important; outline-offset: -2px; }
+                .eweb-column:hover { outline: 2px dashed #007bff !important; outline-offset: -2px; }
+                .eweb-widget:hover { outline: 2px solid #17a2b8 !important; outline-offset: 2px; }
+                
+                .section-action-bar { position: absolute; top: 0; right: 0; background: #28a745; border-radius: 0 0 0 5px; padding: 4px 8px; display: none; z-index: 9005; gap: 4px; pointer-events: auto; }
+                .column-action-bar { position: absolute; top: 0; left: 0; background: #007bff; border-radius: 0 0 5px 0; padding: 2px 6px; display: none; z-index: 9006; gap: 4px; pointer-events: auto; }
+                .widget-action-bar { position: absolute; top: -15px; right: 10px; background: #17a2b8; border-radius: 4px; padding: 2px 6px; display: none; z-index: 9007; gap: 4px; pointer-events: auto; }
+                
+                .eweb-section:hover > .section-action-bar, .eweb-block:hover > .section-action-bar { display: flex !important; }
+                .eweb-column:hover > .column-action-bar { display: flex !important; }
+                .eweb-widget:hover > .widget-action-bar { display: flex !important; }
+                
+                .action-btn { background: transparent; border: none; color: white; cursor: pointer; padding: 0 4px; font-size: 12px; }
+                .action-btn:hover { transform: scale(1.1); }
+                
+                .eweb-drag-hover { background-color: rgba(0, 123, 255, 0.1) !important; outline: 2px dashed #007bff !important; }
+                .eweb-drop-indicator { height: 4px; background: #007bff; margin: 5px 0; border-radius: 2px; pointer-events: none; transition: all 0.2s; }
+                
+                .left-add-plus-btn { position: absolute; left: 0; top: 50%; transform: translateY(-50%) translateX(-50%); width: 24px; height: 24px; background: #007bff; color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; cursor: pointer; z-index: 9008; opacity: 0; transition: opacity 0.2s; pointer-events: auto; }
+                .eweb-section:hover > .left-add-plus-btn, .eweb-block:hover > .left-add-plus-btn { opacity: 1; }
+
+                .eweb-section, .eweb-row, .eweb-column, .eweb-block { cursor: default; }
+
+                .bg-control-container { position: absolute; top: 0; left: 0; display: none; gap: 5px; z-index: 9000; pointer-events: auto; background: rgba(0,0,0,0.6); padding: 4px; border-radius: 0 0 5px 0;}
+                section:hover > .bg-control-container, header:hover > .bg-control-container, footer:hover > .bg-control-container, div.card:hover > .bg-control-container, div.col:hover > .bg-control-container, .section-hover > .bg-control-container, .subsection-hover > .bg-control-container { display: flex !important; }
+                .bg-edit-btn { background: transparent; color: white; border: none; padding: 2px; cursor: pointer; font-size: 14px; transition: transform 0.1s; }
+                .bg-edit-btn:hover { transform: scale(1.1); }
+                .image-wrapper-editable { display: inline-block; position: relative; transition: outline 0.2s; }
+                .image-wrapper-editable:hover { outline: 2px dashed #007bff; }
+                .resize-handle { width: 12px; height: 12px; background: #007bff; border: 1px solid white; position: absolute; bottom: -6px; right: -6px; cursor: se-resize; z-index: 10010; display: none; border-radius: 50%; }
+                .image-wrapper-editable:hover .resize-handle { display: block; }
+                #custom-context-menu { position: fixed; background: white; border: 1px solid #ccc; box-shadow: 2px 2px 10px rgba(0,0,0,0.2); z-index: 2147483647; display: none; flex-direction: column; min-width: 180px; border-radius: 5px; overflow: hidden; font-family: sans-serif; }
+                #custom-context-menu button { background: white; border: none; text-align: left; padding: 8px 15px; cursor: pointer; font-size: 14px; border-bottom: 1px solid #eee; color: #333; display: flex; align-items: center; gap: 8px; width: 100%; transition: background 0.1s; }
+                #custom-context-menu button:hover { background: #f0f0f0; }
+                #custom-context-menu .menu-header { font-size: 11px; text-transform: uppercase; color: #777; padding: 5px 10px; background: #f9f9f9; font-weight: bold; cursor: default; }
+            `;
+            iframeDoc.head.appendChild(editorStyle);
+        }
+
+        iframeDoc.querySelectorAll('img').forEach(img => {
+            if (img.closest('.carousel')) return;
+            const computedStyle = iframe.contentWindow.getComputedStyle(img);
+            if (computedStyle.position === 'absolute' || computedStyle.position === 'fixed') return;
+            if (computedStyle.width === '100%' || computedStyle.width === '100vw') return;
+            
+            let wrapper = img.closest('.image-wrapper-editable');
+            if (!wrapper) {
+                wrapper = iframeDoc.createElement('div'); wrapper.className = 'image-wrapper-editable'; wrapper.style.position = 'relative'; wrapper.style.display = 'inline-block'; wrapper.style.lineHeight = '0'; 
+                img.parentNode.insertBefore(wrapper, img); wrapper.appendChild(img);
+            }
+            wrapper.contentEditable = 'false';
+            if (!wrapper.querySelector('.resize-handle')) {
+                const resizeHandle = iframeDoc.createElement('div'); resizeHandle.className = 'resize-handle'; wrapper.appendChild(resizeHandle);
+                if(typeof window.makeImageResizable === 'function') window.makeImageResizable(img, resizeHandle, wrapper, iframeDoc);
+            }
+        });
+
+        const bindActionBar = (element, type, className, html, bgColor) => {
+            if(element.querySelector(`.${className}`)) return;
+            const bar = iframeDoc.createElement('div');
+            bar.className = className;
+            bar.contentEditable = 'false';
+            bar.innerHTML = html;
+            element.insertBefore(bar, element.firstChild);
+
+            const delBtn = bar.querySelector('.del-btn');
+            if (delBtn) delBtn.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); element.remove(); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); };
+            
+            const dupBtn = bar.querySelector('.dup-btn');
+            if (dupBtn) dupBtn.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); const clone = element.cloneNode(true); clone.querySelectorAll(`.${className}`).forEach(c => c.remove()); element.parentNode.insertBefore(clone, element.nextSibling); initEditor(iframe); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); };
+            
+            const setBtn = bar.querySelector('.set-btn');
+            if (setBtn) setBtn.onclick = (e) => { 
+                e.stopPropagation(); 
+                if(typeof window.captureState === 'function') window.captureState(); window.currentBgElementToReplace = element; 
+                let bgInput = document.getElementById('dynamic-bg-color-picker');
+                if(!bgInput) {
+                    bgInput = document.createElement('input'); bgInput.type = 'color'; bgInput.id = 'dynamic-bg-color-picker'; bgInput.style.position = 'absolute'; bgInput.style.opacity = '0'; bgInput.style.pointerEvents = 'none'; document.body.appendChild(bgInput);
+                    bgInput.addEventListener('input', (ev) => { if (window.currentBgElementToReplace) window.currentBgElementToReplace.style.backgroundColor = ev.target.value; });
+                    bgInput.addEventListener('change', (ev) => { if (window.currentBgElementToReplace) { window.currentBgElementToReplace.style.backgroundColor = ev.target.value; if(typeof window.updateStatus === 'function') window.updateStatus('Background color updated.'); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); window.currentBgElementToReplace = null; } });
+                }
+                const currentBg = window.getComputedStyle(element).backgroundColor;
+                if (currentBg && currentBg.startsWith('rgb')) bgInput.value = rgb2hex(currentBg);
+                try { bgInput.showPicker(); } catch(ex) { bgInput.click(); }
+            };
+
+            const saveSecBtn = bar.querySelector('.save-sec-btn');
+            if (saveSecBtn) saveSecBtn.onclick = (e) => {
+                e.stopPropagation();
+                if(typeof window.openSaveSectionModal === 'function') window.openSaveSectionModal(element);
+            };
+
+            const editVidBtn = bar.querySelector('.edit-vid-btn');
+            if (editVidBtn) {
+                editVidBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    const targetVid = element.querySelector('video, iframe') || element;
+                    if (targetVid) {
+                        const isYouTube = targetVid.tagName === 'IFRAME';
+                        if (typeof window.parent.openEditVideoModal === 'function') {
+                            window.parent.openEditVideoModal(element, targetVid.src, isYouTube);
+                        } else if (typeof openEditVideoModal === 'function') {
+                            openEditVideoModal(element, targetVid.src, isYouTube);
+                        } else {
+                            const newUrl = prompt("Enter new Video URL:", targetVid.src);
+                            if (newUrl) {
+                                targetVid.src = newUrl;
+                                if(typeof window.captureState === 'function') window.captureState();
+                                if(typeof enableSaveButton === 'function') enableSaveButton();
+                            }
+                        }
+                    }
+                };
+            }
+        };
+
+        iframeDoc.querySelectorAll('.eweb-section, .eweb-block').forEach(sec => {
+            sec.contentEditable = 'false';
+            bindActionBar(sec, 'section', 'section-action-bar', `<span style="font-size:10px; font-weight:bold; margin-right:5px;">SECTION</span> <button class="action-btn save-sec-btn" title="Save Section">💾</button> <button class="action-btn set-btn" title="Background Color">🎨</button> <button class="action-btn dup-btn" title="Duplicate">📋</button> <button class="action-btn del-btn" title="Delete">❌</button>`, '#28a745');
+            
+            if(!sec.querySelector('.left-add-plus-btn')) {
+                const plusBtn = iframeDoc.createElement('div');
+                plusBtn.className = 'left-add-plus-btn';
+                plusBtn.innerHTML = '+';
+                plusBtn.contentEditable = 'false';
+                plusBtn.title = 'Add Element or Section';
+                plusBtn.onclick = (e) => {
+                    e.stopPropagation();
+                    if(typeof window.openSectionPlusPopup === 'function') {
+                        const rect = plusBtn.getBoundingClientRect();
+                        const iframeRect = iframe.getBoundingClientRect();
+                        const x = iframeRect.left + rect.left + rect.width;
+                        const y = iframeRect.top + rect.top;
+                        window.openSectionPlusPopup(sec, x, y);
+                    }
+                };
+                sec.appendChild(plusBtn);
+            }
+        });
+
+        iframeDoc.querySelectorAll('.eweb-column').forEach(col => {
+            col.contentEditable = 'false';
+            bindActionBar(col, 'column', 'column-action-bar', `<span style="font-size:10px; font-weight:bold; margin-right:5px;">COL</span> <button class="action-btn set-btn" title="Background Color">🎨</button> <button class="action-btn del-btn" title="Delete">❌</button>`, '#007bff');
+        });
+
+        iframeDoc.querySelectorAll('.eweb-widget').forEach(widget => {
+            if (widget.classList.contains('eweb-text') || widget.classList.contains('eweb-heading')) {
+                widget.contentEditable = 'true';
+            } else {
+                widget.contentEditable = 'false';
+            }
+            bindActionBar(widget, 'widget', 'widget-action-bar', `<button class="action-btn dup-btn" title="Duplicate">📋</button> <button class="action-btn del-btn" title="Delete">❌</button>`, '#17a2b8');
+        });
+
+        const sections = iframeDoc.querySelectorAll('section:not(.eweb-section), header, footer, main, article, .card, .col:not(.eweb-column), .col-md-4:not(.eweb-column), .col-md-6:not(.eweb-column), .container:not(.eweb-container), .row:not(.eweb-row), .grid-item, .feature-box, .service-item, .pricing-box');
+        
+        sections.forEach(sec => {
+            if(sec.classList.contains('image-wrapper-editable')) return;
+            
+            const bgContainer = iframeDoc.createElement('div'); bgContainer.className = 'bg-control-container'; bgContainer.contentEditable = 'false';
+            
+            const imgBtn = iframeDoc.createElement('button'); imgBtn.className = 'bg-edit-btn'; imgBtn.innerHTML = '🖼️'; imgBtn.title = "Bg Image"; 
+            imgBtn.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); currentBgElementToReplace = sec; if(typeof window.openImageManager === 'function') window.openImageManager(); else if (imageUploadInput) imageUploadInput.click(); };
+            
+            const colBtn = iframeDoc.createElement('button'); colBtn.className = 'bg-edit-btn'; colBtn.innerHTML = '🎨'; colBtn.title = "Bg Color"; 
+            colBtn.onclick = (e) => { 
+                e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); currentBgElementToReplace = sec; 
+                let bgInput = document.getElementById('dynamic-bg-color-picker');
+                if(!bgInput) {
+                    bgInput = document.createElement('input'); bgInput.type = 'color'; bgInput.id = 'dynamic-bg-color-picker'; bgInput.style.position = 'absolute'; bgInput.style.opacity = '0'; bgInput.style.pointerEvents = 'none'; document.body.appendChild(bgInput);
+                    bgInput.addEventListener('input', (ev) => { if (currentBgElementToReplace) currentBgElementToReplace.style.backgroundColor = ev.target.value; });
+                    bgInput.addEventListener('change', (ev) => { if (currentBgElementToReplace) { currentBgElementToReplace.style.backgroundColor = ev.target.value; if(typeof window.updateStatus === 'function') window.updateStatus('Background color updated.'); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); currentBgElementToReplace = null; } });
+                }
+                const currentBg = window.getComputedStyle(sec).backgroundColor;
+                if (currentBg && currentBg.startsWith('rgb')) bgInput.value = rgb2hex(currentBg);
+                try { bgInput.showPicker(); } catch(ex) { bgInput.click(); }
+            };
+
+            bgContainer.appendChild(imgBtn); bgContainer.appendChild(colBtn);
+            if(sec.firstChild) sec.insertBefore(bgContainer, sec.firstChild); else sec.appendChild(bgContainer);
+
+            const actionBar = iframeDoc.createElement('div'); actionBar.className = 'section-action-bar'; actionBar.contentEditable = 'false';
+            actionBar.innerHTML = `<button title="Align Left">⬅️</button><button title="Align Center">↔️</button><button title="Align Right">➡️</button><span style="color:#666; font-size:14px; font-weight:bold;">|</span><button title="Move Up">⬆️</button><button title="Move Down">⬇️</button><span style="color:#666; font-size:14px; font-weight:bold;">|</span><button title="Cut">✂️</button><button title="Copy">📋</button><button title="Paste Before">📥⬆️</button><button title="Paste After">📥⬇️</button><span style="color:#666; font-size:14px; font-weight:bold;">|</span><button title="Delete" style="color:#ff6b6b;">🗑️</button>`;
+            sec.insertBefore(actionBar, sec.firstChild);
+            
+            const [alL, alC, alR, sep1, up, down, sep2, cut, copy, pasteBefore, pasteAfter, sep3, delBtn] = actionBar.children;
+            alL.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); sec.style.textAlign = 'left'; if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); };
+            alC.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); sec.style.textAlign = 'center'; if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); };
+            alR.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); sec.style.textAlign = 'right'; if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); };
+            up.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); if(sec.previousElementSibling) { sec.parentNode.insertBefore(sec, sec.previousElementSibling); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); }};
+            down.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); if(sec.nextElementSibling) { sec.parentNode.insertBefore(sec.nextElementSibling, sec); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); }};
+            cut.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); if(typeof window.copySection === 'function') window.copySection(sec); sec.remove(); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); };
+            copy.onclick = (e) => { e.stopPropagation(); if(typeof window.copySection === 'function') window.copySection(sec); };
+            pasteBefore.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); if(typeof window.pasteSection === 'function') window.pasteSection(sec, 'beforebegin'); };
+            pasteAfter.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); if(typeof window.pasteSection === 'function') window.pasteSection(sec, 'afterend'); };
+            delBtn.onclick = (e) => { e.stopPropagation(); if(typeof window.captureState === 'function') window.captureState(); if(confirm('Delete this element?')) { sec.remove(); if(typeof window.enableSaveButton === 'function') window.enableSaveButton(); if(typeof window.captureState === 'function') window.captureState(); }};
+
+            sec.addEventListener('mouseenter', (e) => { e.stopPropagation(); iframeDoc.querySelectorAll('.section-hover, .subsection-hover').forEach(el => el.classList.remove('section-hover', 'subsection-hover')); sec.classList.add(['SECTION', 'HEADER', 'FOOTER', 'MAIN'].includes(sec.tagName) ? 'section-hover' : 'subsection-hover'); });
+            sec.addEventListener('mouseleave', (e) => { sec.classList.remove('section-hover', 'subsection-hover'); });
+        });
+
+        iframeDoc.querySelectorAll('.image-wrapper-editable, .bg-control-container, .section-action-bar').forEach(w => w.contentEditable = 'false');
+
+        // Ensure pristine state is captured on fresh page loads (Cross-page fix)
+        if (!isRestoring && window.historyPageRef !== window.currentPreviewFile) {
+            setTimeout(() => {
+                if(typeof window.captureState === 'function') window.captureState(true);
+            }, 100);
+        }
+    }
+
+    // ==============================================================================
+    // CRITICAL FIX: The Dynamic Page-Aware Undo/Redo Engine
+    // ==============================================================================
+    window.historyPageRef = null;
+
+    window.captureState = function(forceReset = false) { 
+        if (isRestoring) return; 
+        
+        const iframe = document.getElementById('preview-frame');
+        if(!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document; 
+        if (!doc || !doc.body) return; 
+
+        // Reset history if the page file has changed to prevent bleed-over
+        if (forceReset || window.historyPageRef !== window.currentPreviewFile) {
+            localHistory = [];
+            localHistoryIndex = -1;
+            window.historyPageRef = window.currentPreviewFile;
+        }
+        
+        let html = "";
+        if (typeof getCleanFullContent === 'function') {
+            html = getCleanFullContent(doc);
+        } else {
+            html = doc.body.innerHTML;
+        }
+
+        if (!html) return; 
+
+        if (localHistoryIndex >= 0 && localHistory[localHistoryIndex] === html) return;
+        
+        if (localHistoryIndex < localHistory.length - 1) {
+            localHistory = localHistory.slice(0, localHistoryIndex + 1); 
+        }
+        
+        localHistory.push(html); 
+        localHistoryIndex++; 
+        
+        // Exact User Request: Limit to 5 undo steps (plus 1 active state = 6 total elements)
+        if (localHistory.length > 6) {
+            localHistory.shift();
+            localHistoryIndex--;
+        }
+
+        if(typeof window.updateUndoRedoButtons === 'function') window.updateUndoRedoButtons();
+        if(typeof window.checkHistoryStatus === 'function') window.checkHistoryStatus(); 
+        
+        if(window.currentPreviewFile && typeof generatedFiles !== 'undefined') {
+            generatedFiles[window.currentPreviewFile] = html;
+        }
+        if(typeof window.updateCodePaneContent === 'function') window.updateCodePaneContent();
+    };
+    
+    window.restoreHTML = function(html) { 
+        if (!html) return; 
+        
+        isRestoring = true; 
+        
+        const iframe = document.getElementById('preview-frame'); 
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        if (editorObserver) editorObserver.disconnect();
+
+        const htmlLower = html.trim().toLowerCase();
+        
+        // Handle fully formed HTML with DOCTYPE safely
+        if (htmlLower.startsWith('<!doctype') || htmlLower.startsWith('<html')) {
+            const htmlMatch = html.match(/<html[^>]*>([\s\S]*)<\/html>/i);
+            if(htmlMatch && htmlMatch[1]) {
+                doc.documentElement.innerHTML = htmlMatch[1];
+            } else {
+                doc.documentElement.innerHTML = html.replace(/<!DOCTYPE[^>]*>/i, '');
+            }
+        } else {
+            doc.body.innerHTML = html;
+        }
+
+        let head = doc.querySelector('head');
+        if (!head) {
+            head = doc.createElement('head');
+            doc.documentElement.insertBefore(head, doc.body);
+        }
+        
+        let viewportMeta = doc.querySelector('meta[name="viewport"]');
+        if (!viewportMeta) {
+            viewportMeta = doc.createElement('meta');
+            viewportMeta.name = "viewport";
+            viewportMeta.content = "width=device-width, initial-scale=1.0";
+            head.insertBefore(viewportMeta, head.firstChild);
+        }
+
+        currentBgElementToReplace = null; 
+        currentImageToReplace = null; 
+        
+        initEditor(iframe); 
+        
+        if(window.currentPreviewFile && typeof generatedFiles !== 'undefined') {
+            generatedFiles[window.currentPreviewFile] = "<!DOCTYPE html>\n" + doc.documentElement.outerHTML;
+        }
+        if(typeof window.updateCodePaneContent === 'function') window.updateCodePaneContent();
+        
+        setTimeout(() => { isRestoring = false; }, 150);
+    };
+</script>

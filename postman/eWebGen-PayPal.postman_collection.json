@@ -1,0 +1,354 @@
+{
+  "info": {
+    "name": "eWebGen x PayPal Sandbox",
+    "description": "PayPal REST calls used by eWebGen (OAuth, Orders v2, Payments v2 refunds, webhook verification) plus eWebGen's own payment endpoints. Set client_id / client_secret from your sandbox app at developer.paypal.com.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "PayPal Sandbox REST API",
+      "item": [
+        {
+          "name": "1. Get access token (OAuth 2.0)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": "{{paypal_base}}/v1/oauth2/token",
+            "description": "Client-credentials token using the sandbox app's Client ID and Secret. Same call as PaymentService.paypal_access_token().",
+            "body": {
+              "mode": "urlencoded",
+              "urlencoded": [
+                {
+                  "key": "grant_type",
+                  "value": "client_credentials"
+                }
+              ]
+            },
+            "auth": {
+              "type": "basic",
+              "basic": [
+                {
+                  "key": "username",
+                  "value": "{{client_id}}"
+                },
+                {
+                  "key": "password",
+                  "value": "{{client_secret}}"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('token issued', () => pm.response.to.have.status(200));",
+                  "pm.collectionVariables.set('access_token', pm.response.json().access_token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "2. Create order (Orders v2)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "PayPal-Request-Id",
+                "value": "ewg-order-{{$timestamp}}"
+              }
+            ],
+            "url": "{{paypal_base}}/v2/checkout/orders",
+            "description": "Same payload eWebGen sends in PaymentService._create_paypal_rest_link(). Open the payer-action link in a browser and log in with a sandbox PERSONAL account to approve.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"intent\": \"CAPTURE\",\n  \"purchase_units\": [\n    {\n      \"reference_id\": \"{{txn_id}}\",\n      \"custom_id\": \"{{txn_id}}\",\n      \"description\": \"eWebGen Pro plan\",\n      \"amount\": {\n        \"currency_code\": \"USD\",\n        \"value\": \"9.99\"\n      }\n    }\n  ],\n  \"payment_source\": {\n    \"paypal\": {\n      \"experience_context\": {\n        \"brand_name\": \"eWebGen\",\n        \"user_action\": \"PAY_NOW\",\n        \"shipping_preference\": \"NO_SHIPPING\",\n        \"return_url\": \"{{app_base}}/api/payment/callback/paypal?status=success\",\n        \"cancel_url\": \"{{app_base}}/api/payment/callback/paypal?status=cancel\"\n      }\n    }\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('order created', () => pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const o = pm.response.json(); pm.collectionVariables.set('order_id', o.id);",
+                  "const l = (o.links||[]).find(x => x.rel === 'payer-action' || x.rel === 'approve'); if (l) console.log('Approve here:', l.href);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "3. Show order",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{paypal_base}}/v2/checkout/orders/{{order_id}}",
+            "description": "Status should be APPROVED after the buyer approves.",
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "4. Capture order",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "PayPal-Request-Id",
+                "value": "ewg-capture-{{order_id}}"
+              }
+            ],
+            "url": "{{paypal_base}}/v2/checkout/orders/{{order_id}}/capture",
+            "description": "What eWebGen does server-side in PaymentService.paypal_capture_order() before activating a plan.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('captured', () => pm.expect(pm.response.code).to.be.oneOf([200,201]));",
+                  "const c = pm.response.json().purchase_units[0].payments.captures[0];",
+                  "pm.test('COMPLETED', () => pm.expect(c.status).to.eql('COMPLETED'));",
+                  "pm.collectionVariables.set('capture_id', c.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "5. Refund capture (partial)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "PayPal-Request-Id",
+                "value": "ewg-refund-{{$timestamp}}"
+              }
+            ],
+            "url": "{{paypal_base}}/v2/payments/captures/{{capture_id}}/refund",
+            "description": "Same call as PaymentService.paypal_refund(). Remove the amount object for a full refund.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"amount\": {\n    \"currency_code\": \"USD\",\n    \"value\": \"2.00\"\n  },\n  \"note_to_payer\": \"Refund from eWebGen\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "name": "6. Verify webhook signature",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{paypal_base}}/v1/notifications/verify-webhook-signature",
+            "description": "Used by /api/payment/webhook/paypal. Fill the transmission headers from a real webhook delivery (PayPal dashboard > Webhooks events).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"auth_algo\": \"SHA256withRSA\",\n  \"cert_url\": \"\",\n  \"transmission_id\": \"\",\n  \"transmission_sig\": \"\",\n  \"transmission_time\": \"\",\n  \"webhook_id\": \"{{webhook_id}}\",\n  \"webhook_event\": {}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "auth": {
+              "type": "bearer",
+              "bearer": [
+                {
+                  "key": "token",
+                  "value": "{{access_token}}",
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "eWebGen payment endpoints",
+      "item": [
+        {
+          "name": "Start checkout (logged-in user)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{app_base}}/api/pay/initiate",
+            "description": "Creates a pending transaction and a PayPal order; returns the PayPal approval URL. Needs a logged-in session cookie (log in to eWebGen in the same Postman cookie jar first).",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gateway_code\": \"paypal\",\n  \"plan_id\": 1,\n  \"currency\": \"USD\",\n  \"metadata\": {\n    \"type\": \"plan_subscription\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Return from PayPal (callback)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{app_base}}/api/payment/callback/paypal?status=success&token={{order_id}}",
+            "description": "eWebGen captures + verifies the order with PayPal, then activates the plan. A forged call for an unapproved order is rejected."
+          }
+        },
+        {
+          "name": "Admin: list transactions",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{app_base}}/api/transactions",
+            "description": "Shows status, PayPal capture ID and refund ID (admin session)."
+          }
+        },
+        {
+          "name": "Admin: refund transaction",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{app_base}}/api/admin/transactions/{{txn_id}}/refund",
+            "description": "Full: {\"type\":\"full\"}. Partial: {\"type\":\"partial\",\"amount\":2}. Refunds through PayPal.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"full\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "paypal_base",
+      "value": "https://api-m.sandbox.paypal.com"
+    },
+    {
+      "key": "app_base",
+      "value": "http://localhost:3003"
+    },
+    {
+      "key": "client_id",
+      "value": ""
+    },
+    {
+      "key": "client_secret",
+      "value": ""
+    },
+    {
+      "key": "webhook_id",
+      "value": ""
+    },
+    {
+      "key": "access_token",
+      "value": ""
+    },
+    {
+      "key": "order_id",
+      "value": ""
+    },
+    {
+      "key": "capture_id",
+      "value": ""
+    },
+    {
+      "key": "txn_id",
+      "value": "1"
+    }
+  ]
+}

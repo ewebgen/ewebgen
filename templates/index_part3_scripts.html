@@ -1,0 +1,894 @@
+<script>
+        // Global Wrapper Functions for Modals (Ensures Context Menu can always find them)
+        window.toggleVideoInputType = function() {
+            const typeSelect = document.getElementById('edit-video-type-select');
+            if (!typeSelect) return;
+            const type = typeSelect.value;
+            const ytGroup = document.getElementById('video-url-input-group');
+            const fileGroup = document.getElementById('video-file-input-group');
+            if (ytGroup) ytGroup.style.display = type === 'youtube' ? 'block' : 'none';
+            if (fileGroup) fileGroup.style.display = type === 'file' ? 'block' : 'none';
+        };
+
+        window.openEditVideoModal = function(targetWidget, currentUrl, isYouTube) {
+            // FIX 2: Pause any background video in the canvas editor!
+            const iframe = document.getElementById('preview-frame');
+            if (iframe && iframe.contentDocument) {
+                iframe.contentDocument.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
+            }
+
+            window.activeVideoWidget = targetWidget;
+            window.__isAddingVideo = !targetWidget; 
+
+            const modal = document.getElementById('edit-video-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                
+                const ytInput = document.getElementById('edit-video-url-input');
+                const fileInput = document.getElementById('edit-video-file-url');
+                const typeSelect = document.getElementById('edit-video-type-select');
+                
+                // Clear inputs initially
+                if (ytInput) ytInput.value = '';
+                if (fileInput) fileInput.value = '';
+                
+                if (currentUrl) {
+                    if (isYouTube) {
+                        if (typeSelect) typeSelect.value = 'youtube';
+                        if (ytInput) ytInput.value = currentUrl;
+                    } else {
+                        if (typeSelect) typeSelect.value = 'file';
+                        if (fileInput) fileInput.value = currentUrl;
+                    }
+                } else {
+                    if (typeSelect) typeSelect.value = 'youtube';
+                }
+                
+                window.toggleVideoInputType();
+            } else {
+                console.error("Video modal not found in DOM");
+            }
+        };
+
+        // --- NEW: IMAGE MODAL LOGIC ---
+        window.openEditImageModal = function(targetWidget, currentUrl) {
+            // Pause any background video in the canvas editor
+            const iframe = document.getElementById('preview-frame');
+            if (iframe && iframe.contentDocument) {
+                iframe.contentDocument.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
+            }
+
+            window.activeImageWidget = targetWidget;
+            window.__isAddingImage = !targetWidget; 
+
+            const modal = document.getElementById('edit-image-modal');
+            if (modal) {
+                modal.style.display = 'flex';
+                const urlInput = document.getElementById('edit-image-url-input');
+                if (urlInput) urlInput.value = currentUrl || '';
+            }
+        };
+        
+        // NEW FIX: PROPER MEDIA MANAGER TRIGGER FOR IMAGES & CARDS
+        window.triggerImageMediaManager = function() {
+            document.getElementById('edit-image-modal').style.display = 'none';
+
+            // THE GLOBAL INTERCEPTOR
+            // This waits for a click on an image in the gallery, steals the URL,
+            // closes the gallery, opens our edit modal, and populates the input!
+            const galleryInterceptor = function(e) {
+                let selectedUrl = '';
+                
+                // Did they click an image? Or something with a background-image?
+                if (e.target.tagName === 'IMG') {
+                    selectedUrl = e.target.src;
+                } else if (e.target.style && e.target.style.backgroundImage) {
+                    selectedUrl = e.target.style.backgroundImage.replace(/^url\(["']?/, '').replace(/["']?\)$/, '');
+                }
+
+                // If we found a URL, AND they didn't click inside our edit modal or sidebars...
+                if (selectedUrl && !e.target.closest('#edit-image-modal') && !e.target.closest('#editor-sidebar') && !e.target.closest('#control-bar')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    // Put the URL into the input field
+                    const urlInput = document.getElementById('edit-image-url-input');
+                    if (urlInput) urlInput.value = selectedUrl;
+                    
+                    // Force close the Media Manager and any other open modals
+                    document.querySelectorAll('.auth-modal, .modal').forEach(m => {
+                        if (m.id !== 'edit-image-modal') m.style.display = 'none';
+                    });
+                    
+                    // Bring our Image Edit modal back!
+                    document.getElementById('edit-image-modal').style.display = 'flex';
+                    
+                    // Detach this interceptor
+                    document.removeEventListener('click', galleryInterceptor, true);
+                }
+            };
+
+            // Attach interceptor aggressively
+            document.addEventListener('click', galleryInterceptor, true);
+            setTimeout(() => { document.removeEventListener('click', galleryInterceptor, true); }, 300000); // 5 min timeout
+
+            // Finally, launch the internal Media Manager natively
+            if(typeof window.openImageManager === 'function') {
+                window.openImageManager(); 
+            } else {
+                const mm = document.getElementById('image-manager-modal') || document.getElementById('media-manager-modal');
+                if(mm) { mm.style.display = 'flex'; if(typeof loadUserImages === 'function') loadUserImages(); }
+            }
+        };
+
+        window.handleSingleImageUpload = function(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const urlInput = document.getElementById('edit-image-url-input');
+                    if (urlInput) urlInput.value = e.target.result;
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        };
+
+        window.saveImageChanges = function() {
+            const urlInput = document.getElementById('edit-image-url-input');
+            const newUrl = urlInput ? urlInput.value.trim() : '';
+            if (!newUrl) {
+                alert("Please provide an image URL or upload an image.");
+                return;
+            }
+
+            if (window.activeImageWidget) {
+                if (window.activeImageWidget.tagName === 'IMG') {
+                    window.activeImageWidget.src = newUrl;
+                } else {
+                    let img = window.activeImageWidget.querySelector('img');
+                    if (img) {
+                        img.src = newUrl;
+                    } else {
+                        window.activeImageWidget.innerHTML = `<img src="${newUrl}" style="max-width:100%; height:auto;">`;
+                    }
+                }
+                if (typeof window.captureState === 'function') window.captureState();
+                if (typeof window.enableSaveButton === 'function') window.enableSaveButton();
+            } else if (window.__isAddingImage) {
+                const newHtml = `<div class="eweb-block eweb-image-widget image-wrapper-editable" style="margin:10px auto; text-align:center; max-width:100%;"><img src="${newUrl}" style="max-width:100%; height:auto;"></div>`;
+                window.injectWidgetIntoEditor(newHtml);
+                window.__isAddingImage = false;
+            }
+            
+            document.getElementById('edit-image-modal').style.display = 'none';
+            window.activeImageWidget = null;
+        };
+
+        // --- GOAL 3 & 4 FIX: REMOVE GHOST IMAGES & EMPTY ROWS ---
+        window.openEditCarouselModal = function(targetWidget, existingUrls) {
+            // FIX 2: Pause any background video in the canvas editor!
+            const iframe = document.getElementById('preview-frame');
+            if (iframe && iframe.contentDocument) {
+                iframe.contentDocument.querySelectorAll('video').forEach(v => { v.pause(); v.muted = true; });
+            }
+
+            window.activeCarouselWidget = targetWidget;
+            window.__isAddingCarousel = !targetWidget; 
+
+            const modal = document.getElementById('edit-carousel-modal');
+            if(modal) {
+                // Pre-fill the Interval Input if editing an existing carousel
+                const intervalInput = document.getElementById('carousel-interval-input');
+                if (intervalInput) {
+                    intervalInput.value = '300'; // Default
+                    if (targetWidget) {
+                        const scriptTag = targetWidget.querySelector('script');
+                        if (scriptTag) {
+                            const match = scriptTag.textContent.match(/},\s*(\d+)\);/);
+                            if (match && match[1]) {
+                                intervalInput.value = (parseInt(match[1]) / 1000).toString();
+                            }
+                        } else {
+                            intervalInput.value = '0'; // No script found means it was disabled
+                        }
+                    }
+                }
+
+                modal.style.display = 'flex';
+                const container = document.getElementById('carousel-images-list') || document.getElementById('carousel-images-container');
+                if(container) {
+                    container.innerHTML = ''; 
+                    if (existingUrls && existingUrls.length > 0) {
+                        existingUrls.forEach(url => {
+                            if(typeof window.addCarouselImageRow === 'function') window.addCarouselImageRow(url);
+                        });
+                    } 
+                }
+            } else {
+                console.error("Carousel modal not found in DOM");
+            }
+        };
+
+        // --- GOAL 2 FIX: GUARANTEED ROW CREATION AND DELETION ---
+        window.addCarouselImageRow = function(url = '') {
+            const list = document.getElementById('carousel-images-list') || document.getElementById('carousel-images-container');
+            if(!list) return;
+            
+            const row = document.createElement('div');
+            row.style.cssText = 'display:flex; gap:10px; align-items:center; background:#f8f9fa; padding:10px; border:1px solid #ddd; border-radius:6px;';
+            row.innerHTML = `
+                <div style="width:40px; height:40px; background:#e9ecef; border-radius:4px; overflow:hidden; flex-shrink:0; display:flex; justify-content:center; align-items:center;">
+                    <img src="${url}" style="width:100%; height:100%; object-fit:cover; display:${url ? 'block' : 'none'};">
+                    <span style="color:#aaa; font-size:10px; display:${url ? 'none' : 'block'};">Empty</span>
+                </div>
+                <input type="text" class="auth-input carousel-url-input" value="${url}" placeholder="Image URL..." style="flex-grow:1; margin:0;" oninput="this.previousElementSibling.querySelector('img').src=this.value; this.previousElementSibling.querySelector('img').style.display='block'; this.previousElementSibling.querySelector('span').style.display='none';">
+                <button class="auth-btn btn-cancel" style="width:auto; margin:0; padding:8px 12px; background:#dc3545; color:white; border-radius:4px;" onclick="this.parentElement.remove()" title="Delete Image">✕</button>
+            `;
+            list.appendChild(row);
+        };
+
+        function openEwebgenSettings() {
+            document.getElementById('ewebgen-settings-modal').style.display = 'flex';
+            loadEwebSettings();
+        }
+        function closeEwebgenSettings() {
+            document.getElementById('ewebgen-settings-modal').style.display = 'none';
+        }
+        
+        function switchEwebVertTab(tabId, btn) {
+            document.querySelectorAll('.eweb-tab-content').forEach(el => el.style.display = 'none');
+            document.getElementById(tabId).style.display = 'block';
+            document.querySelectorAll('.eweb-vert-tab').forEach(el => el.classList.remove('active'));
+            btn.classList.add('active');
+        }
+
+        function toggleEwebAIPanels() {
+            const prov = document.getElementById('eweb-ai-provider').value;
+            document.querySelectorAll('.eweb-panel, .eweb-model-panel').forEach(el => el.style.display = 'none');
+            if(document.getElementById('eweb-panel-' + prov)) document.getElementById('eweb-panel-' + prov).style.display = 'block';
+            if(document.getElementById('eweb-model-panel-' + prov)) document.getElementById('eweb-model-panel-' + prov).style.display = 'block';
+        }
+        
+        function toggleEwebModelInput(prov) {
+            const val = document.getElementById('eweb-model-' + prov).value;
+            document.getElementById('eweb-custom-model-' + prov).style.display = (val === 'other') ? 'block' : 'none';
+        }
+        
+        function toggleEwebPagesInput() {
+            const val = document.getElementById('eweb-pages-mode').value;
+            document.getElementById('eweb-pages-wrapper').style.display = (val === 'manual') ? 'block' : 'none';
+        }
+        
+        function renderEwebPagesUI(jsonStr) {
+            const list = document.getElementById('eweb-pages-ui-list');
+            list.innerHTML = '';
+            let pages = [];
+            try { pages = JSON.parse(jsonStr); } 
+            catch(e) { pages = [{"name":"index.html", "description":"Homepage", "location":"menu"}]; }
+            
+            if (!Array.isArray(pages) || pages.length === 0) {
+                pages = [{"name":"index.html", "description":"Homepage", "location":"menu"}];
+            }
+            pages.forEach(p => addEwebPageRow(p.name, p.description, p.location));
+        }
+
+        function addEwebPageRow(name='', desc='', loc='menu') {
+            const list = document.getElementById('eweb-pages-ui-list');
+            const row = document.createElement('div');
+            row.className = 'eweb-page-row';
+            row.style = 'display:flex; gap:10px; margin-bottom:10px; align-items:center; background:#fff; padding:10px; border:1px solid #ccc; border-radius:5px; box-shadow:0 1px 3px rgba(0,0,0,0.05);';
+            row.innerHTML = `
+                <div style="flex:1;">
+                    <input type="text" class="auth-input p-name" value="${name}" placeholder="Leave blank for AI to decide" style="margin:0; font-size:0.9em; padding:8px;">
+                </div>
+                <div style="flex:1;">
+                    <input type="text" class="auth-input p-desc" value="${desc}" placeholder="Leave blank for AI to decide" style="margin:0; font-size:0.9em; padding:8px;">
+                </div>
+                <div style="width:110px;">
+                    <select class="auth-input p-loc" style="margin:0; font-size:0.9em; padding:8px;">
+                        <option value="menu" ${loc==='menu'?'selected':''}>Top Menu</option>
+                        <option value="footer" ${loc==='footer'?'selected':''}>Footer</option>
+                        <option value="both" ${loc==='both'?'selected':''}>Both</option>
+                    </select>
+                </div>
+                <button onclick="this.parentElement.remove()" style="background:#dc3545; color:white; border:none; width:30px; height:30px; border-radius:4px; cursor:pointer;" title="Delete Page">✕</button>
+            `;
+            list.appendChild(row);
+        }
+
+        function serializeEwebPagesUI() {
+            const rows = document.querySelectorAll('#eweb-pages-ui-list .eweb-page-row');
+            const pages = [];
+            rows.forEach(r => {
+                const name = r.querySelector('.p-name').value.trim();
+                const desc = r.querySelector('.p-desc').value.trim();
+                const loc = r.querySelector('.p-loc').value;
+                // FIX: Allow completely blank rows so the AI handles generation dynamically!
+                pages.push({name: name, description: desc, location: loc});
+            });
+            return JSON.stringify(pages);
+        }
+
+        function loadEwebSettings() {
+            fetch('/api/user/settings').then(r=>r.json()).then(res => {
+                if(!res.success) return;
+                const s = res.settings || {};
+                
+                document.getElementById('eweb-ga-code').value = s.google_analytics || '';
+                document.getElementById('eweb-contact-email').value = s.contact_email || '';
+                document.getElementById('eweb-smtp-host').value = s.smtp_host || '';
+                document.getElementById('eweb-smtp-port').value = s.smtp_port || '';
+                document.getElementById('eweb-smtp-user').value = s.smtp_user || '';
+                document.getElementById('eweb-smtp-pass').value = s.smtp_pass || '';
+
+                if(res.allow_own_api_keys) {
+                    document.getElementById('eweb-ai-locked').style.display = 'none';
+                    document.getElementById('eweb-ai-unlocked').style.display = 'block';
+                    
+                    document.getElementById('eweb-ai-provider').value = s.ai_provider || 'gemini';
+                    
+                    const pKeys = ['gemini', 'openai', 'claude', 'deepseek', 'xai', 'meta', 'perplexity'];
+                    pKeys.forEach(p => { if(document.getElementById(`eweb-${p}-key`)) document.getElementById(`eweb-${p}-key`).value = s[`${p}_api_key`] || ''; });
+
+                    const pModels = ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'];
+                    pModels.forEach(p => {
+                        const select = document.getElementById(`eweb-model-${p}`);
+                        const custom = document.getElementById(`eweb-custom-model-${p}`);
+                        if(select && custom) {
+                            if(s[`user_model_${p}`] && s[`user_model_${p}`] !== 'default') {
+                                select.value = 'other'; custom.style.display = 'block'; custom.value = s[`user_model_${p}`];
+                            } else {
+                                select.value = 'default'; custom.style.display = 'none'; custom.value = '';
+                            }
+                        }
+
+                        // --- NEW: Load Token Limits ---
+                        const tSelect = document.getElementById(`eweb-token-${p}`);
+                        const tCustom = document.getElementById(`eweb-custom-token-${p}`);
+                        if (tSelect && tCustom) {
+                            const tVal = s[`user_token_${p}`];
+                            if (!tVal || tVal === 'default') {
+                                tSelect.value = 'default';
+                                tCustom.style.display = 'none';
+                                tCustom.value = '';
+                            } else if (tVal === 'maximum') {
+                                tSelect.value = 'maximum';
+                                tCustom.style.display = 'none';
+                                tCustom.value = '';
+                            } else if (tVal === '8192') {
+                                tSelect.value = '8192';
+                                tCustom.style.display = 'none';
+                                tCustom.value = '';
+                            } else {
+                                tSelect.value = 'other';
+                                tCustom.style.display = 'block';
+                                tCustom.value = tVal;
+                            }
+                        }
+                    });
+
+                    if (s.default_pages_mode === 'manual') {
+                        document.getElementById('eweb-pages-mode').value = 'manual';
+                        document.getElementById('eweb-pages-wrapper').style.display = 'block';
+                        renderEwebPagesUI(s.default_pages_json);
+                    } else {
+                        document.getElementById('eweb-pages-mode').value = 'default';
+                        document.getElementById('eweb-pages-wrapper').style.display = 'none';
+                        renderEwebPagesUI('[]');
+                    }
+                    toggleEwebAIPanels();
+                } else {
+                    document.getElementById('eweb-ai-locked').style.display = 'block';
+                    document.getElementById('eweb-ai-unlocked').style.display = 'none';
+                }
+            });
+        }
+
+        function saveEwebSettings(type) {
+            const payload = {};
+            if(type==='analytics') {
+                payload.google_analytics = document.getElementById('eweb-ga-code').value;
+            }
+            else if(type==='contact') {
+                payload.contact_email = document.getElementById('eweb-contact-email').value;
+                payload.smtp_host = document.getElementById('eweb-smtp-host').value;
+                payload.smtp_port = document.getElementById('eweb-smtp-port').value;
+                payload.smtp_user = document.getElementById('eweb-smtp-user').value;
+                payload.smtp_pass = document.getElementById('eweb-smtp-pass').value;
+            }
+            else if(type==='ai') {
+                payload.ai_provider = document.getElementById('eweb-ai-provider').value;
+                
+                ['gemini', 'openai', 'claude', 'deepseek', 'xai', 'meta', 'perplexity'].forEach(p => {
+                    const k = document.getElementById(`eweb-${p}-key`); if(k) payload[`${p}_api_key`] = k.value;
+                });
+                
+                ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'].forEach(p => {
+                    const sel = document.getElementById(`eweb-model-${p}`);
+                    if(sel && sel.value === 'other') payload[`user_model_${p}`] = document.getElementById(`eweb-custom-model-${p}`).value;
+                    else payload[`user_model_${p}`] = '';
+
+                    // --- NEW: Save Token Limits ---
+                    const tSel = document.getElementById(`eweb-token-${p}`);
+                    if(tSel) {
+                        if (tSel.value === 'other') {
+                            payload[`user_token_${p}`] = document.getElementById(`eweb-custom-token-${p}`).value;
+                        } else if (tSel.value === 'default' || !tSel.value) {
+                            payload[`user_token_${p}`] = '';
+                        } else {
+                            payload[`user_token_${p}`] = tSel.value;
+                        }
+                    }
+                });
+
+                const mode = document.getElementById('eweb-pages-mode').value;
+                payload.default_pages_mode = mode;
+                if (mode === 'manual') {
+                    payload.default_pages_json = serializeEwebPagesUI();
+                } else {
+                    payload.default_pages_json = '';
+                }
+            }
+
+            fetch('/api/user/settings', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+            }).then(r=>r.json()).then(res => {
+                if(res.success) alert("Settings saved!"); else alert("Error saving settings.");
+            });
+        }
+        
+        window.addEventListener('click', function(e) {
+            const btn = document.getElementById('import-btn');
+            const menu = document.getElementById('import-menu-dropdown');
+            if (btn && menu && !btn.contains(e.target) && !menu.contains(e.target)) {
+                menu.style.display = 'none';
+            }
+        });
+
+        // ==========================================
+        // NEW ELEMENTS DRAWER LOGIC & WIDGET GENERATOR
+        // ==========================================
+        window.toggleUiElementsSlider = function(e) {
+            if(e) e.stopPropagation();
+            const slider = document.getElementById('ui-elements-slider');
+            const templateDrawer = document.getElementById('elements-slider');
+            const addBtn = document.getElementById('sidebar-add-btn');
+            const closeBtn = document.getElementById('sidebar-close-btn');
+            
+            if (slider.classList.contains('active')) {
+                closeUiElementsSlider();
+            } else {
+                // Safely close templates drawer visually so they don't overlap
+                if (templateDrawer) {
+                    templateDrawer.classList.remove('active');
+                    templateDrawer.classList.remove('open');
+                }
+                
+                if (closeBtn) closeBtn.style.display = 'none';
+                if (addBtn) addBtn.style.display = 'flex';
+                
+                // Sync the physical height and boundaries of the templates drawer exactly!
+                if (templateDrawer) {
+                    const comp = window.getComputedStyle(templateDrawer);
+                    slider.style.top = comp.top;
+                    slider.style.bottom = comp.bottom;
+                    slider.style.height = comp.height;
+                    slider.style.maxHeight = comp.maxHeight;
+                    slider.style.marginTop = comp.marginTop;
+                }
+                
+                slider.classList.add('active');
+                const overlay = document.getElementById('slider-overlay');
+                if (overlay) overlay.style.display = 'block';
+            }
+        };
+
+        window.closeUiElementsSlider = function() {
+            const slider = document.getElementById('ui-elements-slider');
+            if (slider) slider.classList.remove('active');
+            
+            const overlay = document.getElementById('slider-overlay');
+            const templateDrawer = document.getElementById('elements-slider');
+            if (overlay && (!templateDrawer || !templateDrawer.classList.contains('active') && !templateDrawer.classList.contains('open'))) {
+                overlay.style.display = 'none';
+            }
+            // CRITICAL FIX: DO NOT CLEAR window.__insertTarget HERE.
+            // If the user clicks out to interact with a modal, we must remember where they clicked originally!
+        };
+
+        window.openWidgetDrawer = function() {
+            const slider = document.getElementById('ui-elements-slider');
+            const templateDrawer = document.getElementById('elements-slider');
+            const addBtn = document.getElementById('sidebar-add-btn');
+            const closeBtn = document.getElementById('sidebar-close-btn');
+            
+            if (slider && !slider.classList.contains('active')) {
+                // Safely close templates visually without triggering bad cross-callbacks
+                if (templateDrawer) {
+                    templateDrawer.classList.remove('active');
+                    templateDrawer.classList.remove('open');
+                }
+                
+                if (closeBtn) closeBtn.style.display = 'none';
+                if (addBtn) addBtn.style.display = 'flex';
+                
+                // Sync the physical height and boundaries
+                if (templateDrawer) {
+                    const comp = window.getComputedStyle(templateDrawer);
+                    slider.style.top = comp.top;
+                    slider.style.bottom = comp.bottom;
+                    slider.style.height = comp.height;
+                    slider.style.maxHeight = comp.maxHeight;
+                    slider.style.marginTop = comp.marginTop;
+                }
+
+                slider.classList.add('active');
+                const overlay = document.getElementById('slider-overlay');
+                if (overlay) overlay.style.display = 'block';
+            }
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            // 1. Hook into the overlay click to safely close Elements slider
+            const overlay = document.getElementById('slider-overlay');
+            if (overlay) {
+                overlay.addEventListener('click', () => {
+                    closeUiElementsSlider();
+                });
+            }
+
+            // 2. Safely patch existing close functionality to also close Elements
+            const origCloseAll = window.closeElementsSlider;
+            if (typeof origCloseAll === 'function' && !origCloseAll.patchedUi) {
+                window.closeElementsSlider = function() {
+                    origCloseAll();
+                    closeUiElementsSlider();
+                };
+                window.closeElementsSlider.patchedUi = true;
+            }
+
+            // 3. Patch the Template toggle button to force close Elements (Mutual Exclusivity)
+            const origToggle = window.toggleElementsSlider;
+            if (typeof origToggle === 'function' && !origToggle.patchedUi) {
+                window.toggleElementsSlider = function(e) {
+                    closeUiElementsSlider();
+                    origToggle(e);
+                };
+                window.toggleElementsSlider.patchedUi = true;
+            }
+            
+            renderDrawerWidgets();
+        });
+
+        // NATIVE WIDGET LIBRARY RENDERER
+        const EWEB_WIDGETS = [
+            { id: 'heading', icon: 'H1', name: 'Heading', html: '<h2 class="eweb-text-widget" style="padding:10px; margin:0;">Heading Text</h2>' },
+            { id: 'text', icon: '📄', name: 'Text Block', html: '<p class="eweb-text-widget" style="padding:10px; margin:0;">Double-click to edit this paragraph. You can format the text using the toolbar.</p>' },
+            { id: 'image', icon: '🖼️', name: 'Image', html: '<div class="eweb-block eweb-image-widget image-wrapper-editable" style="margin:10px auto; text-align:center; max-width:100%;"><img src="https://placehold.co/600x400?text=Double+Click+to+Change" style="max-width:100%; height:auto;"></div>' },
+            { id: 'video', icon: '🎥', name: 'Video', html: '' },
+            { id: 'button', icon: '🔳', name: 'Button', html: '<div class="eweb-button-widget" style="text-align:center; padding:10px;"><a href="#" class="btn btn-primary" style="padding:10px 24px; text-decoration:none;">Click Me</a></div>' },
+            { id: 'carousel', icon: '🎠', name: 'Carousel', html: '' },
+            { id: 'card', icon: '💳', name: 'Card', html: '<div class="eweb-block card" style="margin:10px; box-shadow:0 4px 8px rgba(0,0,0,0.1); border:none; border-radius:8px; overflow:hidden;"><div class="eweb-image-widget"><img src="https://placehold.co/400x250?text=Card+Image" class="card-img-top" style="width:100%; height:auto;"></div><div class="card-body" style="padding:15px; background:#fff;"><h5 class="card-title eweb-text-widget" style="margin-top:0;">Card Title</h5><p class="card-text eweb-text-widget" style="color:#555;">Some quick example text to build on the card title and make up the bulk of the card\'s content.</p><div class="eweb-button-widget"><a href="#" class="btn btn-primary">Go somewhere</a></div></div></div>' },
+            { id: 'divider', icon: '➖', name: 'Divider', html: '<div class="eweb-block eweb-divider-widget" style="padding: 10px 0;"><hr style="margin:0; border-top:2px solid #ddd; opacity:1;"></div>' },
+            { id: 'spacer', icon: '↕️', name: 'Spacer', html: '<div class="eweb-block" style="height:50px; width:100%;"></div>' }
+        ];
+
+        function renderDrawerWidgets() {
+            const container = document.getElementById('drawer-widget-list-container');
+            if (!container) return;
+            container.innerHTML = ''; 
+            
+            EWEB_WIDGETS.forEach(w => {
+                const btn = document.createElement('button');
+                btn.className = 'widget-drawer-btn';
+                btn.style.cssText = 'display:flex; flex-direction:column; align-items:center; justify-content:center; padding:15px 5px; background:#fff; border:1px solid #ddd; border-radius:8px; cursor:pointer; transition:all 0.2s; box-shadow:0 2px 5px rgba(0,0,0,0.02);';
+                btn.innerHTML = `<span style="font-size:24px; margin-bottom:8px;">${w.icon}</span><span style="font-size:12px; font-weight:bold; color:#555;">${w.name}</span>`;
+                
+                btn.onmouseover = () => { btn.style.borderColor = '#007bff'; btn.style.transform = 'translateY(-2px)'; btn.style.boxShadow = '0 4px 10px rgba(0,123,255,0.15)'; };
+                btn.onmouseout = () => { btn.style.borderColor = '#ddd'; btn.style.transform = 'none'; btn.style.boxShadow = '0 2px 5px rgba(0,0,0,0.02)'; };
+                
+                btn.onclick = () => {
+                    if (w.id === 'video') {
+                        window.__isAddingVideo = true;
+                        window.activeVideoWidget = null;
+                        if(typeof window.openEditVideoModal === 'function') window.openEditVideoModal(null, '', true);
+                        return;
+                    } else if (w.id === 'carousel') {
+                        window.__isAddingCarousel = true;
+                        window.activeCarouselWidget = null;
+                        if(typeof window.openEditCarouselModal === 'function') window.openEditCarouselModal(null, []);
+                        return;
+                    } else if (w.id === 'image') {
+                        window.__isAddingImage = true;
+                        window.activeImageWidget = null;
+                        if(typeof window.openEditImageModal === 'function') window.openEditImageModal(null, '');
+                        return;
+                    }
+                    
+                    window.injectWidgetIntoEditor(w.html);
+                };
+                
+                container.appendChild(btn);
+            });
+        }
+        
+        // --- CRITICAL FIX: Robust Injection Fallbacks & SCRIPT EXECUTION ---
+        window.injectWidgetIntoEditor = function(htmlContent) {
+            const iframe = document.getElementById('preview-frame');
+            if (!iframe) return null;
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            const temp = doc.createElement('div');
+            temp.innerHTML = htmlContent.trim();
+            let widgetNode = temp.firstElementChild || temp;
+
+            // 1. If replacing an existing element
+            if (window.__widgetToReplace && window.__widgetToReplace.parentNode) {
+                window.__widgetToReplace.parentNode.insertBefore(widgetNode, window.__widgetToReplace);
+            } 
+            // 2. If inserting into a specific chosen target (from + Add Widget)
+            else if (window.__insertTarget && window.__insertTarget.parentNode) {
+                window.__insertTarget.appendChild(widgetNode);
+            } 
+            // 3. Fallback: If no target was clicked, safely append to the bottom of the page
+            else {
+                const activeSection = doc.querySelector('section:hover') || doc.querySelector('section:last-of-type') || doc.body;
+                if (activeSection) {
+                    activeSection.appendChild(widgetNode);
+                } else {
+                    doc.body.appendChild(widgetNode);
+                }
+            }
+            
+            // FORCE BROWSER TO EXECUTE INJECTED SCRIPTS (REQUIRED FOR CAROUSEL AUTO-SLIDE)
+            const scripts = widgetNode.tagName === 'SCRIPT' ? [widgetNode] : Array.from(widgetNode.querySelectorAll('script'));
+            scripts.forEach(oldScript => {
+                const newScript = doc.createElement('script');
+                newScript.textContent = oldScript.textContent;
+                if (oldScript.parentNode) {
+                    oldScript.parentNode.replaceChild(newScript, oldScript);
+                }
+            });
+
+            if (typeof window.initEditor === 'function') window.initEditor(iframe);
+            if (typeof window.captureState === 'function') window.captureState();
+            
+            const saveBtn = document.getElementById('save-btn');
+            if (saveBtn) saveBtn.disabled = false;
+            
+            if (typeof closeUiElementsSlider === 'function') closeUiElementsSlider();
+            
+            // Clear targets ONLY AFTER successful insertion
+            window.__insertTarget = null;
+            window.__widgetToReplace = null;
+            
+            return widgetNode;
+        };
+
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDrawerWidgets();
+            
+            // NEW: Keep dropdown selector synced with user's saved language
+            setInterval(() => {
+                const langSelect = document.getElementById('app-language-select');
+                if (langSelect && typeof currentAppLanguage !== 'undefined') {
+                    if (langSelect.value !== currentAppLanguage) {
+                        langSelect.value = currentAppLanguage;
+                    }
+                }
+            }, 1000);
+        });
+
+        // ==========================================
+        // EDIT VIDEO LOGIC
+        // ==========================================
+        window.saveVideoChanges = function() {
+            const typeSelect = document.getElementById('edit-video-type-select');
+            const isFileMode = typeSelect && typeSelect.value === 'file';
+            
+            let newUrl = '';
+            if (isFileMode) {
+                const fileInput = document.getElementById('edit-video-file-url');
+                newUrl = fileInput ? fileInput.value.trim() : '';
+            } else {
+                const ytInput = document.getElementById('edit-video-url-input');
+                newUrl = ytInput ? ytInput.value.trim() : '';
+            }
+
+            if (!newUrl) {
+                alert("Please provide a valid video URL or file.");
+                return;
+            }
+            
+            let isDirectVideo = isFileMode || newUrl.match(/\.(mp4|webm|ogg|mov)/i) || (!newUrl.includes('youtube') && !newUrl.includes('youtu.be') && !newUrl.includes('vimeo'));
+
+            let embedUrl = newUrl;
+            if (!isDirectVideo) {
+                let videoId = '';
+                let match = newUrl.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|watch\?.+&v=|shorts\/))([^&?]+)/);
+                if (match && match[1]) {
+                    videoId = match[1];
+                    embedUrl = `https://www.youtube.com/embed/${videoId}`;
+                } else if (newUrl.includes('vimeo')) {
+                    let vMatch = newUrl.match(/vimeo\.com\/(\d+)/);
+                    if (vMatch && vMatch[1]) {
+                        embedUrl = `https://player.vimeo.com/video/${vMatch[1]}`;
+                    }
+                }
+                if (!embedUrl.startsWith('http')) {
+                    embedUrl = 'https://' + embedUrl;
+                }
+            }
+
+            if (!window.activeVideoWidget && window.__isAddingVideo) {
+                let newHtml = '';
+                if (isDirectVideo) {
+                    newHtml = `<div class="eweb-block eweb-video-widget" style="margin:10px auto; position:relative; width:100%; max-width:100%; display:block;"><video src="${newUrl}" controls style="width:100%; height:auto; display:block;" muted></video></div>`;
+                } else {
+                    newHtml = `<div class="eweb-block eweb-video-widget ratio ratio-16x9" style="margin:10px auto; position:relative; width:100%; max-width:100%; aspect-ratio: 16/9; background:#000; border-radius:8px; overflow:hidden; min-height:250px; display:block;"><iframe src="${embedUrl}" style="position:absolute; top:0; left:0; width:100%; height:100%; border:none;" frameborder="0" allowfullscreen></iframe></div>`;
+                }
+                window.injectWidgetIntoEditor(newHtml);
+                document.getElementById('edit-video-modal').style.display = 'none';
+                window.__isAddingVideo = false;
+                return;
+            }
+
+            if (window.activeVideoWidget) {
+                const videoTag = window.activeVideoWidget.querySelector('video');
+                const iframeTag = window.activeVideoWidget.querySelector('iframe');
+                
+                if (isDirectVideo) {
+                    if (videoTag) {
+                        videoTag.src = newUrl;
+                        videoTag.load();
+                    } else if (iframeTag) {
+                        const newVid = document.createElement('video');
+                        newVid.src = newUrl;
+                        newVid.controls = true;
+                        newVid.muted = true;
+                        newVid.className = iframeTag.className;
+                        newVid.style.cssText = iframeTag.style.cssText;
+                        newVid.style.width = "100%";
+                        window.activeVideoWidget.replaceChild(newVid, iframeTag);
+                        window.activeVideoWidget.className = "eweb-block eweb-video-widget";
+                        window.activeVideoWidget.style.cssText = "margin:10px auto; position:relative; width:100%; max-width:100%; display:block;";
+                    }
+                } else {
+                    if (iframeTag) {
+                        iframeTag.src = embedUrl;
+                    } else if (videoTag) {
+                        const newIframe = document.createElement('iframe');
+                        newIframe.src = embedUrl;
+                        newIframe.className = videoTag.className;
+                        newIframe.style.cssText = videoTag.style.cssText;
+                        newIframe.style.width = "100%";
+                        newIframe.style.height = "100%";
+                        newIframe.style.position = "absolute";
+                        newIframe.style.top = "0";
+                        newIframe.style.left = "0";
+                        newIframe.setAttribute("frameborder", "0");
+                        newIframe.setAttribute("allowfullscreen", "");
+                        
+                        window.activeVideoWidget.style.aspectRatio = "16/9";
+                        window.activeVideoWidget.style.minHeight = "250px";
+                        window.activeVideoWidget.style.background = "#000";
+                        window.activeVideoWidget.style.position = "relative";
+                        window.activeVideoWidget.classList.add('ratio', 'ratio-16x9');
+                        
+                        window.activeVideoWidget.replaceChild(newIframe, videoTag);
+                    }
+                }
+                
+                if(typeof window.captureState === 'function') window.captureState();
+                if(typeof window.enableSaveButton === 'function') window.enableSaveButton();
+            }
+            document.getElementById('edit-video-modal').style.display = 'none';
+        };
+
+        // ==========================================
+        // EDIT CAROUSEL LOGIC
+        // ==========================================
+        
+        window.saveCarouselChanges = function() {
+            // Find all inputs in the list dynamically
+            const rows = document.querySelectorAll('#carousel-images-list input[type="text"], .carousel-url-input');
+            const urls = [];
+            rows.forEach(input => {
+                const val = input.value.trim();
+                if (val) urls.push(val);
+            });
+            
+            if (urls.length === 0) {
+                alert("You must have at least one image in the carousel.");
+                return;
+            }
+
+            let itemsHtml = '';
+            urls.forEach((url, idx) => {
+                itemsHtml += `<img src="${url}" style="flex: 0 0 100%; min-width:100%; height:400px; object-fit:cover; scroll-snap-align:center; display:block; user-select:none; -webkit-user-drag:none;" alt="Slide ${idx+1}">`;
+            });
+
+            // NEW: READ THE CUSTOM INTERVAL INPUT
+            const intervalInput = document.getElementById('carousel-interval-input');
+            const intervalSeconds = intervalInput ? parseFloat(intervalInput.value) : 3; // Fallback to 1
+            const intervalMs = intervalSeconds > 0 ? Math.floor(intervalSeconds * 1000) : 0;
+
+            const carouselId = 'carousel_' + Math.random().toString(36).substr(2, 9);
+            
+            // DYNAMICALLY GENERATE THE SCRIPT IF INTERVAL IS GREATER THAN 0
+            let scriptHtml = '';
+            if (intervalMs > 0) {
+                scriptHtml = `<scr`+`ipt>
+                        (function() {
+                            var s = document.getElementById('${carouselId}');
+                            if(s) {
+                                setInterval(function() {
+                                    var container = s.closest('.eweb-carousel-container');
+                                    if (container && !container.matches(':hover')) {
+                                        var maxScroll = s.scrollWidth - s.clientWidth;
+                                        if (maxScroll > 0) {
+                                            if (s.scrollLeft >= maxScroll - 5) {
+                                                s.scrollLeft = 0;
+                                            } else {
+                                                s.scrollLeft += s.clientWidth;
+                                            }
+                                        }
+                                    }
+                                }, ${intervalMs});
+                            }
+                        })();
+                    </scr`+`ipt>`;
+            }
+
+            // Creates a robust container with CSS scroll buttons
+            const containerHtml = `
+                <div class="eweb-block eweb-carousel-container" contenteditable="false" style="position:relative; width:100%; max-width:100%; margin:15px auto; border-radius:8px; overflow:hidden; box-shadow:0 4px 15px rgba(0,0,0,0.1); user-select:none;">
+                    <button type="button" contenteditable="false" style="pointer-events:auto; position:absolute; left:10px; top:50%; transform:translateY(-50%); z-index:10; background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;" onclick="event.preventDefault(); event.stopPropagation(); const slider = this.parentElement.querySelector('.eweb-carousel-widget'); slider.scrollLeft -= slider.clientWidth; return false;">❮</button>
+                    <div id="${carouselId}" class="eweb-carousel-widget" style="pointer-events:auto; display:flex; flex-wrap:nowrap; overflow-x:auto; scroll-snap-type: x mandatory; scroll-behavior: smooth; scrollbar-width:none; -ms-overflow-style:none; width:100%;">
+                        <style>.eweb-carousel-widget::-webkit-scrollbar { display: none; }</style>
+                        ${itemsHtml}
+                    </div>
+                    <button type="button" contenteditable="false" style="pointer-events:auto; position:absolute; right:10px; top:50%; transform:translateY(-50%); z-index:10; background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:40px; height:40px; cursor:pointer; font-size:18px; display:flex; align-items:center; justify-content:center;" onclick="event.preventDefault(); event.stopPropagation(); const slider = this.parentElement.querySelector('.eweb-carousel-widget'); slider.scrollLeft += slider.clientWidth; return false;">❯</button>
+                    ${scriptHtml}
+                </div>
+            `;
+
+            if (!window.activeCarouselWidget && window.__isAddingCarousel) {
+                window.injectWidgetIntoEditor(containerHtml);
+                document.getElementById('edit-carousel-modal').style.display = 'none';
+                window.__isAddingCarousel = false;
+                return;
+            }
+
+            if (window.activeCarouselWidget) {
+                let container = window.activeCarouselWidget.closest('.eweb-carousel-container');
+                if(container) {
+                    container.outerHTML = containerHtml;
+                } else {
+                    window.activeCarouselWidget.outerHTML = containerHtml;
+                }
+            }
+
+            if(typeof window.captureState === 'function') window.captureState();
+            if(typeof window.enableSaveButton === 'function') window.enableSaveButton();
+            if(typeof window.updateStatus === 'function') window.updateStatus("✅ Carousel updated.");
+            document.getElementById('edit-carousel-modal').style.display = 'none';
+            window.activeCarouselWidget = null;
+        };
+
+        // FIX 2: GLOBAL ANTI-AUTOPLAY FOR MODAL VIDEOS
+        setInterval(function() {
+            document.querySelectorAll('.auth-modal video, .modal video').forEach(v => {
+                if (!v.paused && !v.hasAttribute('data-user-played')) {
+                    v.muted = true;
+                    v.pause();
+                }
+            });
+        }, 1000);
+
+        document.addEventListener('play', function(e) {
+            if (e.target.closest('.modal') || e.target.closest('.auth-modal')) {
+                e.target.setAttribute('data-user-played', 'true');
+            }
+        }, true);
+
+</script>

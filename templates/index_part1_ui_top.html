@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Editable AI Website Builder</title>
+    
+    <script src="https://js.stripe.com/v3/"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    
+    {% include 'includes/custom_styles_part1.html' %}
+    {% include 'includes/custom_styles_part2.html' %}
+
+    <style>
+        /* Exact layout clone of the Templates drawer for the new Elements drawer */
+        #ui-elements-slider {
+            position: fixed;
+            top: 54px; 
+            height: calc(100% - 54px);
+            left: -450px; 
+            width: 400px;
+            background: #fff;
+            z-index: 8000;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.15);
+            transition: left 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        #ui-elements-slider.active { left: 70px; }
+        #ui-elements-slider .slider-split-layout { display: flex; height: 100%; flex-direction: row; }
+        #ui-elements-slider .slider-left-pane { width: 120px; border-right: 1px solid #eee; background: #fdfdfd; overflow-y: auto; }
+        #ui-elements-slider .slider-right-pane { flex-grow: 1; padding: 15px; overflow-y: auto; background: #fff; }
+        @media screen and (max-width: 950px) {
+            #ui-elements-slider { left: -100vw; width: 85vw !important; max-width: 350px !important; top: 0; height: 100%; }
+            #ui-elements-slider.active { left: 0; }
+            #ui-elements-slider .slider-split-layout { flex-direction: column; }
+            #ui-elements-slider .slider-left-pane { width: 100%; border-right: none; border-bottom: 1px solid #eee; display: flex; flex-direction: row; height: auto; }
+        }
+        /* Feature 4 Fix: Hide scrollbars on native CSS Carousel */
+        .eweb-carousel-widget::-webkit-scrollbar { display: none; }
+
+        /* --- NEW: SETTINGS SLIDER LAYOUT STYLING --- */
+        #settings-slider {
+            position: fixed;
+            top: 54px; 
+            height: calc(100% - 54px);
+            left: -800px; 
+            width: 750px;
+            background: #fff;
+            z-index: 8000;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.18);
+            transition: left 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        #settings-slider.active { left: 70px; }
+        #settings-slider .slider-split-layout { display: flex; height: 100%; flex-direction: row; }
+        #settings-slider .slider-left-pane { width: 220px; border-right: 1px solid #eee; background: #fdfdfd; overflow-y: auto; flex-shrink: 0; }
+        #settings-slider .slider-right-pane { flex-grow: 1; padding: 25px; overflow-y: auto; background: #fff; text-align: left; }
+        .settings-tab-btn {
+            padding: 15px 20px; width: 100%; text-align: left; border: none; background: transparent; color: #555;
+            cursor: pointer; font-weight: bold; font-size: 14px; border-left: 4px solid transparent; transition: all 0.2s;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .settings-tab-btn:hover { background: #f0f4f8; }
+        .settings-tab-btn.active { background: #e8f4fd; color: #007bff; border-left: 4px solid #007bff; }
+        @media screen and (max-width: 950px) {
+            #settings-slider { left: -100vw; width: 90vw !important; max-width: 100% !important; top: 0; height: 100%; }
+            #settings-slider.active { left: 0; }
+            #settings-slider .slider-split-layout { flex-direction: column; }
+            #settings-slider .slider-left-pane { width: 100%; border-right: none; border-bottom: 1px solid #eee; display: flex; flex-direction: row; height: auto; }
+            .settings-tab-btn { padding: 12px 15px; font-size: 13px; white-space: nowrap; }
+        }
+
+        /* --- NEW: HELP SLIDER LAYOUT STYLING --- */
+        #help-slider {
+            position: fixed;
+            top: 54px; 
+            height: calc(100% - 54px);
+            left: -650px; 
+            width: 580px;
+            background: #fff;
+            z-index: 8000;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.18);
+            transition: left 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        #help-slider.active { left: 70px; }
+        #help-slider .slider-split-layout { display: flex; height: 100%; flex-direction: row; }
+        #help-slider .slider-left-pane { width: 150px; border-right: 1px solid #eee; background: #fdfdfd; overflow-y: auto; flex-shrink: 0; }
+        #help-slider .slider-right-pane { flex-grow: 1; padding: 20px; overflow-y: auto; background: #fff; }
+        .help-tab-btn {
+            padding: 15px 12px; width: 100%; text-align: left; border: none; background: transparent; color: #555;
+            cursor: pointer; font-weight: 600; font-size: 13px; border-left: 4px solid transparent; transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .help-tab-btn:hover { background: #f0f4f8; }
+        .help-tab-btn.active { background: #e8f4fd; color: #007bff; border-left: 4px solid #007bff; }
+        .star-rating-box { display: inline-flex; flex-direction: row-reverse; gap: 5px; cursor: pointer; font-size: 24px; }
+        .star-rating-box input { display: none; }
+        .star-rating-box label { color: #ccc; transition: color 0.2s; cursor: pointer; }
+        .star-rating-box label:hover, .star-rating-box label:hover ~ label, .star-rating-box input:checked ~ label { color: #f1c40f; }
+        @media screen and (max-width: 950px) {
+            #help-slider { left: -100vw; width: 90vw !important; max-width: 450px !important; top: 0; height: 100%; }
+            #help-slider.active { left: 0; }
+            #help-slider .slider-split-layout { flex-direction: column; }
+            #help-slider .slider-left-pane { width: 100%; border-right: none; border-bottom: 1px solid #eee; display: flex; flex-direction: row; height: auto; }
+            .help-tab-btn { justify-content: center; padding: 12px 8px; font-size: 12px; }
+        }
+
+        /* --- NEW: STORE SLIDER LAYOUT STYLING --- */
+        #store-slider {
+            position: fixed;
+            top: 54px; 
+            height: calc(100% - 54px);
+            left: -650px; 
+            width: 580px;
+            background: #fff;
+            z-index: 8000;
+            box-shadow: 5px 0 25px rgba(0,0,0,0.18);
+            transition: left 0.3s ease;
+            display: flex;
+            flex-direction: column;
+        }
+        #store-slider.active { left: 70px; }
+        #store-slider .slider-split-layout { display: flex; height: 100%; flex-direction: row; }
+        #store-slider .slider-left-pane { width: 150px; border-right: 1px solid #eee; background: #fdfdfd; overflow-y: auto; flex-shrink: 0; }
+        #store-slider .slider-right-pane { flex-grow: 1; padding: 20px; overflow-y: auto; background: #fff; }
+        .store-tab-btn {
+            padding: 15px 12px; width: 100%; text-align: left; border: none; background: transparent; color: #555;
+            cursor: pointer; font-weight: 600; font-size: 13px; border-left: 4px solid transparent; transition: all 0.2s;
+            display: flex; align-items: center; gap: 8px;
+        }
+        .store-tab-btn:hover { background: #f0f4f8; }
+        .store-tab-btn.active { background: #e8f4fd; color: #007bff; border-left: 4px solid #007bff; }
+        @media screen and (max-width: 950px) {
+            #store-slider { left: -100vw; width: 90vw !important; max-width: 450px !important; top: 0; height: 100%; }
+            #store-slider.active { left: 0; }
+            #store-slider .slider-split-layout { flex-direction: column; }
+            #store-slider .slider-left-pane { width: 100%; border-right: none; border-bottom: 1px solid #eee; display: flex; flex-direction: row; height: auto; }
+            .store-tab-btn { justify-content: center; padding: 12px 8px; font-size: 12px; }
+        }
+    </style>
+</head>
+<body class="view-maximized hide-app-while-loading">
+
+    <div id="landscape-prompt" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:#212529; color:white; z-index:9999999; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px;">
+        <div style="font-size:4em; margin-bottom:20px;">📱➡️📳</div>
+        <h2>Please Rotate Your Device</h2>
+        <p style="color:#aaa;">The EWebGen editor workspace is optimized for landscape orientation.</p>
+    </div>
+
+    <div id="mobile-start-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.85); z-index:9999998; flex-direction:column; justify-content:center; align-items:center; text-align:center; padding:20px; color:white; backdrop-filter: blur(5px);">
+        <h2 style="font-size:2.5em; margin-bottom:10px;">Welcome! 🎉</h2>
+        <p style="margin-bottom:30px; color:#ddd; font-size:1.1em;">Tap below to launch your workspace in full screen for the best experience.</p>
+        <button class="auth-btn" style="background:#28a745; font-size:1.2em; padding:15px 30px; border-radius:30px; width:auto; box-shadow:0 4px 15px rgba(40, 167, 69, 0.4);" onclick="enterMobileWorkspace()">Launch Workspace</button>
+    </div>
+
+    <div id="mobile-chat-fab" onclick="openChatMobile()" style="display:none; position:fixed; bottom:20px; right:20px; width:60px; height:60px; border-radius:50%; background:#6610f2; color:white; font-size:28px; justify-content:center; align-items:center; box-shadow:0 4px 15px rgba(0,0,0,0.4); z-index:9999; cursor:pointer;">💬</div>
+
+    <div id="desktop-chat-fab" onclick="restoreDesktopChat()" style="display:none; position:fixed; bottom:20px; left:90px; width:55px; height:55px; border-radius:50%; background:#212529; color:white; font-size:24px; justify-content:center; align-items:center; box-shadow:0 4px 15px rgba(0,0,0,0.4); z-index:9999; cursor:pointer; transition: transform 0.2s; border:2px solid #6610f2;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Open Chat">💬</div>
+
+    {% include 'includes/modals_part1.html' %}
+    {% include 'includes/modals_part2.html' %}
+
+    {% include 'includes/admin_dashboard_part1.html' %}
+    {% include 'includes/admin_dashboard_part2.html' %}
+    {% include 'includes/admin_dashboard_part3.html' %}
+
+    <!-- Added closeSettingsSlider() to the overlay click event -->
+    <div id="slider-overlay" onclick="closeElementsSlider(); closeUiElementsSlider(); closeHelpSlider(); closeStoreSlider(); closeSettingsSlider();"></div>
+
+    <div id="top-left-logo-area" style="display:none; position: fixed; top: 0; left: 0; width: 70px; height: 54px; background-color: #212529; border-bottom: 1px solid #000; border-right: 1px solid #000; align-items: center; justify-content: center; z-index: 7000; box-sizing: border-box; padding: 5px;">
+        <img id="main-app-logo" src="" alt="App Logo" style="max-height: 40px; max-width: 60px; object-fit: contain;">
+    </div>
+
+    <div id="editor-sidebar">
+         
+        <button id="sidebar-add-btn" class="sidebar-btn" title="Use Templates" onclick="toggleElementsSlider(event)">
+            <span class="icon" style="color: #007bff; font-size: 18px;">📄</span>
+            <span class="label" data-i18n="sidebar_templates">Templates</span>
+        </button>
+
+        <button id="sidebar-elements-btn" class="sidebar-btn" title="Elements & Colours" onclick="toggleUiElementsSlider(event)">
+            <span class="icon" style="color: #28a745; font-weight: bold; font-size: 18px;">🧩</span>
+            <span class="label" data-i18n="sidebar_elements">Elements</span>
+        </button>
+
+        <!-- UPDATED: Settings now opens slider instead of modal -->
+        <button id="sidebar-settings-btn" class="sidebar-btn" title="Settings" onclick="toggleSettingsSlider(event)">
+            <span class="icon">⚙️</span>
+            <span class="label" data-i18n="sidebar_settings">Settings</span>
+        </button>
+
+        <button id="sidebar-store-btn" class="sidebar-btn" title="Store" onclick="openStoreSlider()">
+            <span class="icon" style="font-size: 20px;">🛒</span>
+            <span class="label">Store</span>
+        </button>
+
+        <button id="sidebar-help-btn" class="sidebar-btn" title="Help & Support" onclick="toggleHelpSlider(event)">
+            <span class="icon" style="color: #17a2b8; font-size: 18px;">❓</span>
+            <span class="label" data-i18n="sidebar_help">Help</span>
+        </button>
+        
+        <div style="flex-grow: 1;"></div>
+        
+        <div id="sidebar-user-stats" style="display:none; flex-direction:column; align-items:center; gap:8px; margin-bottom:15px; width:100%; padding:0 5px; box-sizing: border-box;">
+            <div class="stat-item" title="Remaining Websites" style="background:#343a40; border:1px solid #444; color:#aaa; padding:5px; border-radius:6px; text-align:center; width:100%; font-size:10px; box-sizing: border-box; cursor:help;">
+                <span style="display:block; font-size:14px; margin-bottom:2px; color:#4dabf5;">🌐</span>
+                <strong id="stat-sites-left" style="color:#fff;">--</strong>
+            </div>
+        </div>
+
+        <button id="sidebar-upgrade-btn" class="sidebar-btn" onclick="openPlanSelectionModal()" style="display:none; color:#f1c40f; margin-bottom:10px;">
+            <span class="icon" style="font-size: 20px;">💎</span>
+            <span class="label" style="font-weight:bold;" data-i18n="sidebar_upgrade">Upgrade</span>
+        </button>
+    </div>

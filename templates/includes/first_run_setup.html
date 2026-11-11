@@ -1,0 +1,389 @@
+<!-- =====================================================================
+     FIRST-RUN ADMIN SETUP  +  WELCOME PROMPT POPUP
+     - Admin (until an AI key exists): enter AI provider key + image provider key,
+       reminder to configure SMTP. At least one API key is required; generation is
+       blocked until an AI key is saved.
+     - Every user after login: centered "What website do you want?" popup.
+       Cancel / Minimize closes it and opens the default floating chat on the left.
+     ===================================================================== -->
+<style>
+    .eweb-fr-overlay { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(3px); z-index: 100050; display: none; align-items: center; justify-content: center; padding: 16px; font-family: 'Inter', 'Segoe UI', sans-serif; }
+    .eweb-fr-overlay.open { display: flex; }
+    .eweb-fr-box { background: #ffffff; color: #1e293b; width: 560px; max-width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; border-radius: 14px; box-shadow: 0 25px 60px rgba(0,0,0,0.35); }
+    .eweb-fr-head { display: flex; align-items: center; justify-content: space-between; padding: 18px 22px; border-bottom: 1px solid #e2e8f0; }
+    .eweb-fr-head h2 { margin: 0; font-size: 1.2em; color: #1e293b; }
+    .eweb-fr-head .eweb-fr-ctrls { display: flex; gap: 6px; }
+    .eweb-fr-head .eweb-fr-ctrls button { background: #f1f5f9; border: none; width: 32px; height: 32px; border-radius: 6px; cursor: pointer; font-size: 15px; color: #475569; }
+    .eweb-fr-head .eweb-fr-ctrls button:hover { background: #e2e8f0; color: #0f172a; }
+    .eweb-fr-body { padding: 20px 22px; }
+    .eweb-fr-body p.eweb-fr-sub { margin: 0 0 14px; color: #64748b; font-size: 0.93em; line-height: 1.5; }
+    .eweb-fr-label { display: block; font-size: 12px; font-weight: 700; color: #334155; margin: 12px 0 5px; text-transform: uppercase; letter-spacing: .03em; }
+    .eweb-fr-row { display: flex; gap: 8px; }
+    .eweb-fr-row select { flex: 0 0 38%; }
+    .eweb-fr-input, .eweb-fr-select, .eweb-fr-textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; background: #fff; color: #0f172a; outline: none; font-family: inherit; }
+    .eweb-fr-input:focus, .eweb-fr-select:focus, .eweb-fr-textarea:focus { border-color: #6610f2; box-shadow: 0 0 0 3px rgba(102,16,242,0.15); }
+    .eweb-fr-textarea { min-height: 120px; resize: vertical; line-height: 1.5; }
+    .eweb-fr-note { background: #fff7ed; border: 1px solid #fed7aa; color: #9a3412; padding: 10px 12px; border-radius: 8px; font-size: 13px; margin-top: 16px; line-height: 1.45; }
+    .eweb-fr-ok { background: #ecfdf5; border-color: #a7f3d0; color: #065f46; }
+    .eweb-fr-details summary { cursor: pointer; font-weight: 600; color: #6610f2; margin-top: 14px; font-size: 14px; }
+    .eweb-fr-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 0 10px; }
+    .eweb-fr-foot { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 22px 20px; flex-wrap: wrap; }
+    .eweb-fr-btn { border: none; padding: 10px 18px; border-radius: 8px; font-weight: 700; cursor: pointer; font-size: 14px; }
+    .eweb-fr-btn-primary { background: #6610f2; color: #fff; box-shadow: 0 6px 16px rgba(102,16,242,0.3); }
+    .eweb-fr-btn-primary:hover { background: #520dc2; }
+    .eweb-fr-btn-ghost { background: #f1f5f9; color: #334155; }
+    .eweb-fr-btn-ghost:hover { background: #e2e8f0; }
+    .eweb-fr-msg { min-height: 18px; color: #dc2626; font-size: 13px; margin-top: 10px; }
+    .eweb-fr-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+    .eweb-fr-chips button { background: #f5f3ff; color: #5b21b6; border: 1px solid #ddd6fe; padding: 5px 10px; border-radius: 999px; font-size: 12px; cursor: pointer; }
+    .eweb-fr-chips button:hover { background: #ede9fe; }
+    body.eweb-welcome-open #left-panel, body.eweb-welcome-open #desktop-chat-fab { display: none !important; }
+    body.dark-mode .eweb-fr-box { background: #1f2937; color: #e5e7eb; }
+    body.dark-mode .eweb-fr-head { border-bottom-color: #374151; }
+    body.dark-mode .eweb-fr-head h2, body.dark-mode .eweb-fr-label { color: #f3f4f6; }
+    body.dark-mode .eweb-fr-input, body.dark-mode .eweb-fr-select, body.dark-mode .eweb-fr-textarea { background: #111827; color: #f9fafb; border-color: #4b5563; }
+    body.dark-mode .eweb-fr-btn-ghost, body.dark-mode .eweb-fr-head .eweb-fr-ctrls button { background: #374151; color: #e5e7eb; }
+    @media (max-width: 520px) { .eweb-fr-row { flex-direction: column; } .eweb-fr-row select { flex: 1 1 auto; } .eweb-fr-grid { grid-template-columns: 1fr; } }
+</style>
+
+<!-- ADMIN FIRST-RUN SETUP -->
+<div id="eweb-admin-setup-modal" class="eweb-fr-overlay" role="dialog" aria-modal="true" aria-labelledby="eweb-admin-setup-title">
+    <div class="eweb-fr-box">
+        <div class="eweb-fr-head">
+            <h2 id="eweb-admin-setup-title">🔑 Set up your AI keys</h2>
+        </div>
+        <div class="eweb-fr-body">
+            <p class="eweb-fr-sub">Welcome, Admin! Add the API keys eWebGen will use. <b>At least one API key is required</b> — an AI provider key is needed to start website generation.</p>
+
+            <label class="eweb-fr-label" for="eweb-setup-ai-key">AI provider API key</label>
+            <div class="eweb-fr-row">
+                <select id="eweb-setup-ai-provider" class="eweb-fr-select">
+                    <option value="gemini">Google Gemini</option>
+                    <option value="openai">OpenAI (ChatGPT)</option>
+                    <option value="claude">Anthropic Claude</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="grok">xAI Grok</option>
+                    <option value="meta">Meta Llama</option>
+                    <option value="perplexity">Perplexity</option>
+                </select>
+                <input id="eweb-setup-ai-key" type="password" class="eweb-fr-input" placeholder="Paste AI API key" autocomplete="off">
+            </div>
+
+            <label class="eweb-fr-label" for="eweb-setup-img-key">Image provider API key</label>
+            <div class="eweb-fr-row">
+                <select id="eweb-setup-img-provider" class="eweb-fr-select">
+                    <option value="pexels">Pexels (free)</option>
+                    <option value="unsplash">Unsplash</option>
+                    <option value="pixabay">Pixabay</option>
+                    <option value="freepik">Freepik</option>
+                    <option value="shutterstock">Shutterstock</option>
+                </select>
+                <input id="eweb-setup-img-key" type="password" class="eweb-fr-input" placeholder="Paste image API key" autocomplete="off">
+            </div>
+
+            <div id="eweb-setup-smtp-note" class="eweb-fr-note">
+                ✉️ <b>Email (SMTP) is not configured.</b> Registration emails, password resets and contact-form mails will not be sent until you add SMTP details below or in <b>Admin CMS → AI &amp; System → Email</b>.
+            </div>
+
+            <details class="eweb-fr-details" id="eweb-setup-smtp-details">
+                <summary>Add SMTP details now (optional)</summary>
+                <div class="eweb-fr-grid">
+                    <div><label class="eweb-fr-label">SMTP host</label><input id="eweb-setup-smtp-host" class="eweb-fr-input" placeholder="smtp.gmail.com"></div>
+                    <div><label class="eweb-fr-label">Port</label><input id="eweb-setup-smtp-port" class="eweb-fr-input" placeholder="587" value="587"></div>
+                    <div><label class="eweb-fr-label">Username</label><input id="eweb-setup-smtp-user" class="eweb-fr-input" placeholder="info@yourdomain.com" autocomplete="off"></div>
+                    <div><label class="eweb-fr-label">Password</label><input id="eweb-setup-smtp-pass" type="password" class="eweb-fr-input" autocomplete="new-password"></div>
+                </div>
+                <label class="eweb-fr-label">From email</label><input id="eweb-setup-smtp-from" class="eweb-fr-input" placeholder="info@yourdomain.com">
+            </details>
+            <div id="eweb-setup-msg" class="eweb-fr-msg"></div>
+        </div>
+        <div class="eweb-fr-foot">
+            <button class="eweb-fr-btn eweb-fr-btn-ghost" onclick="window.ewebSkipAdminSetup()">Skip for now</button>
+            <button class="eweb-fr-btn eweb-fr-btn-primary" id="eweb-setup-save-btn" onclick="window.ewebSaveAdminSetup()">Save &amp; continue</button>
+        </div>
+    </div>
+</div>
+
+<!-- WELCOME PROMPT POPUP -->
+<div id="eweb-welcome-prompt-modal" class="eweb-fr-overlay" role="dialog" aria-modal="true" aria-labelledby="eweb-welcome-title">
+    <div class="eweb-fr-box">
+        <div class="eweb-fr-head">
+            <h2 id="eweb-welcome-title">✨ What website should we build?</h2>
+            <div class="eweb-fr-ctrls">
+                <button title="Minimize to chat" onclick="window.ewebCloseWelcomePrompt(true)">▁</button>
+                <button title="Cancel" onclick="window.ewebCloseWelcomePrompt(false)">✕</button>
+            </div>
+        </div>
+        <div class="eweb-fr-body">
+            <p class="eweb-fr-sub">Describe the business, pages and style you want. You can keep refining it in the chat afterwards.</p>
+            <textarea id="eweb-welcome-prompt-input" class="eweb-fr-textarea" placeholder="e.g. Create new website for a modern dental clinic in Pune with services, doctors, testimonials and an appointment form"></textarea>
+            <div class="eweb-fr-chips">
+                <button type="button" data-p="Create new website for a restaurant with menu, gallery, reservations and contact page">🍽️ Restaurant</button>
+                <button type="button" data-p="Create new website for an IT services company with services, portfolio, team and contact page">💻 IT company</button>
+                <button type="button" data-p="Create new website for a real estate agency with property listings, about us and enquiry form">🏠 Real estate</button>
+                <button type="button" data-p="Create new website for a fitness gym with classes, trainers, membership plans and contact page">🏋️ Gym</button>
+            </div>
+            <div id="eweb-welcome-msg" class="eweb-fr-msg"></div>
+        </div>
+        <div class="eweb-fr-foot">
+            <button class="eweb-fr-btn eweb-fr-btn-ghost" onclick="window.ewebCloseWelcomePrompt(false)">Cancel</button>
+            <button class="eweb-fr-btn eweb-fr-btn-ghost" onclick="window.ewebCloseWelcomePrompt(true)">Minimize</button>
+            <button class="eweb-fr-btn eweb-fr-btn-primary" onclick="window.ewebSubmitWelcomePrompt()">🚀 Generate website</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const ss = {
+        get(k) { try { return sessionStorage.getItem(k); } catch (e) { return null; } },
+        set(k, v) { try { sessionStorage.setItem(k, v); } catch (e) {} },
+        del(k) { try { sessionStorage.removeItem(k); } catch (e) {} }
+    };
+
+    window.ewebSetupStatus = null;
+    let authUser = null;
+
+    function openModal(id) { const m = $(id); if (m) m.classList.add('open'); }
+    function closeModal(id) { const m = $(id); if (m) m.classList.remove('open'); }
+    function isVisible(id) { const el = $(id); return !!el && getComputedStyle(el).display !== 'none'; }
+
+    function workspaceHasSite() {
+        try { return typeof generatedFiles !== 'undefined' && Object.keys(generatedFiles || {}).some(f => f.endsWith('.html')); }
+        catch (e) { return false; }
+    }
+
+    // Show the default floating chat on the left
+    function showFloatingChat() {
+        document.body.classList.remove('eweb-welcome-open');
+        if (typeof window.restoreDesktopChat === 'function') window.restoreDesktopChat();
+        else { const lp = $('left-panel'); if (lp) lp.style.removeProperty('display'); }
+        if (typeof setChatMode === 'function') setChatMode('default');
+        const chat = $('chat-display');
+        if (chat) setTimeout(() => { chat.scrollTop = chat.scrollHeight; }, 50);
+    }
+
+    // FIX: keep the floating chat minimized while the welcome prompt popup is on screen
+    function hideFloatingChat() {
+        document.body.classList.add('eweb-welcome-open');
+        if (typeof window.iconifyChat === 'function') window.iconifyChat();
+        else { const lp = $('left-panel'); if (lp) lp.style.setProperty('display', 'none', 'important'); }
+        const fab = $('desktop-chat-fab'); if (fab) fab.style.display = 'none';
+    }
+
+    function fetchSetupStatus() {
+        return fetch('/api/admin/setup_status').then(r => r.ok ? r.json() : null).then(d => {
+            window.ewebSetupStatus = d; return d;
+        }).catch(() => null);
+    }
+
+    // ---------------- ADMIN SETUP ----------------
+    function openAdminSetup(status) {
+        const st = status || window.ewebSetupStatus || {};
+        if (st.ai_provider && $('eweb-setup-ai-provider')) $('eweb-setup-ai-provider').value = st.ai_provider;
+        const note = $('eweb-setup-smtp-note');
+        if (note) {
+            if (st.has_smtp) {
+                note.classList.add('eweb-fr-ok');
+                note.innerHTML = '✉️ SMTP email is configured.';
+            } else {
+                note.classList.remove('eweb-fr-ok');
+            }
+        }
+        $('eweb-setup-msg').textContent = '';
+        hideFloatingChat();
+        openModal('eweb-admin-setup-modal');
+        setTimeout(() => { const k = $('eweb-setup-ai-key'); if (k) k.focus(); }, 50);
+    }
+    window.ewebOpenAdminSetup = () => fetchSetupStatus().then(openAdminSetup);
+
+    window.ewebSaveAdminSetup = function () {
+        const aiKey = $('eweb-setup-ai-key').value.trim();
+        const imgKey = $('eweb-setup-img-key').value.trim();
+        const msg = $('eweb-setup-msg');
+        msg.style.color = '#dc2626';
+        if (!aiKey && !imgKey) { msg.textContent = 'Please enter at least one API key.'; return; }
+
+        const btn = $('eweb-setup-save-btn');
+        btn.disabled = true; btn.textContent = 'Saving...';
+        fetch('/api/admin/quick_setup', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                ai_provider: $('eweb-setup-ai-provider').value,
+                ai_api_key: aiKey,
+                image_provider: $('eweb-setup-img-provider').value,
+                image_api_key: imgKey,
+                smtp_host: $('eweb-setup-smtp-host').value.trim(),
+                smtp_port: $('eweb-setup-smtp-port').value.trim(),
+                smtp_user: $('eweb-setup-smtp-user').value.trim(),
+                smtp_pass: $('eweb-setup-smtp-pass').value,
+                smtp_from_email: $('eweb-setup-smtp-from').value.trim()
+            })
+        }).then(r => r.json()).then(d => {
+            btn.disabled = false; btn.textContent = 'Save & continue';
+            if (!d.success) { msg.textContent = d.error || 'Could not save settings.'; return; }
+            window.ewebSetupStatus = d;
+            $('eweb-setup-ai-key').value = ''; $('eweb-setup-img-key').value = ''; $('eweb-setup-smtp-pass').value = '';
+            if (!d.has_ai_key) {
+                msg.style.color = '#b45309';
+                msg.textContent = 'Image key saved. Add an AI provider key to start generating websites.';
+                return;
+            }
+            closeModal('eweb-admin-setup-modal');
+            if (!d.has_smtp && typeof updateStatus === 'function') updateStatus('Tip: configure SMTP in Admin CMS so emails work.');
+            maybeShowWelcomePrompt(true);
+        }).catch(err => {
+            btn.disabled = false; btn.textContent = 'Save & continue';
+            msg.textContent = 'Network error: ' + err.message;
+        });
+    };
+
+    window.ewebSkipAdminSetup = function () {
+        ss.set('eweb_admin_setup_skipped', '1');
+        closeModal('eweb-admin-setup-modal');
+        maybeShowWelcomePrompt(true);
+    };
+
+    // ---------------- WELCOME PROMPT ----------------
+    function maybeShowWelcomePrompt(force) {
+        const restoreIfHidden = () => { if (document.body.classList.contains('eweb-welcome-open')) showFloatingChat(); };
+        if (!authUser) return restoreIfHidden();
+        if (!force && ss.get('eweb_welcome_prompt_done')) return restoreIfHidden();
+        if (workspaceHasSite()) { ss.set('eweb_welcome_prompt_done', '1'); return restoreIfHidden(); }
+
+        // Wait while another blocking popup (onboarding / setup / auth) is open
+        let tries = 0;
+        const tryOpen = () => {
+            const blocked = isVisible('onboarding-modal') || isVisible('auth-modal') ||
+                            ($('eweb-admin-setup-modal') && $('eweb-admin-setup-modal').classList.contains('open'));
+            if (blocked && tries++ < 240) { setTimeout(tryOpen, 500); return; }
+            if (blocked) return;
+            ss.set('eweb_welcome_prompt_done', '1');
+            ss.del('eweb_just_logged_in');
+            const chatInput = $('prompt-input');
+            const box = $('eweb-welcome-prompt-input');
+            if (chatInput && chatInput.value.trim() && !box.value.trim()) box.value = chatInput.value;
+            $('eweb-welcome-msg').textContent = '';
+            hideFloatingChat();
+            openModal('eweb-welcome-prompt-modal');
+            setTimeout(() => box.focus(), 50);
+        };
+        tryOpen();
+    }
+    window.ewebOpenWelcomePrompt = () => maybeShowWelcomePrompt(true);
+
+    window.ewebCloseWelcomePrompt = function (keepText) {
+        const box = $('eweb-welcome-prompt-input');
+        const chatInput = $('prompt-input');
+        if (keepText && box && chatInput && box.value.trim()) chatInput.value = box.value.trim();
+        closeModal('eweb-welcome-prompt-modal');
+        showFloatingChat();
+        if (chatInput) setTimeout(() => chatInput.focus(), 100);
+    };
+
+    window.ewebSubmitWelcomePrompt = function () {
+        const box = $('eweb-welcome-prompt-input');
+        const text = (box.value || '').trim();
+        if (!text) { $('eweb-welcome-msg').textContent = 'Please describe the website you want.'; box.focus(); return; }
+
+        if (authUser && authUser.role === 'admin' && window.ewebSetupStatus && !window.ewebSetupStatus.has_ai_key) {
+            closeModal('eweb-welcome-prompt-modal');
+            const chatInput = $('prompt-input'); if (chatInput) chatInput.value = text;
+            openAdminSetup(window.ewebSetupStatus);
+            $('eweb-setup-msg').textContent = 'Add an AI provider key to generate your website.';
+            return;
+        }
+
+        const chatInput = $('prompt-input');
+        if (chatInput) chatInput.value = /create\s+(a\s+)?new\s+website/i.test(text) ? text : ('Create new website: ' + text);
+        box.value = '';
+        window._forceNewWebsite = true;
+        closeModal('eweb-welcome-prompt-modal');
+        showFloatingChat();
+        if (typeof generateWebsite === 'function') generateWebsite();
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('#eweb-welcome-prompt-modal .eweb-fr-chips button').forEach(b => {
+            b.addEventListener('click', () => { const box = $('eweb-welcome-prompt-input'); box.value = b.dataset.p; box.focus(); });
+        });
+        const box = $('eweb-welcome-prompt-input');
+        if (box) box.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); window.ewebSubmitWelcomePrompt(); }
+            if (e.key === 'Escape') window.ewebCloseWelcomePrompt(true);
+        });
+
+        // Block generation for admin until an AI key exists (at least one key is required)
+        if (typeof window.generateWebsite === 'function' && !window.generateWebsite.__ewebGuarded) {
+            const original = window.generateWebsite;
+            const guarded = async function (...args) {
+                if (authUser && authUser.role === 'admin') {
+                    const st = window.ewebSetupStatus || await fetchSetupStatus();
+                    if (st && st.has_ai_key === false) {
+                        openAdminSetup(st);
+                        $('eweb-setup-msg').textContent = 'An AI provider API key is required to generate websites.';
+                        return;
+                    }
+                }
+                return original.apply(this, args);
+            };
+            guarded.__ewebGuarded = true;
+            window.generateWebsite = guarded;
+        }
+    });
+
+    // ---------------- LICENSE LOCK (expired / suspended -> license screen) ----------------
+    (function licenseWatch() {
+        const goLocked = () => { if (!location.pathname.startsWith('/activation')) location.href = '/activation'; };
+        if (window.fetch && !window.fetch.__ewebLicenseHooked) {
+            const orig = window.fetch;
+            const hooked = function (...args) {
+                return orig.apply(this, args).then(resp => {
+                    if (resp && resp.status === 403) {
+                        resp.clone().json().then(d => { if (d && d.needs_activation) goLocked(); }).catch(() => {});
+                    }
+                    return resp;
+                });
+            };
+            Object.keys(orig).forEach(k => { try { hooked[k] = orig[k]; } catch (e) {} });
+            hooked.__ewebLicenseHooked = true;
+            window.fetch = hooked;
+        }
+        const check = () => fetch('/api/license/state', { headers: { 'Accept': 'application/json' } })
+            .then(r => r.ok ? r.json() : null).then(d => { if (d && d.valid === false) goLocked(); }).catch(() => {});
+        setInterval(check, 5 * 60 * 1000);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') check(); });
+    })();
+
+    // Right after login, keep the chat hidden until the welcome popup decides (avoids a flash)
+    if (ss.get('eweb_just_logged_in') === '1' && !ss.get('eweb_welcome_prompt_done')) {
+        document.body.classList.add('eweb-welcome-open');
+        setTimeout(() => {
+            const anyOpen = document.querySelector('.eweb-fr-overlay.open');
+            if (!anyOpen && document.body.classList.contains('eweb-welcome-open')) showFloatingChat();
+        }, 10000);
+    }
+
+    // Called by checkAuth() once the user is authenticated
+    window.ewebAfterAuth = function (user) {
+        authUser = user || null;
+        if (!authUser) return;
+        if (authUser.role === 'admin') {
+            fetchSetupStatus().then(st => {
+                if (st && st.has_ai_key === false && !ss.get('eweb_admin_setup_skipped')) {
+                    const waitForOnboarding = () => {
+                        if (isVisible('onboarding-modal') || isVisible('auth-modal')) { setTimeout(waitForOnboarding, 500); return; }
+                        openAdminSetup(st);
+                    };
+                    waitForOnboarding();
+                } else {
+                    maybeShowWelcomePrompt(false);
+                }
+            });
+        } else {
+            maybeShowWelcomePrompt(false);
+        }
+    };
+})();
+</script>

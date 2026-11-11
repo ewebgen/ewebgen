@@ -1,0 +1,54 @@
+{% if desktop_edition %}
+<!-- =====================================================================
+     DESKTOP EDITION
+     Admin CMS without Monetization, System Updates and Commerce & Orders.
+     (Server routes for these are also refused in main.py: desktop_edition_guard)
+     ===================================================================== -->
+<style>
+    .admin-nav-group:has(#sub-money),
+    .admin-nav-group:has(#sub-commerce),
+    .admin-nav-item[onclick*="'tab-updates'"],
+    #tab-plans, #tab-payments, #tab-api-key-reqs, #tab-updates, #tab-admin-orders, #tab-admin-txns { display: none !important; }
+</style>
+<script>
+(function () {
+    window.EWEBGEN_DESKTOP_EDITION = true;
+    const HIDDEN_TABS = ['tab-plans', 'tab-payments', 'tab-api-key-reqs', 'tab-updates', 'tab-admin-orders', 'tab-admin-txns'];
+
+    function prune() {
+        // Remove the menu groups / items and their tab panels (some are injected later by timers)
+        ['sub-money', 'sub-commerce'].forEach(id => {
+            const sub = document.getElementById(id);
+            const group = sub && sub.closest('.admin-nav-group');
+            if (group) group.remove();
+        });
+        document.querySelectorAll('.admin-nav-item').forEach(el => {
+            const oc = el.getAttribute('onclick') || '';
+            if (HIDDEN_TABS.some(t => oc.includes("'" + t + "'"))) el.remove();
+        });
+        HIDDEN_TABS.forEach(id => { const el = document.getElementById(id); if (el) el.remove(); });
+    }
+
+    // If anything tries to open a removed tab, fall back to the first admin tab
+    function guardSwitch() {
+        const orig = window.switchAdminTab;
+        if (typeof orig !== 'function' || orig.__desktopGuard) return;
+        const guarded = function (tabId, el) {
+            if (HIDDEN_TABS.includes(tabId)) tabId = 'tab-general';
+            return orig.call(this, tabId, el);
+        };
+        guarded.__desktopGuard = true;
+        window.switchAdminTab = guarded;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        prune(); guardSwitch();
+        let queued = false;
+        new MutationObserver(() => {
+            if (queued) return; queued = true;
+            requestAnimationFrame(() => { queued = false; prune(); guardSwitch(); });
+        }).observe(document.body, { childList: true, subtree: true });
+    });
+})();
+</script>
+{% endif %}

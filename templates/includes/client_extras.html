@@ -1,0 +1,338 @@
+<!-- =====================================================================
+     CLIENT EXTRAS
+       1. Store > API Key: "Buy from Store" (https://ewebgen.com/ai-key.html)
+       2. Help > Submit Idea  (sent to the Owner Admin CMS)
+       3. Ad banner under the website-generation progress circle (managed in Owner Admin CMS)
+     ===================================================================== -->
+<style>
+    #eweb-ad-slot { width: min(640px, 92%); margin: 18px auto 0; display: none; position: relative; z-index: 3; pointer-events: auto; }
+    #eweb-ad-slot.show { display: block; animation: ewebAdIn .35s ease; }
+    #eweb-ad-slot .eweb-ad-label { font: 600 10px/1 'Segoe UI', sans-serif; letter-spacing: .08em; text-transform: uppercase; color: #94a3b8; margin-bottom: 6px; text-align: right; }
+    #eweb-ad-slot .eweb-ad-body { border-radius: 10px; overflow: hidden; box-shadow: 0 10px 30px rgba(0,0,0,.25); background: rgba(255,255,255,.04); }
+    #eweb-ad-slot a { text-decoration: none; }
+    @keyframes ewebAdIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+    .eweb-store-buy { background: linear-gradient(135deg, #6610f2, #0d6efd); color: #fff; border-radius: 10px; padding: 16px 18px; margin-bottom: 18px; box-shadow: 0 8px 20px rgba(102,16,242,.25); }
+    .eweb-store-buy h4 { margin: 0 0 4px; font-size: 16px; color: #fff; }
+    .eweb-store-buy p { margin: 0 0 12px; font-size: 13px; opacity: .9; line-height: 1.45; }
+    .eweb-store-buy a { display: inline-block; background: #fff; color: #4c1d95; font-weight: 800; padding: 10px 16px; border-radius: 8px; text-decoration: none; font-size: 14px; }
+    .eweb-store-buy a:hover { background: #f3e8ff; }
+    .eweb-store-alt > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: #555; margin-bottom: 12px; }
+</style>
+
+<script>
+(function () {
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const safeUrl = (u) => /^https?:\/\//i.test(String(u || '').trim()) ? String(u).trim() : '';
+    const STORE_API_KEY_URL = 'https://ewebgen.com/ai-key.html';
+
+    // ------------------------------------------------------------------
+    // 1. STORE > API KEY: Buy from Store
+    // ------------------------------------------------------------------
+    function enhanceApiKeyTab() {
+        const tab = $('store-tab-api-key');
+        if (!tab || tab.dataset.ewebBuy) return;
+        tab.dataset.ewebBuy = '1';
+        const existing = Array.from(tab.childNodes);
+        const banner = document.createElement('div');
+        banner.className = 'eweb-store-buy';
+        banner.innerHTML = '<h4>🔑 Buy AI API Keys from the eWebGen Store</h4>' +
+            '<p>Get ready-to-use API keys for Gemini, OpenAI, Claude, DeepSeek, Grok and more — delivered to your email.</p>' +
+            '<a href="' + STORE_API_KEY_URL + '" target="_blank" rel="noopener noreferrer">🛒 Buy from Store →</a>';
+        const alt = document.createElement('details');
+        alt.className = 'eweb-store-alt';
+        alt.innerHTML = '<summary>Or send a purchase request to your admin</summary>';
+        existing.forEach(n => alt.appendChild(n));
+        tab.appendChild(banner);
+        tab.appendChild(alt);
+    }
+
+    // ------------------------------------------------------------------
+    // 2. HELP > SUBMIT IDEA
+    // ------------------------------------------------------------------
+    window.ewebPrefillIdea = function () {
+        try {
+            if (typeof currentUser !== 'undefined' && currentUser) {
+                if ($('idea-name') && !$('idea-name').value) $('idea-name').value = currentUser.full_name || currentUser.username || '';
+                if ($('idea-email') && !$('idea-email').value) $('idea-email').value = currentUser.email || '';
+            }
+        } catch (e) {}
+    };
+
+    window.ewebSubmitIdea = function () {
+        const msg = $('idea-msg'), btn = $('idea-submit-btn');
+        const title = $('idea-title').value.trim(), description = $('idea-description').value.trim();
+        msg.style.color = '#dc3545';
+        if (!title) { msg.textContent = 'Please add a short title.'; $('idea-title').focus(); return; }
+        if (description.length < 10) { msg.textContent = 'Please describe your idea (at least 10 characters).'; $('idea-description').focus(); return; }
+        btn.disabled = true; btn.textContent = 'Sending...'; msg.textContent = '';
+        fetch('/api/idea/submit', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title, description, category: $('idea-category').value, name: $('idea-name').value.trim(), email: $('idea-email').value.trim() })
+        }).then(r => r.json()).then(d => {
+            btn.disabled = false; btn.textContent = '🚀 Submit Idea';
+            if (d.success) {
+                msg.style.color = '#28a745'; msg.textContent = '✅ ' + (d.message || 'Idea sent!');
+                $('idea-title').value = ''; $('idea-description').value = '';
+            } else { msg.textContent = '❌ ' + (d.error || 'Could not send your idea.'); }
+        }).catch(() => { btn.disabled = false; btn.textContent = '🚀 Submit Idea'; msg.textContent = '❌ Network error.'; });
+    };
+
+    // ------------------------------------------------------------------
+    // 3. AD BANNER UNDER THE PROGRESS CIRCLE
+    // ------------------------------------------------------------------
+    let adsCache = null, adsFetchedAt = 0, lastAdId = null;
+
+    function pickAd(ads) {
+        if (!ads || !ads.length) return null;
+        const pool = ads.length > 1 ? ads.filter(a => a.id !== lastAdId) : ads;
+        const total = pool.reduce((s, a) => s + Math.max(1, a.weight || 1), 0);
+        let r = Math.random() * total;
+        for (const a of pool) { r -= Math.max(1, a.weight || 1); if (r <= 0) return a; }
+        return pool[0];
+    }
+
+    function adHtml(ad) {
+        const link = safeUrl(ad.link_url);
+        if (ad.ad_type === 'image') {
+            const img = `<img src="${esc(safeUrl(ad.image_url))}" alt="${esc(ad.headline || 'Advertisement')}" style="display:block; width:100%; max-height:160px; object-fit:contain;">`;
+            return link ? `<a href="${esc(link)}" target="_blank" rel="noopener sponsored" data-eweb-ad-click>${img}</a>` : img;
+        }
+        if (ad.ad_type === 'text') {
+            const bg = esc(ad.bg_color || '#eef2ff'), fg = esc(ad.text_color || '#1e293b');
+            return `<div style="display:flex; align-items:center; gap:14px; justify-content:space-between; flex-wrap:wrap; background:${bg}; color:${fg}; padding:14px 18px; font-family:'Segoe UI',sans-serif;">
+                <div style="min-width:0;"><div style="font-weight:800; font-size:16px;">${esc(ad.headline)}</div>${ad.body_text ? `<div style="font-size:13px; opacity:.85; margin-top:2px;">${esc(ad.body_text)}</div>` : ''}</div>
+                ${link && ad.button_text ? `<a href="${esc(link)}" target="_blank" rel="noopener sponsored" data-eweb-ad-click style="background:${fg}; color:${bg}; padding:8px 14px; border-radius:8px; font-weight:700; font-size:13px; white-space:nowrap;">${esc(ad.button_text)}</a>` : ''}
+            </div>`;
+        }
+        // HTML/code ads run in a sandbox: no access to the editor, cookies or the user's site
+        return `<iframe title="Advertisement" sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox" srcdoc="${esc(ad.html_code || '')}" style="display:block; width:100%; height:160px; border:0; background:transparent;"></iframe>`;
+    }
+
+    function track(id, event) {
+        try { fetch('/api/ads/track', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, event }) }); } catch (e) {}
+    }
+
+    function getAds() {
+        if (adsCache && Date.now() - adsFetchedAt < 10 * 60 * 1000) return Promise.resolve(adsCache);
+        return fetch('/api/ads/current?placement=generation_progress').then(r => r.ok ? r.json() : { ads: [] })
+            .then(d => { adsCache = (d && d.ads) || []; adsFetchedAt = Date.now(); return adsCache; })
+            .catch(() => []);
+    }
+
+    function ensureSlot() {
+        const overlay = $('progress-overlay');
+        if (!overlay) return null;
+        let slot = $('eweb-ad-slot');
+        if (!slot) {
+            slot = document.createElement('div');
+            slot.id = 'eweb-ad-slot';
+            slot.innerHTML = '<div class="eweb-ad-label">Sponsored</div><div class="eweb-ad-body"></div>';
+            slot.addEventListener('click', (e) => {
+                if (e.target.closest('[data-eweb-ad-click]') && slot.dataset.adId) track(Number(slot.dataset.adId), 'click');
+            });
+            overlay.appendChild(slot);
+        }
+        return slot;
+    }
+
+    function showAd() {
+        const slot = ensureSlot();
+        if (!slot) return;
+        getAds().then(ads => {
+            const ad = pickAd(ads);
+            if (!ad) { slot.classList.remove('show'); return; }
+            const ov = $('progress-overlay');
+            if (!ov || getComputedStyle(ov).display === 'none') return;
+            lastAdId = ad.id;
+            slot.dataset.adId = ad.id;
+            slot.querySelector('.eweb-ad-body').innerHTML = adHtml(ad);
+            slot.classList.add('show');
+            track(ad.id, 'view');
+        });
+    }
+
+    function hideAd() { const slot = $('eweb-ad-slot'); if (slot) slot.classList.remove('show'); }
+
+    function watchOverlay() {
+        const overlay = $('progress-overlay');
+        if (!overlay) return;
+        let wasVisible = false;
+        const check = () => {
+            const visible = overlay.style.display === 'flex' || (overlay.style.display !== 'none' && getComputedStyle(overlay).display !== 'none');
+            if (visible && !wasVisible) showAd();
+            if (!visible && wasVisible) hideAd();
+            wasVisible = visible;
+        };
+        new MutationObserver(check).observe(overlay, { attributes: true, attributeFilter: ['style', 'class'] });
+        check();
+    }
+
+    // ------------------------------------------------------------------
+    // 4. CODE VIEW: click anything in the page -> exact same element is highlighted in the code
+    //    (works for forms, inputs, buttons, labels, images, nested elements...)
+    // ------------------------------------------------------------------
+    let lastClickedEl = null, codeDirty = false, fallbackHighlight = null;
+
+    function bindFrameClicks() {
+        const iframe = $('preview-frame');
+        if (!iframe) return;
+        const attach = () => {
+            const doc = iframe.contentDocument;
+            if (!doc || doc.__ewebCodePick) return;
+            doc.__ewebCodePick = true;
+            // capture phase: runs before editor handlers that may stop propagation
+            // real pointer presses only: a click on a <label> also fires a synthetic click on its input
+            ['mousedown', 'touchstart'].forEach(ev => doc.addEventListener(ev, (e) => {
+                let t = e.target;
+                if (t && t.nodeType === 3) t = t.parentNode;
+                if (t && t.nodeType === 1 && !t.closest('.section-action-bar, .column-action-bar, .widget-action-bar, #custom-context-menu')) lastClickedEl = t;
+            }, { capture: true, passive: true }));
+        };
+        iframe.addEventListener('load', attach);
+        attach();
+        setInterval(attach, 1000);   // pages written with document.open()/write() don't always fire "load"
+    }
+
+    function lineHeightOf(el) {
+        const lh = parseFloat(getComputedStyle(el).lineHeight);
+        return isNaN(lh) ? (parseFloat(getComputedStyle(el).fontSize) || 13) * 1.4 : lh;
+    }
+
+    function exactHighlight(payload) {
+        const container = $('code-pane-container');
+        const editor = $('code-editor-area');
+        const iframe = $('preview-frame');
+        if (!container || !editor || !iframe || container.style.display !== 'flex') return false;
+        const doc = iframe.contentDocument;
+        const clean = window.getCleanFullContent || (typeof getCleanFullContent === 'function' ? getCleanFullContent : null);
+        let el = lastClickedEl;
+        if (!doc || !clean || !el || el.ownerDocument !== doc || !doc.documentElement.contains(el)) return false;
+
+        // The code pane shows getCleanFullContent(doc). Keep it in sync unless the user is typing in it.
+        let source = clean(doc);
+        if (editor.value !== source) {
+            if (codeDirty) return false;
+            editor.value = source;
+        }
+
+        // Elements the cleaner removes (editor helpers) -> walk up to the nearest real element
+        const MARK = 'data-eweb-code-pick';
+        let start = -1, marked = '';
+        for (let guard = 0; el && el.nodeType === 1 && guard < 12; guard++, el = el.parentElement) {
+            el.setAttribute(MARK, '1');
+            try { marked = clean(doc); } finally { el.removeAttribute(MARK); }
+            const p = marked.indexOf(' ' + MARK + '="1"');
+            if (p !== -1) { start = marked.lastIndexOf('<', p); break; }
+        }
+        if (start < 0) return false;
+
+        // Same offset in the unmarked source; select the opening tag
+        let end = source.indexOf('>', start);
+        end = end === -1 ? start + 1 : end + 1;
+
+        editor.focus({ preventScroll: true });
+        editor.setSelectionRange(start, end);
+        const line = (source.substring(0, start).match(/\n/g) || []).length;
+        editor.scrollTop = Math.max(0, line * lineHeightOf(editor) - editor.clientHeight / 2);
+        editor.classList.remove('highlight-flash'); void editor.offsetWidth; editor.classList.add('highlight-flash');
+        return true;
+    }
+
+    function installHighlight() {
+        const mine = function (payload) {
+            try { if (exactHighlight(payload || {})) return; } catch (e) { console.warn('code highlight', e); }
+            if (typeof fallbackHighlight === 'function') return fallbackHighlight(payload);
+        };
+        fallbackHighlight = window.highlightCodeFromPreview;
+        // Later scripts may re-assign highlightCodeFromPreview: keep theirs only as the fallback
+        Object.defineProperty(window, 'highlightCodeFromPreview', {
+            configurable: true, get: () => mine, set: (fn) => { if (fn !== mine) fallbackHighlight = fn; }
+        });
+        const editor = $('code-editor-area');
+        const watchEditor = (ed) => {
+            if (!ed || ed.__ewebDirtyWatch) return;
+            ed.__ewebDirtyWatch = true;
+            ed.addEventListener('input', () => { codeDirty = true; });
+        };
+        watchEditor(editor);
+        // Code pane may be created later; reset "dirty" after Apply / reopen
+        document.addEventListener('click', (e) => {
+            watchEditor($('code-editor-area'));
+            if (e.target.closest && e.target.closest('#code-view-btn, [onclick*="applyCodeChanges"]')) setTimeout(() => { codeDirty = false; }, 50);
+        }, true);
+    }
+
+    // ------------------------------------------------------------------
+    // 5. DUPLICATE DIALOG CLEANUP
+    //    Several dialogs are included 2-3 times by different template files. getElementById()
+    //    always uses the FIRST copy, so later copies are dead but still confuse password
+    //    autofill and duplicate form IDs. Remove a later copy only when it contains nothing
+    //    the first copy is missing.
+    // ------------------------------------------------------------------
+    function removeDeadDuplicateDialogs() {
+        const counts = {};
+        document.querySelectorAll('body [id]').forEach(e => { counts[e.id] = (counts[e.id] || 0) + 1; });
+        const roots = {};
+        document.querySelectorAll('body [id]').forEach(e => {
+            if (counts[e.id] < 2) return;
+            const outer = e.parentElement && e.parentElement.closest('[id]');
+            if (outer && counts[outer.id] > 1) return;           // inside another duplicated block
+            (roots[e.id] = roots[e.id] || []).push(e);
+        });
+        let removed = 0;
+        Object.values(roots).forEach(list => {
+            if (list.length < 2) return;
+            const first = list[0];
+            const firstIds = new Set([...first.querySelectorAll('[id]')].map(x => x.id));
+            list.slice(1).forEach(copy => {
+                if (copy.contains(document.activeElement)) return;
+                if (getComputedStyle(copy).display !== 'none' && copy.offsetParent !== null) return; // visible: leave it
+                const extra = [...copy.querySelectorAll('[id]')].some(x => !firstIds.has(x.id));
+                if (!extra) { copy.remove(); removed++; }
+            });
+        });
+        if (removed) console.info(`[eWebGen] removed ${removed} duplicate dialog copies`);
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        setTimeout(removeDeadDuplicateDialogs, 1500);
+        bindFrameClicks();
+        setTimeout(installHighlight, 0);
+        watchOverlay();
+        let tries = 0;
+        const t = setInterval(() => { enhanceApiKeyTab(); if ($('store-tab-api-key') && $('store-tab-api-key').dataset.ewebBuy || ++tries > 40) clearInterval(t); }, 500);
+        // Warm the ad cache so the banner appears instantly with the progress circle
+        setTimeout(getAds, 4000);
+    });
+})();
+</script>
+
+<script>
+/* Payment result after returning from PayPal / other gateways (?payment=success|failed&reason=...) */
+(function () {
+    const q = new URLSearchParams(location.search);
+    const result = q.get('payment');
+    if (!result) return;
+    const ok = result === 'success';
+    const box = document.createElement('div');
+    box.setAttribute('role', 'status');
+    box.style.cssText = 'position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:100000;max-width:92%;' +
+        'padding:14px 44px 14px 18px;border-radius:10px;font:600 14.5px/1.45 Segoe UI,Arial,sans-serif;color:#fff;' +
+        'box-shadow:0 10px 30px rgba(0,0,0,.25);background:' + (ok ? '#16a34a' : '#dc2626');
+    box.textContent = ok ? '✅ Payment successful - your purchase is now active. Thank you!'
+                         : '❌ Payment not completed: ' + (q.get('reason') || 'Payment failed');
+    const x = document.createElement('button');
+    x.textContent = '✕';
+    x.setAttribute('aria-label', 'Close');
+    x.style.cssText = 'position:absolute;right:10px;top:50%;transform:translateY(-50%);background:none;border:none;color:#fff;font-size:16px;cursor:pointer;';
+    x.onclick = () => box.remove();
+    box.appendChild(x);
+    document.addEventListener('DOMContentLoaded', () => document.body.appendChild(box));
+    if (document.readyState !== 'loading') document.body.appendChild(box);
+    setTimeout(() => box.remove(), 12000);
+    q.delete('payment'); q.delete('reason');
+    history.replaceState(null, '', location.pathname + (q.toString() ? '?' + q : '') + location.hash);
+})();
+</script>

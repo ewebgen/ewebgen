@@ -1,0 +1,1103 @@
+<script>
+    // --- ADMIN DASHBOARD ---
+
+    // GOAL 2 FIX: Securely anchor extra fields above the Action Buttons to prevent Flexbox layout breakage.
+    function injectUserTypeExtraFields() {
+        const extraFieldsStyle = "margin-top:20px; margin-bottom:20px; padding:15px; background:#e8f4fd; border:1px solid #b8daff; border-radius:5px; display:block; width:100%; box-sizing:border-box; clear:both;";
+        const labelStyle = "font-weight:bold; cursor:pointer; display:flex; align-items:center; margin-bottom:5px; font-size:14px;";
+        const pStyle = "font-size:12px; color:#555; margin:0 0 15px 26px; line-height:1.4;";
+
+        const newHtml = `
+            <div id="new-ut-extra-fields-wrapper" style="${extraFieldsStyle}">
+                <label style="${labelStyle} color:#0056b3;">
+                    <input type="checkbox" id="new-ut-own-keys" style="margin-right:8px; width:18px; height:18px; margin-top:0;"> 
+                    Unlock "Own AI API Keys" feature
+                </label>
+                <p style="${pStyle}">Allows users on this tier to enter their own OpenAI/Gemini/Claude keys in their settings to bypass system limits.</p>
+
+                <label style="${labelStyle} color:#28a745;">
+                    <input type="checkbox" id="new-ut-allow-download" style="margin-right:8px; width:18px; height:18px; margin-top:0;"> 
+                    Allow ZIP Download
+                </label>
+                <p style="${pStyle.replace('15px', '0')}">Allows users to download their website source code as a ZIP file.</p>
+            </div>
+        `;
+
+        const editHtml = newHtml.replace(/new-ut-/g, 'admin-ut-edit-').replace('new-ut-extra-fields-wrapper', 'edit-ut-extra-fields-wrapper');
+
+        // 1. Inject into "New User Type" Form (Uses designated container)
+        const newContainer = document.getElementById('new-ut-extra-fields-container');
+        if (newContainer && !document.getElementById('new-ut-own-keys')) {
+            newContainer.innerHTML = newHtml;
+        }
+
+        // 2. Inject into "Edit User Type" Form
+        const editUtStorage = document.getElementById('admin-ut-edit-storage');
+        if (editUtStorage && !document.getElementById('admin-ut-edit-own-keys')) {
+            const modalBox = editUtStorage.closest('.auth-box') || document.getElementById('admin-usertype-edit-modal');
+            if (modalBox) {
+                // Find the Save button to safely inject directly above it, bypassing any flex rows entirely.
+                const saveBtn = modalBox.querySelector('button[onclick*="saveUserTypeChanges"]');
+                if (saveBtn && saveBtn.parentElement) {
+                    saveBtn.parentElement.insertAdjacentHTML('beforebegin', editHtml);
+                } else {
+                    // Fallback
+                    editUtStorage.parentElement.insertAdjacentHTML('afterend', editHtml);
+                }
+            }
+        }
+    }
+    
+    function openAdminDashboard() {
+        document.getElementById('admin-dashboard').style.display = 'block';
+        
+        const sidebar = document.getElementById('editor-sidebar');
+        if(sidebar) sidebar.style.display = 'none';
+        
+        const chatbox = document.getElementById('left-panel');
+        if(chatbox) chatbox.style.display = 'none';
+        
+        if(typeof closeElementsSlider === 'function') closeElementsSlider();
+        
+        if (typeof setChatMode === 'function') setChatMode('minimized');
+
+        injectUserTypeExtraFields(); // Ensure new fields are present
+
+        loadAdminUsers();
+        loadAdminSettings();
+        loadAdminUserTypes(); 
+        
+        if(msgRefreshInterval) clearInterval(msgRefreshInterval);
+        msgRefreshInterval = setInterval(loadAdminMessages, 10000); 
+    }
+    
+    function closeAdminDashboard() { 
+        document.getElementById('admin-dashboard').style.display = 'none';
+        
+        const sidebar = document.getElementById('editor-sidebar');
+        if(sidebar) sidebar.style.display = 'flex';
+        
+        const chatbox = document.getElementById('left-panel');
+        if(chatbox) chatbox.style.display = '';
+
+        if(msgRefreshInterval) clearInterval(msgRefreshInterval); 
+    }
+
+    // --- ADMIN PLANS MANAGEMENT ---
+
+    function loadAdminPlans() {
+        fetch('/api/admin/plans')
+            .then(r => r.json())
+            .then(data => {
+                const tbody = document.getElementById('plans-table-body');
+                if(!tbody) return;
+                tbody.innerHTML = '';
+                
+                const baseUrl = window.location.origin;
+
+                data.forEach(p => {
+                    const linkUrl = `${baseUrl}/?plan_id=${p.id}`;
+                    
+                    tbody.innerHTML += `
+                        <tr>
+                            <td>${p.name}</td>
+                            <td>${p.price} ${p.currency}</td>
+                            <td>${p.billing_cycle ? p.billing_cycle.charAt(0).toUpperCase() + p.billing_cycle.slice(1) : 'Monthly'}</td>
+                            <td>${p.user_type_name}</td>
+                            <td><small>${p.features ? p.features.substring(0, 30) + '...' : ''}</small></td>
+                            <td>
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <input type="text" value="${linkUrl}" readonly style="width:120px; font-size:0.8em; padding:2px; border:1px solid #ddd;">
+                                    <button onclick="navigator.clipboard.writeText('${linkUrl}'); alert('Link Copied!');" style="cursor:pointer; border:1px solid #ccc; background:#fff; padding:2px 5px; border-radius:3px;" title="Copy Link">📋</button>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="badge ${p.is_active ? 'badge-success' : 'badge-secondary'}">
+                                    ${p.is_active ? 'Active' : 'Inactive'}
+                                </span>
+                            </td>
+                            <td>
+                                <button onclick='openEditPlanModal(${JSON.stringify(p)})' class="btn-sm btn-edit">Edit</button>
+                                <button onclick='deleteSubscriptionPlan(${p.id})' class="btn-sm btn-delete">Delete</button>
+                            </td>
+                        </tr>
+                    `;
+                });
+            });
+    }
+    
+    function loadUserTypesForDropdown() {
+        fetch('/api/admin/user_types')
+            .then(r => r.json())
+            .then(data => {
+                const selects = [
+                    document.getElementById('new-plan-usertype'),
+                    document.getElementById('edit-plan-usertype')
+                ];
+                selects.forEach(sel => {
+                    if(!sel) return;
+                    sel.innerHTML = '<option value="" disabled selected>Select User Type...</option>';
+                    data.forEach(ut => {
+                        sel.innerHTML += `<option value="${ut.id}">${ut.name} (Limit: ${ut.project_limit == -1 ? 'Unlimited' : ut.project_limit})</option>`;
+                    });
+                });
+            });
+    }
+
+    function createSubscriptionPlan() {
+        const name = document.getElementById('new-plan-name').value;
+        const price = document.getElementById('new-plan-price').value;
+        const currency = document.getElementById('new-plan-currency').value;
+        const billingCycle = document.getElementById('new-plan-billing-cycle').value; 
+        const userTypeId = document.getElementById('new-plan-usertype').value;
+        const features = document.getElementById('new-plan-features').value;
+
+        if (!name || !price || !userTypeId) return alert("Please fill all required fields.");
+
+        fetch('/api/admin/create_plan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                name: name,
+                price: price,
+                currency: currency,
+                billing_cycle: billingCycle, 
+                user_type_id: userTypeId,
+                features: features
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("Plan Created!");
+                loadAdminPlans();
+                document.getElementById('new-plan-name').value = '';
+                document.getElementById('new-plan-price').value = '';
+                document.getElementById('new-plan-features').value = '';
+            } else {
+                alert("Error: " + data.error);
+            }
+        });
+    }
+
+    function openEditPlanModal(plan) {
+        hideAllForms(); 
+        document.getElementById('auth-modal').style.display = 'none'; 
+        document.getElementById('admin-plan-edit-modal').style.display = 'flex'; 
+        
+        document.getElementById('edit-plan-id').value = plan.id;
+        document.getElementById('edit-plan-name').value = plan.name;
+        document.getElementById('edit-plan-price').value = plan.price;
+        document.getElementById('edit-plan-currency').value = plan.currency;
+        
+        const cycleSelect = document.getElementById('edit-plan-billing-cycle');
+        if (cycleSelect) cycleSelect.value = plan.billing_cycle || 'monthly';
+        
+        document.getElementById('edit-plan-usertype').value = plan.user_type_id;
+        document.getElementById('edit-plan-features').value = plan.features || '';
+    }
+
+    function updateSubscriptionPlan() {
+        const id = document.getElementById('edit-plan-id').value;
+        const name = document.getElementById('edit-plan-name').value;
+        const price = document.getElementById('edit-plan-price').value;
+        const currency = document.getElementById('edit-plan-currency').value;
+        
+        const cycleSelect = document.getElementById('edit-plan-billing-cycle');
+        const billingCycle = cycleSelect ? cycleSelect.value : 'monthly';
+        
+        const userTypeId = document.getElementById('edit-plan-usertype').value;
+        const features = document.getElementById('edit-plan-features').value;
+
+        fetch('/api/admin/update_plan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                id: id,
+                name: name,
+                price: price,
+                currency: currency,
+                billing_cycle: billingCycle, 
+                user_type_id: userTypeId,
+                features: features,
+                is_active: true
+            })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                safeCloseModal('admin-plan-edit-modal');
+                loadAdminPlans();
+            } else {
+                alert("Error: " + data.error);
+            }
+        });
+    }
+
+    function deleteSubscriptionPlan(id) {
+        if(!confirm("Are you sure you want to delete this plan?")) return;
+        fetch('/api/admin/delete_plan', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: id })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                loadAdminPlans();
+            } else {
+                alert("Error: " + data.error);
+            }
+        });
+    }
+
+    // --- OTHER UI FUNCTIONS ---
+
+    // FIX: Single handler for the Pages dropdown (previously two handlers raced, so
+    // "Delete Current Page" tried to load a page called "__DELETE_PAGE__" and never deleted).
+    function handlePageDropdown(value) {
+        const dd = document.getElementById('page-dropdown');
+        const current = window.currentPreviewFile || 'index.html';
+        if (value === '__NEW_PAGE__') {
+            if (dd) dd.value = current;
+            showAddPageModal();
+        } else if (value === '__DELETE_PAGE__') {
+            if (dd) dd.value = current;
+            deleteCurrentPage();
+        } else if (value) {
+            loadPreview(value);
+        }
+    }
+
+    function deleteCurrentPage() {
+        const page = window.currentPreviewFile;
+        const files = (typeof generatedFiles !== 'undefined' && generatedFiles) ? generatedFiles : {};
+        const pages = Object.keys(files).filter(f => f.endsWith('.html') || f.endsWith('.php'));
+        if (!page || pages.length <= 1) { alert("You can't delete the only page in the website."); return; }
+        if (!confirm(`Are you sure you want to permanently delete '${page}'?`)) return;
+
+        fetch('/delete_page', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ page_name: page })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if (!d.success) { alert("Error: " + (d.error || 'Could not delete page.')); updatePageDropdown(page); return; }
+            delete generatedFiles[page];
+            const remaining = Object.keys(generatedFiles).filter(f => f.endsWith('.html') || f.endsWith('.php')).sort();
+            const next = remaining.includes('index.html') ? 'index.html' : remaining[0];
+            if (typeof updateStatus === 'function') updateStatus(`🗑️ Page '${page}' deleted.`);
+            if (next) loadPreview(next); else updatePageDropdown('');
+            const saveBtn = document.getElementById('save-btn');
+            if (saveBtn) saveBtn.disabled = false;
+        })
+        .catch(err => { alert("Error deleting page: " + err.message); updatePageDropdown(page); });
+    }
+    window.deleteCurrentPage = deleteCurrentPage;
+
+    function showAddPageModal() {
+        hideAllForms(); 
+        // FIX: Don't open the full-screen login backdrop (it made this dialog look dark/black).
+        const authModal = document.getElementById('auth-modal');
+        if (authModal) authModal.style.display = 'none';
+        const addModal = document.getElementById('add-page-modal');
+        addModal.style.display = 'flex';
+
+        const baseSelect = document.getElementById('new-page-base');
+        if(baseSelect) {
+            baseSelect.innerHTML = '';
+            const files = Object.keys(generatedFiles).filter(f => f.endsWith('.html'));
+            files.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f;
+                opt.textContent = f;
+                if(f === currentPreviewFile) opt.selected = true;
+                baseSelect.appendChild(opt);
+            });
+        }
+        document.getElementById('new-page-name').value = '';
+        document.getElementById('new-page-file-preview').textContent = 'URL: ...';
+        document.getElementById('add-page-msg').textContent = '';
+    }
+
+    function closeAddPageModal() { 
+        safeCloseModal('add-page-modal'); 
+        const dd = document.getElementById('page-dropdown');
+        if (dd && window.currentPreviewFile) dd.value = window.currentPreviewFile;
+    }
+    
+    function updateNewPagePreview() {
+        const rawName = document.getElementById('new-page-name').value;
+        if(!rawName) { document.getElementById('new-page-file-preview').textContent = 'URL: ...'; return; }
+        let clean = rawName.trim().toLowerCase().replace(/[^a-z0-9\s-]/g, '').replace(/\s+/g, '-');
+        document.getElementById('new-page-file-preview').textContent = `URL: ${clean}.html`;
+    }
+
+    function createNewPage() {
+        const basePage = document.getElementById('new-page-base').value;
+        const newName = document.getElementById('new-page-name').value;
+        if(!basePage || !newName) { document.getElementById('add-page-msg').textContent = "Please fill all fields."; return; }
+
+        fetch('/create_page', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ base_page: basePage, new_page_name: newName })
+        }).then(r => r.json()).then(data => {
+            if(data.success) {
+                generatedFiles[data.new_filename] = generatedFiles[basePage];
+                alert(data.message);
+                closeAddPageModal();
+                updatePageDropdown(data.new_filename);
+                loadPreview(data.new_filename);
+            } else { document.getElementById('add-page-msg').textContent = data.error; }
+        });
+    }
+
+    function toggleAdminMenu(id, btn) {
+        const el = document.getElementById(id);
+        const arrow = document.getElementById('arrow-' + id);
+        if (el.style.display === 'none') {
+            el.style.display = 'block';
+            arrow.textContent = '▲';
+        } else {
+            el.style.display = 'none';
+            arrow.textContent = '▼';
+        }
+    }
+
+    // Wrap the override inside DOMContentLoaded to ensure it fires correctly without conflicts
+    document.addEventListener("DOMContentLoaded", () => {
+        
+        // Define the global tab switching function robustly[cite: 32]
+        window.switchAdminTab = function(tabId, el) {
+            
+            // 1. Completely hide all tab contents safely[cite: 32]
+            const allTabs = document.querySelectorAll('.admin-tab-content');
+            allTabs.forEach(c => {
+                c.style.display = 'none';
+                c.classList.remove('active');
+            });
+            
+            // 2. Safely show only the target tab[cite: 32]
+            const target = document.getElementById(tabId);
+            if (target) {
+                target.style.display = 'block';
+                target.classList.add('active');
+            } else {
+                console.error("Admin Tab not found:", tabId);
+            }
+            
+            // 3. Update the left sidebar navigation active state[cite: 32]
+            document.querySelectorAll('.admin-nav-item').forEach(i => i.classList.remove('active'));
+            if (el) el.classList.add('active');
+
+            // 4. Trigger Data Loading Logic specifically for the clicked tab[cite: 32]
+            if (tabId === 'tab-updates' && typeof initClientUpdatesTab === 'function') initClientUpdatesTab();
+            if (tabId === 'tab-logs' && typeof loadGlobalGenerationLogs === 'function') loadGlobalGenerationLogs();
+            if (tabId === 'tab-users' && typeof loadAdminUsers === 'function') loadAdminUsers();
+            if (tabId === 'tab-usertypes' && typeof loadAdminUserTypes === 'function') loadAdminUserTypes();
+            if (tabId === 'tab-plans' && typeof loadAdminPlans === 'function') { loadAdminPlans(); if (typeof loadUserTypesForDropdown === 'function') loadUserTypesForDropdown(); }
+            if (tabId === 'tab-payments' && typeof loadPaymentGateways === 'function') loadPaymentGateways();
+            if (tabId === 'tab-notifs' && typeof loadAdminMessages === 'function') loadAdminMessages();
+            
+            // --- ADDED MISSING SUPPORT AND FEEDBACK TAB HOOKS ---
+            if (tabId === 'tab-help-kb' && typeof loadAdminHelpArticles === 'function') loadAdminHelpArticles();
+            if (tabId === 'tab-hire-reqs' && typeof loadAdminHireRequests === 'function') loadAdminHireRequests();
+            if (tabId === 'tab-user-feedback' && typeof loadAdminFeedbacks === 'function') loadAdminFeedbacks();
+            
+            const settingsTabs = ['tab-ai', 'tab-smtp', 'tab-images', 'tab-general', 'tab-brand', 'tab-legal', 'tab-oauth'];
+            if (settingsTabs.includes(tabId) && typeof window.loadAdminSettings === 'function') {
+                window.loadAdminSettings();
+            }
+        };
+        
+        // Safety: If Admin CMS is opened, make sure the default tab is fully loaded properly[cite: 32]
+        const defaultTabElement = document.querySelector('.admin-nav-item.active');
+        if (defaultTabElement) {
+            window.switchAdminTab('tab-general', defaultTabElement);
+        }
+    });
+
+    // =========================================================
+    // --- SUPPORT & FEEDBACK MANAGEMENT ---
+    // =========================================================
+    
+    // Safety helper to escape HTML and prevent XSS rendering bugs
+    function _escHtml(unsafe) {
+        return (unsafe || "").toString()
+             .replace(/&/g, "&amp;")
+             .replace(/</g, "&lt;")
+             .replace(/>/g, "&gt;")
+             .replace(/"/g, "&quot;")
+             .replace(/'/g, "&#039;");
+    }
+
+    // 1. Knowledge Base (Q&A)
+    window.loadAdminHelpArticles = function() {
+        const tbody = document.getElementById('admin-help-kb-tbody');
+        if(!tbody) return;
+        fetch('/api/admin/help/articles').then(r=>r.json()).then(data => {
+            if(data.error) {
+                tbody.innerHTML = `<tr><td colspan="5" style="text-align:center; color:red;">${_escHtml(data.error)}</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">No Q&A articles found.</td></tr>';
+                return;
+            }
+            data.forEach(a => {
+                const status = a.is_active ? '<span style="color:green;font-weight:bold;">Active</span>' : '<span style="color:red;font-weight:bold;">Inactive</span>';
+                // Escape arguments to safely pass into the onclick string
+                const q = _escHtml(a.question).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                const ans = _escHtml(a.answer).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"').replace(/\n/g, '\\n');
+                const c = _escHtml(a.category).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${a.id}</td>
+                        <td>${_escHtml(a.category)}</td>
+                        <td>${_escHtml(a.question)}</td>
+                        <td>${status}</td>
+                        <td>
+                            <button onclick="openEditHelpArticleModal(${a.id}, '${q}', '${ans}', '${c}', ${a.is_active})" style="background:#f39c12; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer;">Edit</button>
+                            <button onclick="deleteAdminHelpArticle(${a.id})" style="background:#e74c3c; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; margin-left:5px;">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }).catch(e => {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:red;">Error loading articles.</td></tr>';
+        });
+    };
+
+    window.openEditHelpArticleModal = function(id, question='', answer='', category='General', isActive=true) {
+        document.getElementById('admin-help-id').value = id || '';
+        document.getElementById('admin-help-question').value = question;
+        document.getElementById('admin-help-answer').value = answer;
+        document.getElementById('admin-help-category').value = category;
+        document.getElementById('admin-help-active').checked = isActive;
+        document.getElementById('admin-help-modal-title').textContent = id ? "Edit Q&A" : "Add Knowledge Base Q&A";
+        document.getElementById('admin-help-article-modal').style.display = 'flex';
+    };
+
+    window.saveAdminHelpArticle = function() {
+        const id = document.getElementById('admin-help-id').value;
+        const question = document.getElementById('admin-help-question').value.trim();
+        const answer = document.getElementById('admin-help-answer').value.trim();
+        const category = document.getElementById('admin-help-category').value.trim();
+        const isActive = document.getElementById('admin-help-active').checked;
+
+        if(!question || !answer) {
+            alert("Question and Answer are required.");
+            return;
+        }
+
+        fetch('/api/admin/help/articles', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id, question: question, answer: answer, category: category, is_active: isActive})
+        }).then(r=>r.json()).then(d => {
+            if(d.success) {
+                document.getElementById('admin-help-article-modal').style.display = 'none';
+                if(typeof loadAdminHelpArticles === 'function') loadAdminHelpArticles();
+            } else {
+                alert("Error: " + d.error);
+            }
+        }).catch(err => alert("Network error saving article."));
+    };
+
+    window.deleteAdminHelpArticle = function(id) {
+        if(!confirm("Are you sure you want to delete this Q&A?")) return;
+        fetch(`/api/admin/help/articles/${id}`, { method: 'DELETE' })
+        .then(r=>r.json()).then(d => {
+            if(d.success) {
+                if(typeof loadAdminHelpArticles === 'function') loadAdminHelpArticles();
+            } else {
+                alert("Error: " + d.error);
+            }
+        }).catch(err => alert("Network error deleting article."));
+    };
+
+    window.exportHelpArticlesJson = function() {
+        window.open('/api/admin/help/export', '_blank');
+    };
+
+    window.importHelpArticlesJson = function(file) {
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = JSON.parse(e.target.result);
+                fetch('/api/admin/help/import', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({articles: data.articles || data})
+                }).then(r=>r.json()).then(d => {
+                    if(d.success) {
+                        alert(d.message);
+                        if(typeof loadAdminHelpArticles === 'function') loadAdminHelpArticles();
+                    } else {
+                        alert("Error: " + d.error);
+                    }
+                }).catch(err => alert("Network error importing articles."));
+            } catch(err) {
+                alert("Invalid JSON file format.");
+            }
+        };
+        reader.readAsText(file);
+        document.getElementById('help-kb-import-input').value = '';
+    };
+
+    // 2. Hire Requests
+    window.loadAdminHireRequests = function() {
+        const tbody = document.getElementById('admin-hire-reqs-tbody');
+        if(!tbody) return;
+        fetch('/api/admin/hire_requests').then(r=>r.json()).then(data => {
+            if(data.error) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">${_escHtml(data.error)}</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">No hire requests found.</td></tr>';
+                return;
+            }
+            data.forEach(r => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-size:0.9em; color:#666;">${r.created_at}</td>
+                        <td><b>${_escHtml(r.name)}</b><br><a href="mailto:${_escHtml(r.email)}" style="color:#007bff; text-decoration:none;">${_escHtml(r.email)}</a><br><span style="font-size:0.85em; color:#555;">${_escHtml(r.phone)}</span></td>
+                        <td>${_escHtml(r.country)}</td>
+                        <td><div style="max-height:80px; overflow-y:auto; font-size:13px; color:#333;">${_escHtml(r.description)}</div></td>
+                        <td>
+                            <select onchange="adminUpdateHireStatus(${r.id}, this.value)" class="auth-input" style="padding:4px; margin:0; font-size:13px; width:auto;">
+                                <option value="Pending" ${r.status === 'Pending' ? 'selected' : ''}>Pending</option>
+                                <option value="Contacted" ${r.status === 'Contacted' ? 'selected' : ''}>Contacted</option>
+                                <option value="Completed" ${r.status === 'Completed' ? 'selected' : ''}>Completed</option>
+                            </select>
+                        </td>
+                        <td><a href="mailto:${_escHtml(r.email)}" style="background:#17a2b8; color:white; padding:5px 10px; border-radius:3px; text-decoration:none; font-size:13px; font-weight:bold;">Email</a></td>
+                    </tr>
+                `;
+            });
+        }).catch(e => {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Error loading requests.</td></tr>';
+        });
+    };
+
+    window.adminUpdateHireStatus = function(id, status) {
+        fetch('/api/admin/hire_requests/status', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id, status: status})
+        }).then(r=>r.json()).then(d => {
+            if(!d.success) alert("Error updating status: " + d.error);
+        }).catch(err => alert("Network error updating status."));
+    };
+
+    // 3. User Feedback & Ratings
+    window.loadAdminFeedbacks = function() {
+        const tbody = document.getElementById('admin-feedbacks-tbody');
+        if(!tbody) return;
+        fetch('/api/admin/feedback').then(r=>r.json()).then(data => {
+            if(data.error) {
+                tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:red;">${_escHtml(data.error)}</td></tr>`;
+                return;
+            }
+            tbody.innerHTML = '';
+            if(data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:#888;">No feedback found.</td></tr>';
+                return;
+            }
+            data.forEach(f => {
+                let stars = '⭐'.repeat(f.rating) + '☆'.repeat(5 - f.rating);
+                let replyStatus = f.is_replied ? `<span style="color:#28a745; font-weight:bold;">Replied (${f.replied_at})</span><br><div style="font-size:0.85em; color:#555; max-height:60px; overflow-y:auto; border-left:2px solid #28a745; padding-left:5px; margin-top:4px;">${_escHtml(f.admin_reply)}</div>` : '<span style="color:#e67e22; font-weight:bold;">Pending</span>';
+                
+                let replyAction = f.is_replied ? '<span style="color:#aaa;">-</span>' : `<button onclick="adminReplyFeedback(${f.id})" style="background:#2ecc71; color:white; border:none; padding:5px 10px; border-radius:3px; cursor:pointer; font-size:13px; font-weight:bold;">Reply in App</button>`;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td style="font-size:0.9em; color:#666;">${f.created_at}</td>
+                        <td><b>${_escHtml(f.username)}</b><br><a href="mailto:${_escHtml(f.email)}" style="color:#007bff; text-decoration:none; font-size:0.9em;">${_escHtml(f.email)}</a></td>
+                        <td style="color:#f1c40f; font-size:16px;">${stars}</td>
+                        <td><div style="max-height:80px; overflow-y:auto; font-size:13px; color:#333;">${_escHtml(f.message)}</div></td>
+                        <td>${replyStatus}</td>
+                        <td>${replyAction}</td>
+                    </tr>
+                `;
+            });
+        }).catch(e => {
+            tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; color:red;">Error loading feedback.</td></tr>';
+        });
+    };
+
+    window.adminReplyFeedback = function(id) {
+        const reply = prompt("Enter your reply (This will be sent directly to the user's in-app Messages inbox):");
+        if(!reply || !reply.trim()) return;
+        
+        fetch('/api/admin/feedback/reply', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({id: id, reply: reply.trim()})
+        }).then(r=>r.json()).then(d => {
+            if(d.success) {
+                alert("Reply sent successfully!");
+                if(typeof loadAdminFeedbacks === 'function') loadAdminFeedbacks();
+            } else {
+                alert("Error: " + d.error);
+            }
+        }).catch(err => alert("Network error sending reply."));
+    };
+
+    function loadAdminUsers() {
+        fetch('/api/admin/users').then(r => r.json()).then(users => {
+            // Server may answer with an error object (expired session, locked license...)
+            if (!Array.isArray(users)) users = Array.isArray(users && users.users) ? users.users : [];
+            adminUsersList = users;
+            const tbody = document.getElementById('user-table-body');
+            tbody.innerHTML = '';
+            
+            const logSelect = document.getElementById('admin-log-user-select');
+            if (logSelect) {
+                logSelect.innerHTML = '<option value="" disabled selected>Select User...</option>';
+            }
+            
+            users.forEach(u => {
+                const muteLabel = u.is_muted ? 'Unmute' : 'Mute';
+                const muteColor = u.is_muted ? '#ffc107' : '#6c757d'; 
+                const muteTextCol = u.is_muted ? '#333' : 'white';
+
+                const blockLabel = u.is_blocked ? 'Unblock' : 'Block';
+                const blockColor = u.is_blocked ? '#28a745' : '#dc3545'; 
+
+                // GOAL 1 FIX: Injecting Country display into the Contact column
+                tbody.innerHTML += `
+                    <tr id="user-row-${u.id}">
+                        <td>${u.id}</td>
+                        <td><b>${u.username || 'N/A'}</b><br><span style="font-size:0.8em; color:#666;">${u.email}</span></td>
+                        <td>${u.full_name || '-'}<br><span style="font-size:0.8em;">${u.phone || '-'}</span><br><span style="font-size:0.8em; color:#007bff; font-weight:bold;">🌍 ${u.country || 'Unknown'}</span></td>
+                        <td>${u.role}<br><span style="font-size:0.8em; color:#28a745;">${u.user_type_name || 'Default'}</span></td>
+                        <td>${u.verified ? '✅' : '❌'}</td>
+                        <td>
+                            <button onclick="openAdminEditUser(${u.id})" class="btn-sm btn-edit">Edit</button>
+                            <button onclick="toggleVerify(${u.id})" class="btn-sm" style="background:${u.verified ? '#ffc107' : '#28a745'}; color:${u.verified?'#333':'white'};">${u.verified ? 'Unverify' : 'Verify'}</button>
+                            
+                            <button onclick="toggleMute(${u.id})" class="btn-sm" style="background:${muteColor}; color:${muteTextCol};">${muteLabel}</button>
+                            <button onclick="toggleBlock(${u.id})" class="btn-sm" style="background:${blockColor};">${blockLabel}</button>
+
+                            <button id="del-btn-${u.id}" onclick="deleteUser(${u.id})" class="btn-sm btn-delete">Delete</button>
+                        </td>
+                    </tr>`;
+                    
+                if (logSelect) {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = `${u.username} (${u.email})`;
+                    logSelect.appendChild(opt);
+                }
+            });
+        });
+    }
+
+    function deleteUser(uid) {
+        if(!confirm("Are you sure you want to delete this user? This cannot be undone.")) return;
+        const btn = document.getElementById(`del-btn-${uid}`);
+        if(btn) { btn.textContent = "Deleting..."; btn.disabled = true; }
+
+        fetch('/api/admin/delete_user', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ user_id: uid })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) { 
+                alert(d.message); 
+                const row = document.getElementById(`user-row-${uid}`);
+                if(row) row.remove();
+                loadAdminUsers(); 
+            } else { 
+                alert("Error: " + d.error); 
+                if(btn) { btn.textContent = "Delete"; btn.disabled = false; }
+            }
+        });
+    }
+
+    function toggleMute(uid) {
+        if(!confirm("Change Mute status for this user?")) return;
+        fetch('/api/admin/toggle_status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user_id: uid, type: 'mute' }) })
+        .then(r=>r.json()).then(d => { if(d.success) loadAdminUsers(); else alert(d.error); });
+    }
+
+    function toggleBlock(uid) {
+        if(!confirm("Change Block status for this user?")) return;
+        fetch('/api/admin/toggle_status', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user_id: uid, type: 'block' }) })
+        .then(r=>r.json()).then(d => { if(d.success) loadAdminUsers(); else alert(d.error); });
+    }
+
+    function loadUserLogs() {
+        const userId = document.getElementById('admin-log-user-select')?.value;
+        const viewer = document.getElementById('admin-log-viewer');
+        if(!viewer) return;
+        
+        if(!userId) { 
+            viewer.innerHTML = '<div style="color:#aaa; text-align:center; padding: 20px;">Please select a user from the dropdown above to view their logs.</div>';
+            return; 
+        }
+        
+        viewer.innerHTML = '<div style="color:#aaa; text-align:center;">Loading...</div>';
+        fetch(`/api/admin/logs?user_id=${userId}`).then(r => r.json()).then(data => {
+            viewer.innerHTML = '';
+            if(!data.logs || data.logs.length === 0) {
+                viewer.innerHTML = '<div style="color:#aaa; text-align:center;">No logs found for this user.</div>';
+                return;
+            }
+            data.logs.forEach(log => {
+                const entry = document.createElement('div');
+                entry.className = 'log-entry';
+                entry.innerHTML = `<div class="log-time">[${log.timestamp}]</div><div>${log.content}</div>`;
+                viewer.appendChild(entry);
+            });
+        }).catch(e => { viewer.innerHTML = '<div style="color:red; text-align:center;">Error fetching logs.</div>'; });
+    }
+
+    function toggleVerify(uid) {
+        fetch('/api/admin/toggle_verify', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user_id: uid }) })
+        .then(r => r.json()).then(d => { if(d.success) loadAdminUsers(); else alert(d.error); });
+    }
+
+    function openAdminEditUser(userId) {
+        const user = adminUsersList.find(u => u.id === userId);
+        if (!user) return;
+        
+        if(adminUserTypes.length === 0) {
+            fetch('/api/admin/user_types').then(r=>r.json()).then(types => {
+                adminUserTypes = types;
+                populateUserEditModal(user);
+            });
+        } else {
+            populateUserEditModal(user);
+        }
+    }
+    
+    function populateUserEditModal(user) {
+        hideAllForms(); 
+        document.getElementById('auth-modal').style.display = 'none'; 
+        document.getElementById('admin-user-edit-modal').style.display = 'flex'; 
+        
+        document.getElementById('admin-edit-id').value = user.id;
+        document.getElementById('admin-edit-username').value = user.username || '';
+        document.getElementById('admin-edit-fullname').value = user.full_name || '';
+        document.getElementById('admin-edit-email').value = user.email || '';
+        document.getElementById('admin-edit-phone').value = user.phone || '';
+        
+        // GOAL 1 FIX: Populate the Country Field
+        if(document.getElementById('admin-edit-country')) {
+            document.getElementById('admin-edit-country').value = user.country || '';
+        }
+        
+        // NEW FEATURE: Populate limits displays and reset input fields
+        const remSitesEl = document.getElementById('admin-edit-rem-sites');
+        if(remSitesEl) remSitesEl.textContent = user.remaining_websites !== undefined ? user.remaining_websites : '--';
+        
+        const remImagesEl = document.getElementById('admin-edit-rem-images');
+        if(remImagesEl) remImagesEl.textContent = user.remaining_images !== undefined ? user.remaining_images : '--';
+        
+        const addSitesInput = document.getElementById('admin-edit-add-sites');
+        if(addSitesInput) addSitesInput.value = '';
+        
+        const addImagesInput = document.getElementById('admin-edit-add-images');
+        if(addImagesInput) addImagesInput.value = '';
+
+        document.getElementById('admin-edit-role').value = user.role || 'client';
+        document.getElementById('admin-edit-verified').checked = user.verified;
+        document.getElementById('admin-edit-msg').textContent = '';
+
+        const typeSelect = document.getElementById('admin-edit-usertype');
+        typeSelect.innerHTML = '<option value="">Default (No Type)</option>';
+        adminUserTypes.forEach(t => {
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            const lim = t.project_limit == -1 ? "Unlimited" : t.project_limit;
+            opt.textContent = `${t.name} (Limit: ${lim})`;
+            if(user.user_type_id == t.id) opt.selected = true;
+            typeSelect.appendChild(opt);
+        });
+    }
+
+    function closeAdminEditModal() { 
+        safeCloseModal('admin-user-edit-modal'); 
+    }
+
+    function saveAdminUserChanges() {
+        const data = {
+            user_id: document.getElementById('admin-edit-id').value,
+            username: document.getElementById('admin-edit-username').value,
+            full_name: document.getElementById('admin-edit-fullname').value,
+            email: document.getElementById('admin-edit-email').value,
+            phone_number: document.getElementById('admin-edit-phone').value,
+            
+            // GOAL 1 FIX: Include country in payload
+            country: document.getElementById('admin-edit-country') ? document.getElementById('admin-edit-country').value : '',
+            
+            role: document.getElementById('admin-edit-role').value,
+            verified: document.getElementById('admin-edit-verified').checked,
+            user_type_id: document.getElementById('admin-edit-usertype').value,
+            
+            // NEW FEATURE: Include the increment values in payload
+            add_project_limit: document.getElementById('admin-edit-add-sites') ? document.getElementById('admin-edit-add-sites').value : '',
+            add_image_limit: document.getElementById('admin-edit-add-images') ? document.getElementById('admin-edit-add-images').value : ''
+        };
+        fetch('/api/admin/update_user', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data) })
+        .then(r => r.json()).then(res => {
+            if (res.success) { 
+                alert("User updated successfully."); 
+                closeAdminEditModal(); 
+                loadAdminUsers(); 
+            } 
+            else { document.getElementById('admin-edit-msg').textContent = res.error; }
+        });
+    }
+
+    function resetPass(uid) {
+        if(!confirm("Reset password to 'temp1234'?")) return;
+        fetch('/api/admin/reset_user_pass', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ user_id: uid }) })
+        .then(r => r.json()).then(d => alert(d.message));
+    }
+    
+    function loadAdminUserTypes() {
+        fetch('/api/admin/user_types').then(r=>r.json()).then(data => {
+            adminUserTypes = data;
+            const tbody = document.getElementById('usertypes-table-body');
+            if(!tbody) return;
+            tbody.innerHTML = '';
+            if(data.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#777;">No user types defined. Users have unlimited access (or default).</td></tr>';
+                 return;
+            }
+            data.forEach(t => {
+                const isDefault = t.is_default ? 'checked' : ''; 
+                const displayLimit = t.project_limit == -1 ? '<span style="color:#28a745; font-weight:bold;">∞</span>' : t.project_limit;
+                const imgLimText = t.image_limit === -1 ? '<span style="color:#28a745; font-weight:bold;">∞</span>' : t.image_limit;
+                
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${t.id}</td>
+                        <td><b>${t.name}</b></td>
+                        <td>${displayLimit}</td>
+                        <td>${imgLimText}</td>
+                        <td>${t.storage_limit_mb} MB</td>
+                        <td style="text-align:center;">
+                            <input type="radio" name="default_user_type" ${isDefault} onchange="setDefaultUserType(${t.id})" title="Set as default">
+                        </td>
+                        <td>${t.user_count}</td>
+                        <td>
+                             <button onclick="openEditUserType(${t.id}, '${t.name}', ${t.project_limit}, ${t.image_limit}, ${t.storage_limit_mb}, ${t.allow_own_api_keys ? 'true' : 'false'}, ${t.allow_download ? 'true' : 'false'})" style="padding:2px 8px; font-size:12px; cursor:pointer; background:#007bff; color:white; border-radius:3px; border:none; margin-right:3px;">Edit</button>
+                             <button onclick="deleteUserType(${t.id})" style="padding:2px 8px; font-size:12px; cursor:pointer; background:#dc3545; color:white; border-radius:3px; border:none;">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            });
+        }).catch(e => console.error("Err loading types", e));
+    }
+
+    function setDefaultUserType(id) {
+        fetch('/api/admin/set_default_user_type', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ user_type_id: id })
+        }).then(r => r.json()).then(d => {
+            if(!d.success) {
+                alert("Failed to set default: " + d.error);
+                loadAdminUserTypes(); 
+            }
+        }).catch(e => alert("Error setting default type."));
+    }
+
+    function openEditUserType(id, name, limit, imgLimit, storage, allowOwnKeys, allowDownload) {
+        injectUserTypeExtraFields(); // Ensure field exists
+        
+        hideAllForms();
+        document.getElementById('auth-modal').style.display = 'none';
+        document.getElementById('admin-usertype-edit-modal').style.display = 'flex'; 
+        document.getElementById('admin-ut-edit-id').value = id;
+        document.getElementById('admin-ut-edit-name').value = name;
+        
+        const limitInput = document.getElementById('admin-ut-edit-limit');
+        const unlimitedCheck = document.getElementById('admin-ut-edit-unlimited');
+        
+        if (limit == -1) {
+            limitInput.value = '';
+            limitInput.disabled = true;
+            unlimitedCheck.checked = true;
+        } else {
+            limitInput.value = limit;
+            limitInput.disabled = false;
+            unlimitedCheck.checked = false;
+        }
+        
+        unlimitedCheck.onchange = () => {
+            limitInput.disabled = unlimitedCheck.checked;
+            if(unlimitedCheck.checked) limitInput.value = '';
+        };
+
+        const imgInput = document.getElementById('admin-ut-edit-img-limit');
+        const imgCheck = document.getElementById('admin-ut-edit-img-unlimited');
+        if (imgLimit == -1) {
+            imgInput.value = '';
+            imgInput.disabled = true;
+            imgCheck.checked = true;
+        } else {
+            imgInput.value = imgLimit;
+            imgInput.disabled = false;
+            imgCheck.checked = false;
+        }
+
+        imgCheck.onchange = () => {
+            imgInput.disabled = imgCheck.checked;
+            if(imgCheck.checked) imgInput.value = '';
+        };
+        
+        document.getElementById('admin-ut-edit-storage').value = storage;
+        
+        const ownKeysCheck = document.getElementById('admin-ut-edit-own-keys');
+        if(ownKeysCheck) {
+            ownKeysCheck.checked = (allowOwnKeys === true || allowOwnKeys === 'true');
+        }
+
+        const allowDownloadCheck = document.getElementById('admin-ut-edit-allow-download');
+        if(allowDownloadCheck) {
+            allowDownloadCheck.checked = (allowDownload === true || allowDownload === 'true');
+        }
+    }
+
+    function saveUserTypeChanges() {
+        const id = document.getElementById('admin-ut-edit-id').value;
+        const name = document.getElementById('admin-ut-edit-name').value;
+        let limit = document.getElementById('admin-ut-edit-limit').value;
+        const isUnlimited = document.getElementById('admin-ut-edit-unlimited').checked;
+        
+        let imgLimit = document.getElementById('admin-ut-edit-img-limit').value;
+        const isImgUnlimited = document.getElementById('admin-ut-edit-img-unlimited').checked;
+        const storage = document.getElementById('admin-ut-edit-storage').value;
+        
+        const ownKeysCheck = document.getElementById('admin-ut-edit-own-keys');
+        const allowOwnKeys = ownKeysCheck ? ownKeysCheck.checked : false;
+
+        const allowDownloadCheck = document.getElementById('admin-ut-edit-allow-download');
+        const allowDownload = allowDownloadCheck ? allowDownloadCheck.checked : false;
+
+        if (isUnlimited) limit = -1;
+        else if (!limit) { alert("Please enter a project limit."); return; }
+        
+        if (isImgUnlimited) imgLimit = -1;
+        else if (!imgLimit) { alert("Please enter an image limit."); return; }
+
+        fetch('/api/admin/update_user_type', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ 
+                id: id, 
+                name: name, 
+                project_limit: limit,
+                image_limit: imgLimit,
+                storage_limit_mb: storage,
+                allow_own_api_keys: allowOwnKeys,
+                allow_download: allowDownload
+            })
+        }).then(r=>r.json()).then(d => {
+             if(d.success) {
+                 alert(d.message);
+                 safeCloseModal('admin-usertype-edit-modal');
+                 loadAdminUserTypes();
+             } else { alert(d.error); }
+        });
+    }
+
+    function deleteUserType(id) {
+        if(!confirm("Are you sure you want to delete this user type? This will also delete any Subscription Plans linked to it.")) return;
+        fetch('/api/admin/delete_user_type', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: id })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert(data.message);
+                loadAdminUserTypes();
+            } else {
+                alert("Error: " + data.error);
+            }
+        })
+        .catch(err => alert("Network Error while deleting user type."));
+    }
+
+    function openNewUserTypeModal() {
+        injectUserTypeExtraFields(); // Ensure field exists
+        document.getElementById('new-ut-name').value = '';
+        document.getElementById('new-ut-limit').value = '';
+        document.getElementById('new-ut-unlimited').checked = false;
+        document.getElementById('new-ut-img-limit').value = '';
+        document.getElementById('new-ut-img-unlimited').checked = false;
+        document.getElementById('new-ut-storage').value = '500';
+        
+        const ownKeysCheck = document.getElementById('new-ut-own-keys');
+        if(ownKeysCheck) ownKeysCheck.checked = false;
+        
+        const allowDownloadCheck = document.getElementById('new-ut-allow-download');
+        if(allowDownloadCheck) allowDownloadCheck.checked = false;
+        
+        document.getElementById('admin-usertype-new-modal').style.display = 'flex';
+    }
+
+    function createUserType() {
+        injectUserTypeExtraFields(); // Ensure field exists
+        
+        const name = document.getElementById('new-ut-name').value;
+        let limit = document.getElementById('new-ut-limit').value;
+        const isUnlimited = document.getElementById('new-ut-unlimited').checked;
+        
+        let imgLimit = document.getElementById('new-ut-img-limit').value;
+        const isImgUnlimited = document.getElementById('new-ut-img-unlimited').checked;
+        const storage = document.getElementById('new-ut-storage').value;
+        
+        const ownKeysCheck = document.getElementById('new-ut-own-keys');
+        const allowOwnKeys = ownKeysCheck ? ownKeysCheck.checked : false;
+
+        const allowDownloadCheck = document.getElementById('new-ut-allow-download');
+        const allowDownload = allowDownloadCheck ? allowDownloadCheck.checked : false;
+        
+        if(!name) { alert("Please enter a name."); return; }
+        if(isUnlimited) limit = -1;
+        else if(!limit) { alert("Please enter a project limit."); return; }
+        
+        if(isImgUnlimited) imgLimit = -1;
+        else if(!imgLimit) { alert("Please enter an image limit."); return; }
+        
+        fetch('/api/admin/create_user_type', {
+             method: 'POST', headers: {'Content-Type': 'application/json'},
+             body: JSON.stringify({ 
+                 name: name, 
+                 project_limit: limit,
+                 image_limit: imgLimit,
+                 storage_limit_mb: storage,
+                 allow_own_api_keys: allowOwnKeys,
+                 allow_download: allowDownload
+             })
+        }).then(r=>r.json()).then(d => {
+             if(d.success) { 
+                 document.getElementById('new-ut-name').value = ''; 
+                 document.getElementById('new-ut-limit').value = '';
+                 document.getElementById('new-ut-unlimited').checked = false;
+                 
+                 document.getElementById('new-ut-img-limit').value = '';
+                 document.getElementById('new-ut-img-unlimited').checked = false;
+                 document.getElementById('new-ut-storage').value = '500';
+                 if(ownKeysCheck) ownKeysCheck.checked = false;
+                 if(allowDownloadCheck) allowDownloadCheck.checked = false;
+                 
+                 safeCloseModal('admin-usertype-new-modal'); 
+                 loadAdminUserTypes(); 
+             } else { alert(d.error); }
+        });
+    }
+</script>

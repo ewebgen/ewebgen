@@ -1,0 +1,1174 @@
+<style>
+    /* Admin - FIXED: Ensure high z-index to cover everything */
+    #admin-dashboard { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: #f4f4f9; z-index: 9999; display: none; box-sizing: border-box; }
+    .admin-layout { display: flex; width: 100%; height: 100%; }
+    .admin-sidebar { width: 260px; background-color: #2c3e50; color: #ecf0f1; display: flex; flex-direction: column-reverse; border-right: 1px solid #1a252f; }
+    .admin-sidebar-header { padding: 20px; font-size: 1.2em; font-weight: bold; border-bottom: 1px solid #34495e; background-color: #1a252f; display: flex; justify-content: space-between; align-items: center; }
+    .admin-nav { flex-grow: 1; padding: 10px 0; overflow-y: auto; }
+    .admin-nav-item, .admin-nav-item-header { padding: 15px 20px; cursor: pointer; border-bottom: 1px solid #34495e; transition: background 0.2s; display:block; color:inherit; text-decoration:none; }
+    .admin-nav-item:hover, .admin-nav-item-header:hover { background-color: #34495e; }
+    .admin-nav-item.active { background-color: #3498db; color: white; border-left: 5px solid #1abc9c; }
+    
+    .admin-sub-nav .admin-nav-item { padding-left: 40px; font-size: 0.9em; background: #243342; }
+    
+    .admin-exit-btn { padding: 15px; background-color: #c0392b; color: white; text-align: center; cursor: pointer; font-weight: bold; }
+    .admin-exit-btn:hover { background-color: #e74c3c; }
+
+    .admin-content { flex-grow: 1; padding: 30px; overflow-y: auto; background-color: #ecf0f1; position: relative; }
+    .admin-panel { background: white; padding: 25px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05); margin-bottom: 20px; }
+    .admin-tab-content { display: none; }
+    .admin-tab-content.active { display: block; animation: fadeIn 0.3s; }
+    
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+    .user-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .user-table th, .user-table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+    .user-table th { background-color: #f8f9fa; color: #555; }
+    .user-table tr:hover { background-color: #f9f9f9; }
+
+    /* FEATURE 3: Log Styles */
+    .log-container { background: #1e1e1e; color: #0f0; padding: 15px; border-radius: 5px; max-height: 400px; overflow-y: auto; font-family: 'Consolas', monospace; font-size: 13px; margin-top:10px; }
+    .log-entry { margin-bottom: 8px; border-bottom: 1px solid #333; padding-bottom: 5px; }
+    .log-time { color: #888; font-size: 0.8em; }
+
+    /* FEATURE 5: Multi-Key Styles */
+    .key-input-group { display: flex; gap: 5px; margin-bottom: 5px; }
+    .remove-key-btn { background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; }
+    
+    .settings-group { margin-bottom: 20px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+    .settings-group label { display: block; font-weight: bold; margin-bottom: 8px; color: #333; }
+    .settings-row { display: flex; gap: 10px; align-items: center; margin-bottom: 5px; }
+    
+    /* --- NEW: Payment Gateway Card Styles --- */
+    .admin-card {
+        background: #fff;
+        border: 1px solid #e0e0e0;
+        border-radius: 6px;
+        padding: 20px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        margin-bottom: 20px;
+        transition: all 0.3s;
+    }
+    
+    /* Badges */
+    .badge { padding: 3px 8px; border-radius: 12px; font-size: 0.75em; font-weight: bold; text-transform: uppercase; }
+    .badge-primary { background: #e3f2fd; color: #0d47a1; }
+    .badge-secondary { background: #f5f5f5; color: #616161; }
+    .badge-success { background: #e8f5e9; color: #1b5e20; }
+    .badge-danger { background: #ffebee; color: #b71c1c; }
+    
+    /* === FIX: MESSAGE SYSTEM STYLES (UI CONTRAST & RENAMING) === */
+    .notification-dropdown {
+        display: none; position: absolute; top: 60px; right: 220px; width: 300px;
+        background: white; border: 1px solid #ccc; border-radius: 6px;
+        box-shadow: 0 5px 15px rgba(0,0,0,0.2); z-index: 3000;
+        font-family: 'Segoe UI', sans-serif;
+    }
+    .notif-header { padding: 10px; background: #f8f9fa; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; font-weight: bold; color: #333; }
+    .notif-close-btn { background: none; border: none; font-size: 14px; cursor: pointer; color: #777; }
+    .notif-content { max-height: 300px; overflow-y: auto; }
+    
+    /* UI FIX: Explicit color for messages to avoid white-on-white */
+    .notif-item { padding: 10px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.1s; background-color: #ffffff; color: #333; font-size: 0.9em; position: relative; }
+    .notif-item.unread { background-color: #e8f5ff; font-weight: bold; color: #000; }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-item:hover { background: #f1f1f1; }
+    .notif-time { font-size: 0.7em; color: #666; margin-top: 3px; font-weight: normal; }
+    
+    /* NEW: Mark Read Text */
+    .mark-read-text {
+        font-size: 10px; color: #007bff; cursor: pointer; white-space: nowrap; margin-left: 10px;
+    }
+    .mark-read-text:hover { text-decoration: underline; color: #0056b3; }
+    
+    .notif-footer { padding: 10px; background: #f8f9fa; border-top: 1px solid #eee; text-align: center; font-size: 0.85em; color: #007bff; cursor: pointer; font-weight: bold; }
+    .notif-footer:hover { background: #e2e6ea; text-decoration: underline; }
+
+    .mark-read-link { font-size: 0.8em; color: #28a745; cursor: pointer; margin-right: 10px; font-weight: normal; }
+    .mark-read-link:hover { text-decoration: underline; }
+
+    /* Admin Messaging Styles */
+    .inbox-msg { padding: 15px; border-bottom: 1px solid #eee; cursor: pointer; font-size: 0.9em; transition: background 0.2s; background-color: #ffffff; color: #333; }
+    .inbox-msg:hover { background: #f0f0f0; }
+    
+    .inbox-msg.unread { 
+        font-weight: bold; 
+        background: #e8f4fd; 
+        border-left: 4px solid #007bff; 
+        color: #000;
+    }
+    
+    .inbox-header { display: flex; justify-content: space-between; font-size: 0.85em; color: #555; margin-bottom: 6px; }
+    .inbox-msg.unread .inbox-header { color: #0056b3; }
+    
+    .msg-actions { margin-top: 8px; display: flex; gap: 10px; font-size: 0.8em; }
+    .msg-btn-reply { color: #28a745; background: none; border: none; cursor: pointer; padding: 0; }
+    .msg-btn-reply:hover { text-decoration: underline; }
+    
+    .message-modal-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 4000; display: flex; justify-content: center; align-items: center; }
+    /* UI FIX: Explicit background/color for modal to avoid transparency or inheritance issues */
+    .message-modal-box { background: #ffffff; width: 400px; padding: 20px; border-radius: 8px; box-shadow: 0 5px 20px rgba(0,0,0,0.3); max-height: 80vh; overflow-y: auto; color: #333; }
+
+    /* New "Mark as Read" Button Style */
+    .mark-read-btn {
+        margin-top: 15px;
+        padding: 8px 15px;
+        background-color: white;
+        color: #28a745;
+        border: 1px solid #28a745;
+        border-radius: 4px;
+        cursor: pointer;
+        width: 100%;
+        font-weight: bold;
+    }
+    .mark-read-btn:hover { background-color: #f0fff4; }
+    .mark-read-btn:disabled { color: #aaa; border-color: #ccc; cursor: default; background: #f9f9f9; }
+
+    /* FIX: Hero Image Fallback Logic Classes */
+    .hero-fallback {
+        background-color: #2c3e50 !important;
+        background-image: linear-gradient(135deg, #2c3e50 0%, #3498db 100%) !important;
+        color: white !important;
+    }
+    .hero-text-shadow {
+        text-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    }
+
+    /* FEATURE: THREADED MESSAGES */
+    .thread-message {
+        padding: 10px;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        font-size: 0.9em;
+        line-height: 1.4;
+    }
+    .thread-message.sent {
+        background-color: #e3f2fd;
+        border: 1px solid #bbdefb;
+        margin-left: 20px;
+        text-align: right;
+    }
+    .thread-message.received {
+        background-color: #f9f9f9;
+        border: 1px solid #eee;
+        margin-right: 20px;
+        text-align: left;
+    }
+    .msg-meta {
+        font-size: 0.75em;
+        color: #666;
+        margin-bottom: 4px;
+    }
+    .attachment-link {
+        margin-top: 5px;
+        font-size: 0.85em;
+    }
+    .attachment-link a {
+        color: #007bff;
+        text-decoration: none;
+    }
+    .attachment-link a:hover {
+        text-decoration: underline;
+    }
+
+    /* Dark Mode */
+    body.dark-mode { background-color: #121212; color: #e0e0e0; }
+    body.dark-mode #left-panel { background-color: #1e1e1e; border-right: 1px solid #333; color: #e0e0e0; border-color: #333; }
+    body.dark-mode #right-panel { background-color: #121212; }
+    body.dark-mode h1 { color: #f0f0f0; }
+    body.dark-mode p { color: #bbb; }
+    body.dark-mode #chat-display { background-color: #252525; border-color: #333; color: #ddd; }
+    body.dark-mode .ai-message { background-color: #333; border-color: #444; color: #eee; }
+    body.dark-mode .user-message { background-color: #1e3a5f; color: #eee; }
+    body.dark-mode textarea { background-color: #2d2d2d; color: #eee; border-color: #444; }
+    body.dark-mode #status-message { background-color: #1e2a38; border-color: #2c3e50; color: #90caf9; }
+    
+    body.dark-mode .win-btn { color: #aaa; }
+    body.dark-mode .win-btn:hover { background-color: #333; border-color: #444; }
+    
+    body.dark-mode.view-default .btn-restore,
+    body.dark-mode.view-maximized .btn-max,
+    body.dark-mode.view-minimized .btn-min { color: #4dabf5; background: #1e3a5f; }
+    
+    body.dark-mode .link-modal-box { background: #2d2d2d; color: #eee; }
+    body.dark-mode .link-option-group { border-color: #444; }
+    body.dark-mode .link-option-group.disabled { background: #3a3a3a; opacity: 0.4; }
+    body.dark-mode .link-option-header { color: #fff; }
+
+    body.dark-mode #admin-dashboard { background-color: #121212; }
+    body.dark-mode .admin-sidebar { background-color: #1a1a1a; border-right: 1px solid #333; }
+    body.dark-mode .admin-sidebar-header { background-color: #000; border-bottom: 1px solid #333; }
+    body.dark-mode .admin-content { background-color: #121212; }
+    body.dark-mode .admin-panel { background-color: #1e1e1e; color: #e0e0e0; box-shadow: none; border: 1px solid #333; }
+    body.dark-mode .user-table th { background-color: #252525; color: #bbb; border-bottom: 1px solid #444; }
+    body.dark-mode .user-table td { border-bottom: 1px solid #333; color: #ddd; }
+    body.dark-mode .user-table tr:hover { background-color: #2a2a2a; }
+    body.dark-mode .settings-group label { color: #ccc; }
+    body.dark-mode .auth-input { background-color: #2d2d2d; color: white; border: 1px solid #444; }
+    
+    body.dark-mode .admin-card { background: #2d2d2d; border-color: #444; }
+
+    /* UI FIX: Dark Mode overrides for Messages */
+    body.dark-mode .notification-dropdown { background: #2d2d2d; border-color: #444; }
+    body.dark-mode .notif-header { background: #1e1e1e; border-color: #444; color: #eee; }
+    body.dark-mode .notif-item { background-color: #2d2d2d; color: #ddd; border-color: #444; }
+    body.dark-mode .notif-item:hover { background: #333; }
+    body.dark-mode .notif-item.unread { background-color: #3a3a3a; color: #fff; }
+    body.dark-mode .notif-footer { background: #1e1e1e; border-top-color: #444; color: #4dabf5; }
+    body.dark-mode .notif-footer:hover { background: #252525; }
+    
+    /* UI FIX: Explicit colors for modal box in dark mode */
+    body.dark-mode .auth-box { background-color: #2d2d2d !important; color: #eee; }
+    body.dark-mode .message-modal-box { background: #2d2d2d !important; color: #eee; }
+    body.dark-mode #msg-detail-body { color: #eee; }
+    body.dark-mode #msg-detail-subject { color: #fff; }
+    
+    /* UI FIX: Admin Inbox Dark Mode */
+    body.dark-mode .inbox-msg { border-color: #333; color: #ddd; background-color: #1e1e1e; }
+    body.dark-mode .inbox-msg:hover { background: #333; }
+    body.dark-mode .inbox-msg.unread { background: #252525; border-left-color: #4dabf5; color: #fff; }
+    body.dark-mode #admin-msg-inbox { background: #121212; border-color: #333; }
+
+    /* Thread Dark Mode */
+    body.dark-mode .thread-message.sent { background-color: #1e3a5f; border-color: #333; }
+    body.dark-mode .thread-message.received { background-color: #333; border-color: #444; }
+    body.dark-mode .attachment-link a { color: #90caf9; }
+
+    /* FIX: Dark Mode Preview Sync */
+    body.dark-mode #preview-frame {
+        background-color: #1e1e1e;
+        border: 1px solid #333;
+    }
+    
+    #toggle-dark-mode { background: none; border: 1px solid #ddd; border-radius: 50%; width: 28px; height: 28px; cursor: pointer; font-size: 14px; display: flex; align-items: center; justify-content: center; }
+    body.dark-mode #toggle-dark-mode { border-color: #555; color: yellow; }
+
+
+    /* New Floating Toolbar Styling */
+    #floating-editor-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 320px; /* Wider for new buttons */
+    }
+
+    .editor-toolbar-group {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        position: relative;
+        margin-right: 8px;
+        padding-right: 8px;
+        border-right: 1px solid #ddd;
+    }
+    
+    .editor-toolbar-group:last-child {
+        border-right: none;
+    }
+
+    .toolbar-label {
+        font-size: 9px;
+        text-transform: uppercase;
+        color: #888;
+        font-weight: bold;
+        position: absolute;
+        top: -14px;
+        left: 0;
+        width: 100%;
+        text-align: center;
+    }
+
+    /* --- IMAGE MANAGER MODAL STYLES --- */
+    
+    /* REQ 2: Make image manager window big */
+    #image-manager-modal .auth-box {
+        width: 90vw !important;        /* Much wider */
+        max-width: 1200px !important; 
+        height: 85vh !important;       /* Taller */
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        overflow: hidden;
+        border-radius: 8px;
+        text-align: left;
+    }
+
+    /* REQ 3: AI Generation Split Layout */
+    .ai-gen-layout {
+        display: flex;
+        height: 100%;
+        gap: 20px;
+        overflow: hidden;
+    }
+    
+    .ai-controls-pane {
+        width: 350px;
+        flex-shrink: 0;
+        background: #f8f9fa;
+        padding: 20px;
+        border-right: 1px solid #ddd;
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+    }
+    
+    .ai-preview-pane {
+        flex-grow: 1;
+        padding: 20px;
+        background: #ffffff;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: flex-start;
+    }
+
+    /* REQ 5: Progress Bar Styles */
+    .ai-progress-container {
+        width: 100%;
+        background-color: #e9ecef;
+        border-radius: 4px;
+        height: 10px;
+        margin-top: 15px;
+        overflow: hidden;
+        display: none; /* Hidden by default */
+    }
+    
+    .ai-progress-bar {
+        height: 100%;
+        background-color: #28a745;
+        width: 0%;
+        transition: width 0.4s ease;
+        background-image: linear-gradient(45deg,rgba(255,255,255,.15) 25%,transparent 25%,transparent 50%,rgba(255,255,255,.15) 50%,rgba(255,255,255,.15) 75%,transparent 75%,transparent);
+        background-size: 1rem 1rem;
+        animation: progress-bar-stripes 1s linear infinite;
+    }
+    
+    @keyframes progress-bar-stripes {
+        0% { background-position: 1rem 0; }
+        100% { background-position: 0 0; }
+    }
+
+    .img-mgr-tabs {
+        display: flex;
+        border-bottom: 1px solid #ddd;
+        background: #f1f3f5;
+        flex-shrink: 0;
+    }
+    .img-tab {
+        padding: 12px 25px; /* Larger tabs */
+        cursor: pointer;
+        font-weight: 600;
+        color: #666;
+        transition: all 0.2s;
+        border-right: 1px solid #e9ecef;
+        font-size: 1.05em;
+    }
+    .img-tab:hover {
+        background-color: #e2e6ea;
+        color: #333;
+    }
+    .img-tab.active {
+        background-color: #fff;
+        color: #007bff;
+        border-top: 3px solid #007bff; 
+        border-bottom: 1px solid transparent;
+        margin-bottom: -1px;
+    }
+    
+    /* FEATURE 3: My Gallery Sub-Tabs */
+    .sub-img-tabs { 
+        display: flex; 
+        gap: 10px; 
+        margin-bottom: 15px; 
+        border-bottom: 1px solid #ddd; 
+        padding-bottom: 5px; 
+    }
+    .sub-img-tab { 
+        cursor: pointer; 
+        font-size: 0.9em; 
+        font-weight: bold; 
+        color: #666; 
+        padding: 5px 10px; 
+        border-radius: 4px; 
+        transition: background 0.2s; 
+    }
+    .sub-img-tab:hover { background: #e2e6ea; }
+    .sub-img-tab.active { background: #007bff; color: white; }
+    body.dark-mode .sub-img-tab { color: #aaa; }
+    body.dark-mode .sub-img-tab:hover { background: #333; }
+    body.dark-mode .sub-img-tab.active { background: #4dabf5; color: #121212; }
+
+    .img-tab-content {
+        height: 100%; /* Fill available height */
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* REQ 4: Search Web image should be bigger */
+    .img-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); /* Increased from 110px */
+        gap: 15px;
+        padding-top: 10px;
+        width: 100%;
+    }
+    
+    .gallery-item {
+        position: relative;
+        height: 180px; /* Increased from 110px */
+        border-radius: 6px;
+        overflow: hidden;
+        border: 2px solid #eee;
+        cursor: pointer;
+        transition: transform 0.15s, border-color 0.15s, box-shadow 0.15s;
+        background: #f9f9f9; /* Placeholder bg */
+    }
+    
+    /* REQ 3: Right side preview bigger size */
+    .ai-large-preview {
+        width: 100%;
+        max-width: 600px;
+        height: auto;
+        min-height: 300px;
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 10px;
+        position: relative;
+        overflow: hidden;
+    }
+    .ai-large-preview img {
+        width: 100%;
+        height: auto;
+        display: block;
+        object-fit: contain;
+    }
+    
+    .gallery-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .gallery-item:hover {
+        border-color: #bbb;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    
+    .gallery-item.selected {
+        border-color: #28a745;
+        box-shadow: 0 0 0 3px rgba(40, 167, 69, 0.3);
+    }
+    
+    /* Checkmark on select */
+    .gallery-item.selected::after {
+        content: '✓';
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: #28a745;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+
+    .gallery-delete-btn {
+        position: absolute;
+        top: 8px;
+        right: 8px;
+        background: #dc3545;
+        color: white;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        display: none; 
+        justify-content: center;
+        align-items: center;
+        font-size: 14px;
+        font-weight: bold;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        z-index: 10;
+        cursor: pointer;
+    }
+    .gallery-item:hover .gallery-delete-btn {
+        display: flex;
+    }
+    .gallery-delete-btn:hover {
+        background: #b02a37;
+    }
+
+    /* NEW: Admin Profile Header */
+    .admin-profile-header {
+        position: absolute;
+        top: 15px;
+        right: 25px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        z-index: 2005; /* Above modal overlays but below highest alerts */
+    }
+    .admin-profile-btn {
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-radius: 20px;
+        padding: 5px 15px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        cursor: pointer;
+        font-size: 0.9em;
+        color: #333;
+        transition: background 0.2s;
+    }
+    .admin-profile-btn:hover {
+        background: #e2e6ea;
+    }
+    .admin-profile-icon {
+        width: 24px;
+        height: 24px;
+        background: #28a745;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        font-size: 0.85em;
+    }
+
+    /* Dark Mode Support for Image Manager */
+    body.dark-mode .img-mgr-tabs { background-color: #1e1e1e; border-color: #444; }
+    body.dark-mode .img-tab { color: #aaa; border-right-color: #444; }
+    body.dark-mode .img-tab:hover { background-color: #333; color: #fff; }
+    body.dark-mode .img-tab.active { background-color: #2d2d2d; color: #4dabf5; border-top-color: #4dabf5; }
+    body.dark-mode #image-manager-modal .auth-box > div:first-child { /* Header */ background-color: #1e1e1e !important; border-bottom-color: #444 !important; }
+    body.dark-mode #image-manager-modal .auth-box > div:last-child { /* Footer */ background-color: #1e1e1e !important; border-top-color: #444 !important; }
+    body.dark-mode .img-tab-content { background-color: #2d2d2d !important; }
+    body.dark-mode .gallery-item { border-color: #444; background: #333; }
+    body.dark-mode .gallery-item:hover { border-color: #777; }
+    body.dark-mode .ai-controls-pane { background: #1e1e1e; border-right-color: #444; }
+    body.dark-mode .ai-preview-pane { background: #252525; }
+    body.dark-mode .ai-large-preview { border-color: #555; }
+    
+    /* Search Bar Styling Enhancement */
+    .search-bar-container {
+        display: flex; gap: 10px; margin-bottom: 15px; padding: 10px; background: #f1f3f5; border-radius: 8px;
+    }
+    body.dark-mode .search-bar-container { background: #333; }
+
+    /* =========================================
+       7. SYSTEM UPDATE MODAL STYLES
+       ========================================= */
+    /* Spinner Animation */
+    @keyframes spin { 
+        0% { transform: rotate(0deg); } 
+        100% { transform: rotate(360deg); } 
+    }
+    
+    #update-icon {
+        font-size: 4em; 
+        display: block; 
+        margin-bottom: 10px;
+        transition: transform 0.3s;
+    }
+
+    /* Release Notes Scroll Area */
+    #release-notes-display { 
+        background: #fff; 
+        border: 1px solid #e0e0e0; 
+        padding: 12px; 
+        border-radius: 4px; 
+        max-height: 120px; 
+        overflow-y: auto; 
+        font-size: 0.9em; 
+        line-height: 1.5; 
+        color: #555;
+        margin-top: 5px;
+    }
+
+    /* Scrollbar for notes */
+    #release-notes-display::-webkit-scrollbar { width: 6px; }
+    #release-notes-display::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+    /* Restore Section */
+    #restore-section {
+        background: #fdfdfd;
+        border: 1px solid #eee;
+        padding: 15px;
+        border-radius: 5px;
+    }
+
+    /* =========================================
+       8. PAYMENT & PLANS STYLES
+       ========================================= */
+    
+    /* Toggle Switch */
+    .switch { position: relative; display: inline-block; width: 40px; height: 20px; }
+    .switch input { opacity: 0; width: 0; height: 0; }
+    .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 20px; }
+    .slider:before { position: absolute; content: ""; height: 16px; width: 16px; left: 2px; bottom: 2px; background-color: white; transition: .4s; border-radius: 50%; }
+    input:checked + .slider { background-color: #28a745; }
+    input:checked + .slider:before { transform: translateX(20px); }
+
+    /* Plans Grid */
+    .plans-grid { display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; }
+    .plan-card {
+        background: white; border: 1px solid #e0e0e0; border-radius: 8px;
+        padding: 25px; width: 260px; display: flex; flex-direction: column;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.05); transition: transform 0.2s;
+        text-align: center;
+    }
+    .plan-card:hover { transform: translateY(-5px); border-color: #007bff; }
+    .plan-card h3 { margin: 0 0 10px 0; color: #333; }
+    .plan-card .price { font-size: 2em; color: #007bff; font-weight: bold; margin-bottom: 20px; }
+    .plan-card ul { list-style: none; padding: 0; margin: 0 0 20px 0; flex-grow: 1; text-align: left; }
+    .plan-card li { padding: 5px 0; border-bottom: 1px solid #eee; font-size: 0.9em; color: #555; }
+    .plan-card li:last-child { border-bottom: none; }
+    
+    .plans-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    /* =========================================
+       9. EDITOR SIDEBAR & SLIDER (UPDATED WITH FIXES)
+       ========================================= */
+    #editor-sidebar {
+        /* UPDATED: Top shifted to start BELOW top menu, and positioned fixed */
+        position: fixed;
+        top: 54px; /* Matches control-bar height */
+        left: 0;
+        bottom: 0;
+        width: 70px;
+        background-color: #212529;
+        border-right: 1px solid #000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 15px;
+        z-index: 5005; 
+        flex-shrink: 0;
+    }
+    
+    .sidebar-btn {
+        background: transparent;
+        color: #aaa;
+        border: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        cursor: pointer;
+        padding: 10px 5px;
+        width: 100%;
+        transition: all 0.2s;
+    }
+    .sidebar-btn:hover, .sidebar-btn.active {
+        color: #fff;
+        background: #343a40;
+    }
+    .sidebar-btn .icon { font-size: 24px; line-height: 1; margin-bottom: 5px; font-weight: bold; }
+    .sidebar-btn .label { font-size: 11px; text-transform: uppercase; }
+
+    /* FIXED: Invisible Overlay to catch clicks outside the slider */
+    #slider-overlay {
+        display: none; position: fixed; top: 54px; 
+        /* FEATURE FIX: Ensure overlay starts AFTER the 70px sidebar so Add button stays clickable */
+        left: 70px; width: calc(100% - 70px); height: calc(100% - 54px);
+        z-index: 5000; background: rgba(0,0,0,0.1); cursor: default;
+    }
+
+    /* Dual Pane Slider Container */
+    #elements-slider {
+        position: fixed; /* UPDATED: Changed to fixed so it aligns properly with fixed sidebar */
+        top: 54px; /* Start below control bar */
+        bottom: 0;
+        left: -600px; /* Hidden state */
+        width: 550px; 
+        background: #ffffff;
+        box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+        z-index: 5001;
+        transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #ddd;
+    }
+
+    #elements-slider.open { left: 70px; } /* Slides out right next to the 70px sidebar */
+
+    body.dark-mode #elements-slider { background: #1e1e1e; border-right: 1px solid #333; }
+    
+    .slider-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 15px 20px;
+        border-bottom: 1px solid #eee;
+        background: #f8f9fa;
+        flex-shrink: 0;
+    }
+    body.dark-mode .slider-header { background: #252525; border-bottom: 1px solid #333; }
+    
+    .slider-header h3 { margin: 0; font-size: 1.1em; color: #333; }
+    body.dark-mode .slider-header h3 { color: #eee; }
+
+    #admin-add-category-btn {
+        background: #28a745;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 28px;
+        height: 28px;
+        font-size: 18px;
+        line-height: 1;
+        cursor: pointer;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    #admin-add-category-btn:hover { background: #218838; }
+
+    .slider-body {
+        flex-grow: 1;
+        overflow: hidden; 
+    }
+
+    /* Dual Pane Layout */
+    .slider-split-layout {
+        display: flex;
+        flex-direction: row;
+        height: 100%;
+        overflow: hidden;
+    }
+    
+    .slider-left-pane {
+        width: 180px;
+        background: #fdfdfd;
+        border-right: 1px solid #eee;
+        overflow-y: auto;
+        padding: 10px 0;
+        flex-shrink: 0;
+    }
+    body.dark-mode .slider-left-pane { background: #1a1a1a; border-right-color: #333; }
+    
+    .slider-right-pane {
+        flex-grow: 1;
+        background: #fff;
+        overflow-y: auto;
+        padding: 15px;
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 15px;
+        align-content: start;
+    }
+    body.dark-mode .slider-right-pane { background: #121212; }
+
+    /* Category List Items (Left Pane) */
+    .category-item {
+        padding: 12px 15px;
+        font-size: 0.9em;
+        font-weight: bold;
+        color: #555;
+        cursor: pointer;
+        border-left: 3px solid transparent;
+        transition: all 0.2s;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .category-item:hover { background: #e2e6ea; }
+    .category-item.active { background: #e8f4fd; color: #007bff; border-left-color: #007bff; }
+    
+    body.dark-mode .category-item { color: #aaa; }
+    body.dark-mode .category-item:hover { background: #333; }
+    body.dark-mode .category-item.active { background: #1e3a5f; color: #4dabf5; border-left-color: #4dabf5; }
+
+    /* Admin Action Overlays */
+    .cat-action-btn { background: none; border: none; font-size: 12px; cursor: pointer; color: #dc3545; display: none; padding: 2px 5px; border-radius: 3px; }
+    .cat-action-btn:hover { background: rgba(220,53,69,0.1); }
+    .category-item:hover .cat-action-btn { display: inline-block; }
+
+    /* Template Cards (Right Pane) */
+    .template-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 8px;
+        overflow: hidden;
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+        /* FEATURE FIX: Minimum height to maintain portrait sizing */
+        min-height: 280px;
+    }
+    .template-card:hover { transform: translateY(-3px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); border-color: #007bff; }
+    
+    body.dark-mode .template-card { background: #1e1e1e; border-color: #333; }
+    body.dark-mode .template-card:hover { border-color: #4dabf5; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+
+    /* FIXED: Template Edit/Delete buttons placement and visibility */
+    .template-actions { position: absolute; top: 5px; right: 5px; display: none; gap: 5px; z-index: 10; justify-content: flex-end; }
+    .template-card:hover .template-actions { display: flex; }
+    
+    .template-action-btn { background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; padding: 5px 8px; font-size: 13px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background 0.2s;}
+    .template-action-btn:hover { background: #000; }
+    
+    .template-action-btn.del { background: rgba(220, 53, 69, 0.9); }
+    .template-action-btn.del:hover { background: #c82333; }
+    
+    .template-edit-btn { background: rgba(23, 162, 184, 0.9); }
+    .template-edit-btn:hover { background: #117a8b; }
+
+    .template-badge { position: absolute; top: 5px; left: 5px; background: #6f42c1; color: white; font-size: 10px; font-weight: bold; padding: 2px 6px; border-radius: 10px; z-index: 5; }
+
+    /* FEATURE FIX: Make templates display in portrait mode by increasing wrapper height */
+    .template-img-wrapper {
+        width: 100%;
+        height: 240px; /* INCREASED from 120px */
+        background: #f4f4f9;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        overflow: hidden;
+    }
+    .template-img-wrapper img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: top; /* Ensure top of website template is visible */
+    }
+    .template-info {
+        padding: 10px;
+        font-size: 0.9em;
+        font-weight: bold;
+        color: #333;
+        text-align: center;
+        border-top: 1px solid #eee;
+        flex-grow: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    body.dark-mode .template-info { color: #eee; border-top-color: #333; }
+
+    /* =========================================
+       NEW: UI ELEMENTS SLIDER STYLES (FEATURE 1)
+       ========================================= */
+    #ui-elements-slider {
+        position: fixed;
+        top: 54px;
+        bottom: 0;
+        left: -600px;
+        width: 550px;
+        background: #ffffff;
+        box-shadow: 5px 0 15px rgba(0,0,0,0.1);
+        z-index: 5002;
+        transition: left 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+        display: flex;
+        flex-direction: column;
+        border-right: 1px solid #ddd;
+    }
+
+    #ui-elements-slider.open { left: 70px; }
+
+    body.dark-mode #ui-elements-slider { background: #1e1e1e; border-right: 1px solid #333; }
+
+    .el-cat-btn {
+        transition: background 0.2s, color 0.2s;
+    }
+    .el-cat-btn:hover {
+        background: #e2e6ea !important;
+    }
+    body.dark-mode .el-cat-btn:hover {
+        background: #333 !important;
+    }
+
+    .draggable-el-item {
+        transition: transform 0.1s, box-shadow 0.2s, border-color 0.2s;
+    }
+    .draggable-el-item:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        border-color: #007bff !important;
+    }
+    .draggable-el-item:active {
+        transform: translateY(0);
+        box-shadow: none;
+    }
+
+/* =========================================================
+   OVERRIDE: FORMATTING TOOLBAR (GOALS 4 & 5)
+   ========================================================= */
+#formattingToolbar {
+    position: fixed !important;
+    top: 75px !important; /* Just below top nav */
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    display: none; /* Hidden by default */
+    flex-direction: row !important;
+    flex-wrap: nowrap !important; /* Forces single row */
+    align-items: center !important;
+    justify-content: center !important;
+    background: #ffffff !important;
+    border: 1px solid #ddd !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15) !important;
+    padding: 8px 15px !important;
+    z-index: 10000 !important;
+    overflow-x: auto !important; /* Allows scroll only if screen is tiny */
+    overflow-y: hidden !important;
+    scrollbar-width: none !important; /* Hides scrollbar in Firefox */
+    width: max-content !important;
+    max-width: 95vw !important;
+    gap: 8px !important;
+}
+
+/* Hides scrollbar in Chrome/Safari/Edge */
+#formattingToolbar::-webkit-scrollbar {
+    display: none !important; 
+}
+
+#formattingToolbar.active {
+    display: flex !important;
+}
+
+#formattingToolbar > * {
+    display: inline-block !important;
+    margin: 0 !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+}
+
+.close-toolbar-btn {
+    background: transparent !important;
+    border: none !important;
+    color: #dc3545 !important;
+    font-size: 20px !important;
+    font-weight: bold !important;
+    cursor: pointer !important;
+    margin-left: auto !important;
+    padding: 0 5px !important;
+    display: flex !important;
+    align-items: center !important;
+}
+
+.close-toolbar-btn:hover {
+    color: #a71d2a !important;
+}
+
+/* =========================================================
+   NEW: SECTION HOVER & DRAG UI (GOALS 1 & 2)
+   ========================================================= */
+.editor-hover-overlay {
+    position: absolute;
+    pointer-events: none;
+    border: 2px dashed #0d6efd;
+    z-index: 9000;
+    transition: border-color 0.2s ease;
+}
+
+.section-controls-container {
+    position: absolute;
+    top: -15px; /* Floats slightly above the section border */
+    right: 15px;
+    pointer-events: auto;
+    display: flex;
+    gap: 5px;
+    z-index: 9001;
+}
+
+.drag-handle-btn,
+.dropdown-toggle-btn {
+    background: #0d6efd !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 4px !important;
+    width: 32px !important;
+    height: 32px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    cursor: pointer !important;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+    transition: background 0.2s !important;
+    font-size: 16px !important;
+}
+
+.drag-handle-btn:hover,
+.dropdown-toggle-btn:hover {
+    background: #0b5ed7 !important;
+}
+
+.drag-handle-btn {
+    cursor: move !important; 
+}
+
+.drag-handle-btn:active {
+    cursor: grabbing !important;
+}
+
+.section-actions-dropdown {
+    position: absolute;
+    top: 36px;
+    right: 0;
+    background: #ffffff !important;
+    border: 1px solid #ddd !important;
+    border-radius: 6px !important;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.15) !important;
+    display: none;
+    flex-direction: column;
+    min-width: 150px;
+    overflow: hidden;
+    pointer-events: auto;
+    z-index: 9002;
+}
+
+.section-actions-dropdown.show {
+    display: flex !important;
+}
+
+.section-actions-dropdown button {
+    background: transparent !important;
+    border: none !important;
+    border-bottom: 1px solid #f1f1f1 !important;
+    padding: 10px 15px !important;
+    text-align: left !important;
+    width: 100% !important;
+    color: #333 !important;
+    font-size: 14px !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
+}
+
+.section-actions-dropdown button:last-child {
+    border-bottom: none !important;
+}
+
+.section-actions-dropdown button:hover {
+    background: #f8f9fa !important;
+    color: #0d6efd !important;
+}
+
+.dragging-active {
+    opacity: 0.5 !important;
+    border: 2px dashed #ffc107 !important;
+}
+
+/* =========================================================
+   NEW: BACKGROUND GRADIENT UI (GOAL 3)
+   ========================================================= */
+.bg-gradient-settings {
+    display: none; 
+    margin-top: 15px;
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    border: 1px solid #ddd;
+}
+
+.bg-gradient-settings.active {
+    display: block !important;
+}
+
+.gradient-color-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+/* =========================================================
+   GOALS 7 & 8: MOBILE CHATBOX AND TEMPLATE FIXES
+   ========================================================= */
+@media (max-width: 768px) {
+    
+    /* Goal 8 Fix: Ensure left-panel (Chatbox) is fully visible and usable on mobile */
+    body {
+        flex-direction: column !important;
+    }
+    
+    #left-panel {
+        display: flex !important;
+        width: 100% !important;
+        height: 50vh !important; /* Take up half screen */
+        max-width: 100% !important;
+        border-right: none !important;
+        border-bottom: 1px solid #333 !important;
+        position: relative !important;
+        z-index: 100 !important;
+    }
+    
+    #right-panel {
+        width: 100% !important;
+        height: 50vh !important; /* Preview takes other half */
+    }
+    
+    #prompt-input {
+        min-height: 80px !important;
+        height: 80px !important;
+    }
+    
+    .chat-input-container {
+        min-height: auto !important;
+        padding: 10px !important;
+    }
+
+    /* Goal 7 Fix: Ensure Templates section stacks properly instead of squeezing horizontally */
+    #elements-slider {
+        width: 100% !important;
+        left: -100% !important; /* Adjust slide out for mobile */
+    }
+    
+    #elements-slider.open {
+        left: 0 !important; /* Slide over full screen */
+    }
+    
+    .slider-split-layout {
+        flex-direction: column !important;
+    }
+    
+    .slider-left-pane {
+        width: 100% !important;
+        height: auto !important;
+        max-height: 120px !important;
+        border-right: none !important;
+        border-bottom: 1px solid #ccc !important;
+        display: flex;
+        flex-direction: row;
+        overflow-x: auto;
+    }
+    
+    .category-item {
+        white-space: nowrap;
+        border-left: none !important;
+        border-bottom: 3px solid transparent;
+        padding: 10px 15px !important;
+    }
+    
+    .category-item.active {
+        border-left-color: transparent !important;
+        border-bottom-color: #007bff !important;
+    }
+    
+    .slider-right-pane {
+        grid-template-columns: 1fr 1fr !important; /* Maintain portrait grid */
+    }
+}
+
+@media (max-width: 480px) {
+    /* Stack templates fully vertically on very small phones */
+    .slider-right-pane {
+        grid-template-columns: 1fr !important;
+    }
+}
+</style>

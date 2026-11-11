@@ -1,0 +1,910 @@
+<script>
+    function addKeyField(provider, value = '') {
+        const container = document.getElementById(`keys-container-${provider}`);
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = 'key-input-group';
+        div.innerHTML = `
+            <input type="password" class="auth-input provider-key-input" data-provider="${provider}" value="${value}" placeholder="API Key">
+            <button class="remove-key-btn" onclick="this.parentElement.remove()">✕</button>
+        `;
+        container.appendChild(div);
+    }
+	
+    window.loadAdminSettings = function() {
+        console.log("🟢 loadAdminSettings Init");
+        fetch('/api/admin/get_settings')
+        .then(r => r.json())
+        .then(data => {
+            console.log("🟢 RAW DB DATA:", data);
+            
+            // Universal Data Flattener
+            let s = {};
+            if (data.settings && typeof data.settings === 'object' && !Array.isArray(data.settings)) s = { ...data.settings };
+            else if (data.data && typeof data.data === 'object' && !Array.isArray(data.data)) s = { ...data.data };
+            else s = { ...data };
+
+            if (Array.isArray(s)) {
+                let flat = {};
+                s.forEach(row => {
+                    let k = row.key || row.setting_key || row.name || row.id;
+                    let v = row.value !== undefined ? row.value : row.setting_value;
+                    if (k) flat[k] = v;
+                });
+                s = flat;
+            } else if (Array.isArray(data)) {
+                let flat = {};
+                data.forEach(row => {
+                    let k = row.key || row.setting_key || row.name || row.id;
+                    let v = row.value !== undefined ? row.value : row.setting_value;
+                    if (k) flat[k] = v;
+                });
+                s = flat;
+            }
+
+            console.log("🟢 FLATTENED DATA MAP:", s);
+
+            // AGGRESSIVE DOM INJECTOR (Searches multiple possible IDs to guarantee population)
+            const injectToDOM = (possibleIds, val) => {
+                if (val === undefined || val === null) return false;
+                for (let id of possibleIds) {
+                    let el = document.getElementById(id);
+                    if (el) {
+                        // Set Checkbox
+                        if (el.type === 'checkbox') {
+                            el.checked = (val === true || val === 'true' || val === 1 || val === '1' || val === 'on');
+                        } else {
+                            // Set Standard Value
+                            el.value = val;
+                            if (el.tagName !== 'INPUT' && el.tagName !== 'SELECT' && el.tagName !== 'TEXTAREA') {
+                                el.innerHTML = val;
+                            }
+                        }
+
+                        // Force Summernote Visual Sync
+                        if (typeof jQuery !== 'undefined' && typeof jQuery().summernote === 'function' && jQuery(el).next().hasClass('note-editor')) {
+                            jQuery(el).summernote('code', val);
+                        }
+                        
+                        // Force Quill Visual Sync
+                        if (el.nextElementSibling && el.nextElementSibling.classList.contains('ql-container')) {
+                            let qlEditor = el.nextElementSibling.querySelector('.ql-editor');
+                            if (qlEditor) qlEditor.innerHTML = val;
+                        }
+
+                        // Check for specific -visual containers
+                        let vis = document.getElementById(id + '-visual');
+                        if (vis) {
+                            let qlVis = vis.querySelector('.ql-editor');
+                            if (qlVis) qlVis.innerHTML = val;
+                            else vis.innerHTML = val;
+                        }
+
+                        // Fire update events so the browser registers the change
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        
+                        console.log(`✅ Injected data into ID: #${id}`);
+                        return true;
+                    }
+                }
+                console.warn(`❌ Missed: HTML element not found for any of IDs:`, possibleIds);
+                return false;
+            };
+
+            // 1. General & Interface
+            injectToDOM(['admin-default-chat-state', 'admin-chat-state', 'chat-state', 'default_chat_state'], s.default_chat_state || s.chat_state || s.chatbox_state || 'default');
+            injectToDOM(['admin-concurrent-enable', 'concurrent-enable'], s.concurrent_limit_enabled || s.concurrent_enabled);
+            injectToDOM(['admin-concurrent-limit', 'concurrent-limit'], s.concurrent_limit || s.chat_limit || 5);
+            injectToDOM(['admin-menu-color', 'menu-color'], s.top_menu_color || s.menu_color || s.theme_color || '#212529');
+            injectToDOM(['admin-menu-color-text'], s.top_menu_color || s.menu_color || s.theme_color || '#212529');
+            injectToDOM(['admin-voice-duration', 'voice-duration'], s.voice_silence_duration || s.voice_timeout || 2000);
+            injectToDOM(['admin-search-limit', 'search-limit'], s.image_search_limit || s.search_limit || 10);
+            injectToDOM(['admin-store-images', 'store-images'], s.store_images_locally !== false && s.store_images_locally !== 'false');
+            
+            // --- LOAD HIDE ONBOARDING SETTING ---
+            injectToDOM(['admin-hide-onboarding', 'hide-onboarding-popup', 'hide_onboarding_popup', 'admin-hide-onboarding-popup', 'disable-onboarding'], s.hide_onboarding_popup);
+
+            // --- LOAD LIVE PREVIEW TOGGLE ---
+            injectToDOM(['admin-show-live-preview', 'show-live-preview', 'show_live_preview'], s.show_live_preview);
+
+            // --- LOAD TAX SETTINGS ---
+            injectToDOM(['admin-tax-enabled', 'tax-enabled'], s.tax_enabled);
+            injectToDOM(['admin-tax-percentage', 'tax-percentage'], s.tax_percentage || 0);
+
+            // 2. Brand & Login Page
+            injectToDOM(['admin-logo-url', 'logo-url', 'site-logo'], s.logo_url || s.logo || s.brand_logo);
+            injectToDOM(['admin-logo-width', 'logo-width'], s.logo_width || s.logo_w || '120px');
+            injectToDOM(['admin-logo-height', 'logo-height'], s.logo_height || s.logo_h || 'auto');
+            injectToDOM(['admin-login-left-title', 'admin-login-title', 'login-title', 'login-left-title'], s.login_left_title || s.login_title || s.brand_title);
+            injectToDOM(['admin-login-left-content', 'admin-login-content', 'login-content', 'login-left-content'], s.login_left_content || s.login_content || s.brand_content);
+            injectToDOM(['admin-powered-by', 'admin-show-powered-by'], s.show_powered_by !== false && s.show_powered_by !== 'false');
+
+            // 3. Legal & GDPR Content
+            injectToDOM(['admin-terms-content', 'admin-terms', 'terms', 'terms-content', 'terms_and_conditions'], s.terms_content || s.terms_and_conditions || s.terms);
+            injectToDOM(['admin-privacy-content', 'admin-privacy', 'privacy', 'privacy-content', 'privacy_policy'], s.privacy_content || s.privacy_policy || s.privacy);
+            injectToDOM(['admin-gdpr-cookie-msg', 'admin-gdpr-msg', 'admin-gdpr-cookie', 'gdpr', 'gdpr-msg', 'cookie-msg'], s.gdpr_cookie_msg || s.gdpr_msg || s.cookie_msg || s.gdpr_content);
+
+            // 4. OAuth & Email Settings
+            injectToDOM(['admin-google-client-id', 'google-client-id'], s.google_client_id || s.oauth_google_id);
+            injectToDOM(['admin-google-client-secret', 'google-client-secret'], s.google_client_secret || s.oauth_google_secret);
+            injectToDOM(['email-method', 'mailer-type'], s.email_method || s.mailer_type || 'smtp');
+            if (typeof toggleEmailFields === 'function') toggleEmailFields();
+            injectToDOM(['smtp-host'], s.smtp_host);
+            injectToDOM(['smtp-port'], s.smtp_port);
+            injectToDOM(['smtp-user'], s.smtp_user);
+            injectToDOM(['smtp-pass'], s.smtp_pass);
+            injectToDOM(['smtp-from'], s.smtp_from_email || s.smtp_from);
+            injectToDOM(['email-api-url'], s.email_api_url);
+            injectToDOM(['email-api-key'], s.email_api_key);
+
+            // 5. AI Providers & API Keys
+            let activeAi = String(s.ai_provider || s.default_ai || 'gemini').trim().toLowerCase();
+            injectToDOM(['admin-ai-provider', 'ai-provider'], activeAi);
+            if (typeof window.toggleProviderSettings === 'function') window.toggleProviderSettings();
+            
+            let keys = {};
+            try { keys = JSON.parse(s.provider_keys_json || s.api_keys_json || '{}'); } catch(e) {}
+            if(!keys.gemini && s.gemini_api_key) keys.gemini = [s.gemini_api_key];
+            if(!keys.openai && s.openai_api_key) keys.openai = [s.openai_api_key];
+            if(!keys.claude && s.claude_api_key) keys.claude = [s.claude_api_key];
+            if(!keys.deepseek && s.deepseek_api_key) keys.deepseek = [s.deepseek_api_key];
+            if(!keys.grok && s.xai_api_key) keys.grok = [s.xai_api_key];
+            if(!keys.meta && s.meta_api_key) keys.meta = [s.meta_api_key];
+            if(!keys.perplexity && s.perplexity_api_key) keys.perplexity = [s.perplexity_api_key];
+
+            ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'].forEach(prov => {
+                const container = document.getElementById(`keys-container-${prov}`);
+                if(container) {
+                    container.innerHTML = '';
+                    const pKeys = keys[prov] || [];
+                    if(pKeys.length === 0) addKeyField(prov, '');
+                    else pKeys.forEach(k => addKeyField(prov, k));
+                }
+            });
+
+            // 6. Default AI Models & Instructions
+            const setModelVal = (prov, val) => {
+                const sel = document.getElementById(`admin-model-${prov}-select`);
+                const cust = document.getElementById(`admin-model-${prov}-custom`);
+                const fallback = document.getElementById(`admin-model-${prov}`);
+                if(sel) {
+                    let found = Array.from(sel.options).some(opt => opt.value === val);
+                    if(found) { sel.value = val; if(cust) cust.style.display = 'none'; } 
+                    else { sel.value = 'custom'; if(cust) { cust.value = val || ''; cust.style.display = 'block'; } }
+                } else if (fallback && val) { fallback.value = val; }
+            };
+
+            const setImageModelVal = (prov, val) => {
+                const sel = document.getElementById(`admin-image-model-${prov}-select`);
+                const cust = document.getElementById(`admin-image-model-${prov}-custom`);
+                if(sel) {
+                    let found = Array.from(sel.options).some(opt => opt.value === val);
+                    if(found) { sel.value = val; if(cust) cust.style.display = 'none'; } 
+                    else { sel.value = 'custom'; if(cust) { cust.value = val || ''; cust.style.display = 'block'; } }
+                }
+            };
+
+            const setTokenVal = (prov, val) => {
+                const sel = document.getElementById(`admin-token-limit-${prov}-select`);
+                const cust = document.getElementById(`admin-token-limit-${prov}-custom`);
+                if(sel) {
+                    let found = Array.from(sel.options).some(opt => opt.value === String(val));
+                    if(found) { sel.value = val; if(cust) cust.style.display = 'none'; } 
+                    else if (val) { sel.value = 'custom'; if(cust) { cust.value = val; cust.style.display = 'block'; } }
+                    else { sel.value = ''; if(cust) cust.style.display = 'none'; } 
+                }
+            };
+
+            setModelVal('gemini', s.model_gemini);
+            injectToDOM(['admin-inst-gemini', 'inst-gemini'], s.inst_gemini);
+            setModelVal('openai', s.model_openai);
+            injectToDOM(['admin-inst-openai', 'inst-openai'], s.inst_openai);
+            setModelVal('claude', s.model_claude);
+            injectToDOM(['admin-inst-claude', 'inst-claude'], s.inst_claude);
+            setModelVal('deepseek', s.model_deepseek);
+            injectToDOM(['admin-inst-deepseek', 'inst-deepseek'], s.inst_deepseek);
+            setModelVal('grok', s.model_grok);
+            injectToDOM(['admin-inst-grok', 'inst-grok'], s.inst_grok);
+            setModelVal('meta', s.model_meta);
+            injectToDOM(['admin-inst-meta', 'inst-meta'], s.inst_meta);
+            setModelVal('perplexity', s.model_perplexity);
+            injectToDOM(['admin-inst-perplexity', 'inst-perplexity'], s.inst_perplexity);
+            
+            setImageModelVal('gemini', s.image_model_gemini);
+            setImageModelVal('openai', s.image_model_openai);
+            setImageModelVal('claude', s.image_model_claude);
+            setImageModelVal('deepseek', s.image_model_deepseek);
+            setImageModelVal('grok', s.image_model_grok);
+            setImageModelVal('meta', s.image_model_meta);
+            setImageModelVal('perplexity', s.image_model_perplexity);
+
+            setTokenVal('gemini', s.token_limit_gemini);
+            setTokenVal('openai', s.token_limit_openai);
+            setTokenVal('claude', s.token_limit_claude);
+            setTokenVal('deepseek', s.token_limit_deepseek);
+            setTokenVal('grok', s.token_limit_grok);
+            setTokenVal('meta', s.token_limit_meta);
+            setTokenVal('perplexity', s.token_limit_perplexity);
+
+            injectToDOM(['admin-design-guidelines', 'design-guidelines', 'system-prompt'], s.design_guidelines || s.system_prompt);
+
+            // 7. Dynamic Pages
+            let pageData = [];
+            try { pageData = JSON.parse(s.default_pages_json || '[]'); } catch(e){}
+            if(document.getElementById('admin-default-page-count') && typeof window.generateDynamicPageInputs === 'function') {
+                const count = pageData.length > 0 ? pageData.length : 7;
+                document.getElementById('admin-default-page-count').value = count;
+                window.generateDynamicPageInputs(count, pageData);
+            }
+
+            // 8. Image Providers
+            if (typeof window.renderImageProviders === 'function') {
+                window.renderImageProviders(s.image_providers_json);
+            }
+
+        }).catch(e => console.error("Network Error Loading Settings:", e));
+    };
+    
+    document.getElementById('admin-menu-color')?.addEventListener('input', e => document.getElementById('admin-menu-color-text').value = e.target.value);
+    document.getElementById('admin-menu-color-text')?.addEventListener('input', e => document.getElementById('admin-menu-color').value = e.target.value);
+
+    function toggleEmailFields() {
+        const method = document.getElementById('email-method');
+        if (!method) return;
+        const smtpFields = document.getElementById('smtp-fields');
+        const apiFields = document.getElementById('api-fields');
+        if(smtpFields) smtpFields.style.display = method.value === 'smtp' ? 'block' : 'none';
+        if(apiFields) apiFields.style.display = method.value === 'api' ? 'block' : 'none';
+    }
+
+    window.renderImageProviders = function(jsonStr) {
+        const container = document.getElementById('image-providers-list');
+        if(!container) return;
+        container.innerHTML = '';
+        let providers = {};
+        try { providers = JSON.parse(jsonStr) || {}; } catch(e) {}
+        
+        ['pexels', 'unsplash', 'pixabay', 'freepik', 'shutterstock', 'mighty'].forEach(p => {
+            if(!providers[p]) providers[p] = { enabled: false, key: '', keys: [], type: 'paid' };
+        });
+        
+        Object.keys(providers).forEach(p => {
+            if (p === 'pollinations') return;
+            const config = providers[p];
+            let currentKeys = config.keys || [];
+            if(currentKeys.length === 0 && config.key) currentKeys.push(config.key);
+            
+            const div = document.createElement('div');
+            div.className = 'settings-group';
+            div.dataset.providerName = p;
+            
+            let html = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong>${p.toUpperCase()}</strong>
+                    <label><input type="checkbox" class="prov-enable" data-prov="${p}" ${config.enabled ? 'checked' : ''}> Enable</label>
+                </div>
+                <div id="img-keys-container-${p}" style="margin-top:5px;"></div>
+                <button onclick="window.addImageKeyField('${p}')" style="background:#28a745; color:white; border:none; padding:3px 8px; border-radius:3px; font-size:11px; margin-top:5px; cursor:pointer;">+ Add Key</button>
+            `;
+            div.innerHTML = html;
+            container.appendChild(div);
+
+            if (currentKeys.length === 0) window.addImageKeyField(p, '');
+            else currentKeys.forEach(k => window.addImageKeyField(p, k));
+        });
+    }
+
+    window.addImageKeyField = function(provider, value='') {
+        const container = document.getElementById(`img-keys-container-${provider}`);
+        if (!container) return;
+        const div = document.createElement('div');
+        div.className = 'key-input-group';
+        div.style.marginBottom = '5px';
+        div.innerHTML = `
+            <input type="password" class="auth-input img-prov-key" data-prov="${provider}" value="${value}" placeholder="API Key">
+            <button class="remove-key-btn" onclick="this.parentElement.remove()" style="padding:5px 10px;">✕</button>
+        `;
+        container.appendChild(div);
+    };
+
+    window.saveAdminSettings = function(event) {
+        try {
+            const extractVal = (possibleIds, def = '') => {
+                for (let id of possibleIds) {
+                    const el = document.getElementById(id);
+                    if (!el) continue;
+                    
+                    if (el.type === 'checkbox') return el.checked;
+
+                    if (typeof jQuery !== 'undefined' && typeof jQuery().summernote === 'function' && jQuery(el).next().hasClass('note-editor')) {
+                        return jQuery(el).summernote('code');
+                    }
+
+                    if (el.nextElementSibling && el.nextElementSibling.classList.contains('ql-container')) {
+                        const qlEditor = el.nextElementSibling.querySelector('.ql-editor');
+                        if (qlEditor) return qlEditor.innerHTML;
+                    }
+
+                    const visual = document.getElementById(id + '-visual');
+                    if (visual) {
+                        const qlEditor = visual.querySelector('.ql-editor');
+                        if (qlEditor) return qlEditor.innerHTML;
+                        return visual.innerHTML;
+                    }
+                    return el.value;
+                }
+                return def;
+            };
+
+            ['admin-login-content', 'admin-terms-content', 'admin-privacy-content', 'admin-gdpr-msg'].forEach(id => {
+                const visual = document.getElementById(id + '-visual');
+                const code = document.getElementById(id);
+                if (visual && code) code.value = visual.innerHTML;
+            });
+
+            const pageData = [];
+            document.querySelectorAll('.dynamic-page-row').forEach(row => {
+                const nameInput = row.querySelector('.page-name-input');
+                const descInput = row.querySelector('.page-desc-input');
+                const locInput = row.querySelector('.page-location-input');
+                pageData.push({
+                    name: nameInput ? nameInput.value.trim() : '', 
+                    description: descInput ? descInput.value.trim() : '', 
+                    location: locInput ? locInput.value : 'menu'
+                });
+            });
+
+            const aiKeyData = {};
+            ['gemini', 'openai', 'claude', 'deepseek', 'grok', 'meta', 'perplexity'].forEach(prov => {
+                const inputs = document.querySelectorAll(`.provider-key-input[data-provider="${prov}"]`);
+                aiKeyData[prov] = Array.from(inputs).map(i => i.value.trim()).filter(v => v);
+            });
+
+            const imgProvs = {};
+            document.querySelectorAll('#image-providers-list .settings-group').forEach(group => {
+                const name = group.dataset.providerName;
+                const enableCheck = group.querySelector('.prov-enable');
+                const enabled = enableCheck ? enableCheck.checked : false; 
+                const keyInputs = group.querySelectorAll('.img-prov-key');
+                const keys = Array.from(keyInputs).map(i => i.value.trim()).filter(v => v);
+                imgProvs[name] = { enabled: enabled, key: keys.length > 0 ? keys[0] : '', keys: keys, type: 'paid' };
+            });
+            
+            const showPoweredByValue = extractVal(['admin-powered-by', 'admin-show-powered-by'], true);
+
+            const getModelVal = (prov) => {
+                const sel = document.getElementById(`admin-model-${prov}-select`);
+                const cust = document.getElementById(`admin-model-${prov}-custom`);
+                const fallback = document.getElementById(`admin-model-${prov}`);
+                if(sel) return sel.value === 'custom' ? (cust ? cust.value.trim() : '') : sel.value;
+                return fallback ? fallback.value.trim() : '';
+            };
+
+            const getImageModelVal = (prov) => {
+                const sel = document.getElementById(`admin-image-model-${prov}-select`);
+                const cust = document.getElementById(`admin-image-model-${prov}-custom`);
+                if(sel) return sel.value === 'custom' ? (cust ? cust.value.trim() : '') : sel.value;
+                return '';
+            };
+
+            const getTokenVal = (prov) => {
+                const sel = document.getElementById(`admin-token-limit-${prov}-select`);
+                const cust = document.getElementById(`admin-token-limit-${prov}-custom`);
+                if(sel) return sel.value === 'custom' ? (cust ? cust.value.trim() : '') : sel.value;
+                return '';
+            };
+
+            const data = { 
+                ai_provider: extractVal(['admin-ai-provider', 'ai-provider'], 'gemini'),
+                default_ai: extractVal(['admin-ai-provider', 'ai-provider'], 'gemini'),
+                
+                provider_keys_json: JSON.stringify(aiKeyData),
+                api_keys_json: JSON.stringify(aiKeyData),
+                
+                gemini_api_key: (aiKeyData['gemini'] && aiKeyData['gemini'][0]) ? aiKeyData['gemini'][0] : '',
+                openai_api_key: (aiKeyData['openai'] && aiKeyData['openai'][0]) ? aiKeyData['openai'][0] : '',
+                claude_api_key: (aiKeyData['claude'] && aiKeyData['claude'][0]) ? aiKeyData['claude'][0] : '',
+                deepseek_api_key: (aiKeyData['deepseek'] && aiKeyData['deepseek'][0]) ? aiKeyData['deepseek'][0] : '',
+                xai_api_key: (aiKeyData['grok'] && aiKeyData['grok'][0]) ? aiKeyData['grok'][0] : '',
+                meta_api_key: (aiKeyData['meta'] && aiKeyData['meta'][0]) ? aiKeyData['meta'][0] : '',
+                perplexity_api_key: (aiKeyData['perplexity'] && aiKeyData['perplexity'][0]) ? aiKeyData['perplexity'][0] : '',
+
+                default_pages_json: JSON.stringify(pageData), 
+
+                default_chat_state: extractVal(['admin-default-chat-state', 'admin-chat-state', 'chat-state', 'default_chat_state'], 'default'),
+                chat_state: extractVal(['admin-default-chat-state', 'admin-chat-state', 'chat-state', 'default_chat_state'], 'default'),
+                
+                voice_silence_duration: extractVal(['admin-voice-duration', 'voice-duration'], '2000'),
+                concurrent_limit_enabled: extractVal(['admin-concurrent-enable', 'concurrent-enable'], false),
+                concurrent_limit: parseInt(extractVal(['admin-concurrent-limit', 'concurrent-limit'], '5')) || 5,
+                
+                top_menu_color: extractVal(['admin-menu-color', 'menu-color'], '#212529'),
+                menu_color: extractVal(['admin-menu-color', 'menu-color'], '#212529'),
+                
+                store_images_locally: extractVal(['admin-store-images', 'store-images'], true),
+                image_search_limit: parseInt(extractVal(['admin-search-limit', 'search-limit'], '10')) || 10,
+                image_providers_json: JSON.stringify(imgProvs),
+                
+                hide_onboarding_popup: extractVal(['admin-hide-onboarding', 'hide-onboarding-popup', 'hide_onboarding_popup', 'admin-hide-onboarding-popup', 'disable-onboarding'], false),
+                
+                // --- SAVE LIVE PREVIEW TOGGLE ---
+                show_live_preview: extractVal(['admin-show-live-preview', 'show-live-preview', 'show_live_preview'], false),
+
+                tax_enabled: extractVal(['admin-tax-enabled', 'tax-enabled'], false),
+                tax_percentage: parseFloat(extractVal(['admin-tax-percentage', 'tax-percentage'], '0')) || 0.0,
+                
+                email_method: extractVal(['email-method', 'mailer-type'], 'smtp'),
+                smtp_host: extractVal(['smtp-host']),
+                smtp_port: extractVal(['smtp-port']),
+                smtp_user: extractVal(['smtp-user']),
+                smtp_pass: extractVal(['smtp-pass']),
+                smtp_from_email: extractVal(['smtp-from']),
+                smtp_from: extractVal(['smtp-from']),
+                email_api_url: extractVal(['email-api-url']),
+                email_api_key: extractVal(['email-api-key']),
+                
+                logo_url: extractVal(['admin-logo-url', 'logo-url', 'site-logo']),
+                logo: extractVal(['admin-logo-url', 'logo-url', 'site-logo']),
+                brand_logo: extractVal(['admin-logo-url', 'logo-url', 'site-logo']),
+                
+                logo_width: extractVal(['admin-logo-width', 'logo-width'], '120px'),
+                logo_height: extractVal(['admin-logo-height', 'logo-height'], 'auto'),
+                
+                login_left_title: extractVal(['admin-login-left-title', 'admin-login-title', 'login-title', 'login-left-title'], 'Welcome to Ewebgen'),
+                login_title: extractVal(['admin-login-left-title', 'admin-login-title', 'login-title', 'login-left-title'], 'Welcome to Ewebgen'),
+                
+                login_left_content: extractVal(['admin-login-left-content', 'admin-login-content', 'login-content', 'login-left-content']),
+                login_content: extractVal(['admin-login-left-content', 'admin-login-content', 'login-content', 'login-left-content']),
+                
+                terms_content: extractVal(['admin-terms-content', 'admin-terms', 'terms', 'terms-content']),
+                terms_and_conditions: extractVal(['admin-terms-content', 'admin-terms', 'terms', 'terms-content']),
+                terms: extractVal(['admin-terms-content', 'admin-terms', 'terms', 'terms-content']),
+                
+                privacy_content: extractVal(['admin-privacy-content', 'admin-privacy', 'privacy', 'privacy-content']),
+                privacy_policy: extractVal(['admin-privacy-content', 'admin-privacy', 'privacy', 'privacy-content']),
+                
+                gdpr_cookie_msg: extractVal(['admin-gdpr-cookie-msg', 'admin-gdpr-msg', 'admin-gdpr-cookie', 'gdpr', 'gdpr-msg', 'cookie-msg']),
+                gdpr_msg: extractVal(['admin-gdpr-cookie-msg', 'admin-gdpr-msg', 'admin-gdpr-cookie', 'gdpr', 'gdpr-msg', 'cookie-msg']),
+                
+                show_powered_by: showPoweredByValue,
+                
+                google_client_id: extractVal(['admin-google-client-id', 'google-client-id']),
+                google_client_secret: extractVal(['admin-google-client-secret', 'google-client-secret']),
+
+                model_gemini: getModelVal('gemini'),
+                inst_gemini: extractVal(['admin-inst-gemini', 'inst-gemini']),
+                model_openai: getModelVal('openai'),
+                inst_openai: extractVal(['admin-inst-openai', 'inst-openai']),
+                model_claude: getModelVal('claude'),
+                inst_claude: extractVal(['admin-inst-claude', 'inst-claude']),
+                model_deepseek: getModelVal('deepseek'),
+                inst_deepseek: extractVal(['admin-inst-deepseek', 'inst-deepseek']),
+                model_grok: getModelVal('grok'),
+                inst_grok: extractVal(['admin-inst-grok', 'inst-grok']),
+                model_meta: getModelVal('meta'),
+                inst_meta: extractVal(['admin-inst-meta', 'inst-meta']),
+                model_perplexity: getModelVal('perplexity'),
+                inst_perplexity: extractVal(['admin-inst-perplexity', 'inst-perplexity']),
+                
+                image_model_gemini: getImageModelVal('gemini'),
+                image_model_openai: getImageModelVal('openai'),
+                image_model_claude: getImageModelVal('claude'),
+                image_model_deepseek: getImageModelVal('deepseek'),
+                image_model_grok: getImageModelVal('grok'),
+                image_model_meta: getImageModelVal('meta'),
+                image_model_perplexity: getImageModelVal('perplexity'),
+
+                token_limit_gemini: getTokenVal('gemini'),
+                token_limit_openai: getTokenVal('openai'),
+                token_limit_claude: getTokenVal('claude'),
+                token_limit_deepseek: getTokenVal('deepseek'),
+                token_limit_grok: getTokenVal('grok'),
+                token_limit_meta: getTokenVal('meta'),
+                token_limit_perplexity: getTokenVal('perplexity'),
+                
+                design_guidelines: extractVal(['admin-design-guidelines', 'design-guidelines', 'system-prompt']),
+                system_prompt: extractVal(['admin-design-guidelines', 'design-guidelines', 'system-prompt'])
+            };
+
+            const btn = event && event.target ? event.target : null;
+            let originalText = 'Save Settings';
+            
+            if (btn && btn.tagName === 'BUTTON') {
+                originalText = btn.textContent;
+                btn.disabled = true;
+                btn.textContent = 'Saving...';
+            }
+
+            fetch('/api/admin/update_settings', {
+                method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)
+            }).then(r => r.json()).then(d => {
+                if (btn && btn.tagName === 'BUTTON') {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+                if (d.success) {
+                    alert(d.message || "✅ Settings saved successfully!");
+                    const controlBar = document.getElementById('control-bar');
+                    if(controlBar && data.top_menu_color) controlBar.style.backgroundColor = data.top_menu_color;
+                } else {
+                    alert("❌ Error: " + d.error);
+                }
+            }).catch(err => {
+                if (btn && btn.tagName === 'BUTTON') {
+                    btn.disabled = false;
+                    btn.textContent = originalText;
+                }
+                alert("❌ Network Error while saving.");
+                console.error(err);
+            });
+        } catch (error) {
+            console.error("Crash during saveAdminSettings:", error);
+            alert("A system error occurred while trying to process the save. Check console for details.");
+        }
+    };
+
+    function deleteMessage(msgId) {
+        if(!confirm("Are you sure you want to delete this message?")) return;
+        
+        fetch('/api/notifications/delete', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ id: msgId })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const adminDashboard = document.getElementById('admin-dashboard');
+                if (adminDashboard && adminDashboard.style.display !== 'none') {
+                    loadAdminMessages();
+                }
+                if (typeof window.loadNotifications === 'function') {
+                    window.loadNotifications();
+                }
+            } else {
+                alert("Failed to delete message: " + data.error);
+            }
+        })
+        .catch(err => {
+            console.error("Delete Error:", err);
+            alert("Error deleting message.");
+        });
+    }
+
+    window.deleteMessage = deleteMessage;
+    
+    window.loadAdminMessages = function() {
+        const inbox = document.getElementById('admin-msg-inbox');
+        if(!inbox) return; 
+        
+        fetch('/api/admin/messages').then(r => r.json()).then(data => {
+            inbox.innerHTML = '';
+            const unreadCount = data.messages.filter(m => !m.read).length;
+            const countBadge = document.getElementById('admin-msg-count');
+            if(countBadge) {
+                countBadge.textContent = unreadCount;
+                countBadge.style.display = unreadCount > 0 ? 'inline-block' : 'none';
+            }
+
+            if(data.messages.length === 0) {
+                inbox.innerHTML = '<div style="padding:20px; text-align:center; color:#888;">No messages found.</div>';
+                return;
+            }
+            
+            data.messages.forEach(m => {
+                const div = document.createElement('div');
+                div.id = `admin-msg-item-${m.id}`;
+                div.className = `inbox-msg ${m.read ? '' : 'unread'}`;
+                const attachIcon = m.has_attachment ? '📎 ' : '';
+
+                div.innerHTML = `
+                    <div class="inbox-header">
+                        <span><b>${m.from_user}</b> (${m.email})</span>
+                        <span>${m.timestamp}</span>
+                    </div>
+                    <div style="font-weight:bold; margin-bottom:4px;">${attachIcon}${m.subject}</div>
+                    <div style="color:#555; margin-bottom:8px;">${m.body.length > 100 ? m.body.substring(0,100)+'...' : m.body}</div>
+                    <div class="msg-actions" style="display:flex; justify-content:flex-start; align-items:center;">
+                        <button class="msg-btn-reply" onclick="event.stopPropagation(); window.openAdminReplyModal('${m.user_id}', '${m.from_user}', '${m.subject}', '${m.thread_id || m.id}', '${m.id}')">↩️ View & Reply</button>
+                        <button onclick="event.stopPropagation(); deleteMessage(${m.id})" style="background:none; border:none; color:#dc3545; cursor:pointer; font-size:1.1em; font-weight:bold; margin-left:10px;" title="Delete Message">✕</button>
+                    </div>
+                `;
+                div.onclick = (e) => { window.openAdminReplyModal(m.user_id, m.from_user, m.subject, m.thread_id || m.id, m.id, m.body, m.attachment); };
+                inbox.appendChild(div);
+            });
+            
+            const targetSelect = document.getElementById('admin-notif-target');
+            if(targetSelect && typeof adminUsersList !== 'undefined' && adminUsersList.length > 0) {
+                 const currentVal = targetSelect.value;
+                 targetSelect.innerHTML = '<option value="all">📢 All Users (Broadcast)</option>';
+                 adminUsersList.forEach(u => {
+                    const opt = document.createElement('option');
+                    opt.value = u.id;
+                    opt.textContent = `👤 ${u.username} (${u.email})`;
+                    targetSelect.appendChild(opt);
+                 });
+                 if(currentVal) targetSelect.value = currentVal;
+            }
+        });
+    }
+
+    window.openAdminReplyModal = function(userId, userName, originalSubject, threadId, msgId, originalBody = null, attachment = null) {
+        const modal = document.getElementById('admin-reply-modal');
+        if(modal) modal.style.display = 'flex';
+        
+        const targetIdEl = document.getElementById('reply-target-id');
+        if(targetIdEl) targetIdEl.value = userId;
+        
+        const threadIdEl = document.getElementById('reply-thread-id');
+        if(threadIdEl) threadIdEl.value = threadId; 
+        
+        const targetNameEl = document.getElementById('reply-target-name');
+        if(targetNameEl) targetNameEl.textContent = userName;
+        
+        const subjContextEl = document.getElementById('reply-subject-context');
+        if(subjContextEl) subjContextEl.textContent = originalSubject;
+        
+        if (msgId) window.markAdminMessageRead(msgId);
+
+        const contextDiv = document.getElementById('reply-original-content');
+        if(contextDiv) {
+            if(originalBody) {
+                let attHtml = attachment ? `<br><a href="${attachment}" target="_blank" style="font-size:0.8em">📎 View Attachment</a>` : '';
+                contextDiv.innerHTML = `<div style="background:#f9f9f9; padding:10px; border-left:3px solid #ccc; margin-bottom:10px; font-size:0.9em;">${originalBody}${attHtml}</div>`;
+                contextDiv.style.display = 'block';
+            } else {
+                contextDiv.style.display = 'none';
+            }
+        }
+
+        const replyMsg = document.getElementById('reply-message');
+        if(replyMsg) replyMsg.value = '';
+        
+        const replyFile = document.getElementById('admin-reply-file');
+        if(replyFile) replyFile.value = '';
+    }
+    
+    window.markAdminMessageRead = function(msgId) {
+        const msgItem = document.getElementById(`admin-msg-item-${msgId}`);
+        if(msgItem && msgItem.classList.contains('unread')) {
+             msgItem.classList.remove('unread');
+             const badge = document.getElementById('admin-msg-count');
+             let count = parseInt(badge.textContent) || 0;
+             if(count > 0) badge.textContent = count - 1;
+             if(count - 1 <= 0) badge.style.display = 'none';
+        }
+        fetch('/api/admin/mark_message_read', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ message_id: msgId }) }).catch(e => console.error(e));
+    }
+
+    window.sendAdminReply = function() {
+        const target = document.getElementById('reply-target-id').value;
+        const threadId = document.getElementById('reply-thread-id').value;
+        const body = document.getElementById('reply-message').value.trim();
+        const fileInput = document.getElementById('admin-reply-file');
+        const origSubject = document.getElementById('reply-subject-context').textContent;
+        const subject = origSubject.startsWith("RE:") ? origSubject : "RE: " + origSubject;
+
+        if(!body && (!fileInput.files || fileInput.files.length === 0)) { alert("Please enter a message."); return; }
+
+        const formData = new FormData();
+        formData.append('target_user_id', target);
+        formData.append('thread_id', threadId); 
+        formData.append('subject', subject);
+        formData.append('body', body);
+        if(fileInput.files[0]) formData.append('attachment', fileInput.files[0]);
+
+        const btn = document.querySelector('#admin-reply-modal .auth-btn');
+        if(btn) { btn.disabled = true; btn.textContent = "Sending..."; }
+
+        fetch('/api/admin/send_notification', { method: 'POST', body: formData }).then(r => r.json()).then(d => {
+            if(btn) { btn.disabled = false; btn.textContent = "Send Reply"; }
+            if(d.success) { 
+                alert("Reply sent successfully!"); 
+                if(typeof window.safeCloseModal === 'function') window.safeCloseModal('admin-reply-modal'); 
+            } else { 
+                alert("Error: " + d.error); 
+            }
+        }).catch(e => { 
+            if(btn) { btn.disabled = false; btn.textContent = "Send Reply"; }
+            alert("Send failed."); 
+        });
+    }
+
+    window.sendAdminNotification = function() {
+        const target = document.getElementById('admin-notif-target').value;
+        const subject = document.getElementById('admin-notif-subject').value.trim();
+        const body = document.getElementById('admin-notif-body').value.trim();
+        
+        if(typeof currentUser !== 'undefined' && currentUser && target == currentUser.id) { 
+            alert("⚠️ You cannot send a notification to yourself."); 
+            return; 
+        }
+        if(!subject || !body) { alert("Please enter subject and message."); return; }
+        
+        const formData = new FormData();
+        formData.append('target_user_id', target);
+        formData.append('subject', subject);
+        formData.append('body', body);
+
+        fetch('/api/admin/send_notification', { method: 'POST', body: formData }).then(r => r.json()).then(d => {
+            if(d.success) {
+                alert("Notification sent successfully!");
+                document.getElementById('admin-notif-subject').value = '';
+                document.getElementById('admin-notif-body').value = '';
+            } else { alert("Error: " + d.error); }
+        });
+    }
+
+    window.loadPaymentGateways = function() {
+        const container = document.getElementById('payment-gateways-container');
+        if(!container) return;
+        
+        container.innerHTML = '<div style="text-align:center; padding:20px; color:#aaa;">Loading Configuration...</div>';
+        
+        const gatewaySchemas = {
+            'paypal': {
+                label: 'PayPal REST API',
+                fields: [
+                    { key: 'client_id', label: 'Client ID', type: 'text' },
+                    { key: 'client_secret', label: 'Client Secret', type: 'password' },
+                    { key: 'webhook_id', label: 'Webhook ID (optional) - webhook URL: ' + location.origin + '/api/payment/webhook/paypal', type: 'text' }
+                ]
+            },
+            'cashfree': {
+                label: 'Cashfree Payments',
+                fields: [
+                    { key: 'app_id', label: 'App ID / Client ID', type: 'text' },
+                    { key: 'secret_key', label: 'Secret Key', type: 'password' }
+                ]
+            },
+            'ccavenue': {
+                label: 'CCAvenue',
+                fields: [
+                    { key: 'merchant_id', label: 'Merchant ID', type: 'text' },
+                    { key: 'access_code', label: 'Access Code', type: 'text' },
+                    { key: 'working_key', label: 'Working Key', type: 'password' }
+                ]
+            }
+        };
+
+        fetch('/api/admin/payment_gateways')
+        .then(r => r.json())
+        .then(data => {
+            const currSelect = document.getElementById('admin-currency-select');
+            if(currSelect && data.currency) currSelect.value = data.currency;
+
+            const visibleGateways = (data.gateways || []).filter(gw => ['paypal', 'cashfree', 'ccavenue'].includes(gw.code));
+
+            if(visibleGateways.length === 0) {
+                container.innerHTML = '<div style="padding:15px; color:#d9534f;">No compatible gateways (PayPal, Cashfree, CCAvenue) found.</div>';
+                return;
+            }
+            
+            let html = '';
+            visibleGateways.forEach(gw => {
+                const isActive = gw.is_active;
+                const statusColor = isActive ? '#28a745' : '#ccc';
+                const statusText = isActive ? 'Enabled' : 'Disabled';
+                const cardBorder = isActive ? 'border-left: 5px solid #28a745;' : 'border-left: 5px solid #ccc;';
+                
+                const schema = gatewaySchemas[gw.code];
+                const displayName = schema ? schema.label : gw.name;
+
+                let configHtml = '';
+                if (schema && schema.fields) {
+                    schema.fields.forEach(field => {
+                        const val = (gw.config && gw.config[field.key]) ? gw.config[field.key] : '';
+                        configHtml += `
+                            <div class="settings-group" style="margin-bottom:10px;">
+                                <label style="font-size:0.85em; font-weight:bold; color:#555;">${field.label}</label>
+                                <input type="${field.type}" id="gw-config-${gw.id}-${field.key}" class="auth-input" value="${val}" placeholder="Enter ${field.label}" style="background:#fff;">
+                            </div>
+                        `;
+                    });
+                } else {
+                     configHtml = '<div>Configuration not defined for this gateway.</div>';
+                }
+
+                html += `
+                    <div class="admin-card" style="${cardBorder} margin-bottom: 20px; transition:all 0.3s;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                            <div style="display:flex; align-items:center; gap:10px;">
+                                <h3 style="margin:0; font-size:1.1em;">${displayName}</h3>
+                                <span style="font-size:0.75em; background:#eee; color:#666; padding:2px 6px; border-radius:3px; text-transform:uppercase;">${gw.code}</span>
+                            </div>
+                            <div style="display:flex; align-items:center; gap:15px;">
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <label style="margin:0; font-size:0.85em; font-weight:bold;">Mode:</label>
+                                    <select id="gw-mode-${gw.id}" class="auth-input" style="width:auto; margin:0; padding:4px; font-size:0.85em;">
+                                        <option value="sandbox" ${gw.mode === 'sandbox' ? 'selected' : ''}>🧪 Sandbox (Test)</option>
+                                        <option value="live" ${gw.mode === 'live' ? 'selected' : ''}>🚀 Live (Production)</option>
+                                    </select>
+                                </div>
+                                <div style="display:flex; align-items:center; gap:5px;">
+                                    <input type="checkbox" id="gw-active-${gw.id}" ${isActive ? 'checked' : ''} style="transform:scale(1.2); cursor:pointer;">
+                                    <label for="gw-active-${gw.id}" style="margin:0; font-size:0.9em; font-weight:bold; cursor:pointer; color:${statusColor};">${statusText}</label>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="background:#f8f9fa; padding:15px; border-radius:5px;">
+                            ${configHtml}
+                            <div style="text-align:right; margin-top:10px;">
+                                <button class="auth-btn" style="width:auto; padding:8px 20px; font-size:0.9em;" onclick="window.saveGatewayConfig('${gw.id}', '${displayName}')">💾 Save ${displayName} Settings</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+            container.innerHTML = html;
+        })
+        .catch(err => {
+            container.innerHTML = `<div style="color:red;">Error loading gateways: ${err}</div>`;
+        });
+    }
+
+    window.saveGatewayConfig = function(id, name) {
+        const inputs = document.querySelectorAll(`[id^="gw-config-${id}-"]`);
+        let config = {};
+        inputs.forEach(input => {
+            const key = input.id.replace(`gw-config-${id}-`, '');
+            config[key] = input.value.trim();
+        });
+        
+        const mode = document.getElementById(`gw-mode-${id}`).value;
+        const isActive = document.getElementById(`gw-active-${id}`).checked;
+        
+        fetch('/api/admin/update_gateway', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                id: id,
+                is_active: isActive,
+                mode: mode,
+                config: config
+            })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) {
+                alert(`✅ ${name} updated successfully!`);
+                window.loadPaymentGateways(); 
+            } else {
+                alert("❌ Error: " + d.error);
+            }
+        })
+        .catch(e => { alert("Network Error: Could not reach server."); });
+    }
+
+    window.saveCurrencySettings = function() {
+        const currency = document.getElementById('admin-currency-select').value;
+        fetch('/api/admin/update_settings', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ default_currency: currency })
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) alert("✅ Currency Updated!");
+        });
+    }
+
+    // --- GLOBAL OVERRIDE: ENFORCE LIVE PREVIEW SETTING DURING GENERATION ---
+    document.addEventListener("DOMContentLoaded", () => {
+        const originalUpdateLivePreview = window.updateLivePreview;
+        if (typeof originalUpdateLivePreview === 'function') {
+            window.updateLivePreview = function(jsonStreamText) {
+                // Check global app config for the live preview setting
+                const showLivePreview = (typeof appConfigData !== 'undefined' && (appConfigData.show_live_preview === true || appConfigData.show_live_preview === 'true'));
+                
+                if (showLivePreview) {
+                    // Standard behavior: show the website building live
+                    originalUpdateLivePreview(jsonStreamText);
+                } else {
+                    // Hidden behavior: just keep the loading screen up, don't update the iframe DOM
+                    // We do nothing here. The final render happens in 'complete' via runLiveConstructionSequence
+                }
+            };
+        }
+    });
+</script>

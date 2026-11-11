@@ -1,0 +1,846 @@
+<script>
+    // ==========================================
+    // TEMPLATES & CATEGORIES (NEW SLIDER LOGIC)
+    // ==========================================
+    
+    let currentTemplateCategoryId = null;
+
+    // --- ADMIN DASHBOARD OVERRIDES ---
+    function openAdminDashboard() {
+        document.getElementById('admin-dashboard').style.display = 'block';
+        
+        const sidebar = document.getElementById('editor-sidebar');
+        if(sidebar) sidebar.style.display = 'none';
+        
+        const chatbox = document.getElementById('left-panel');
+        if(chatbox) chatbox.style.display = 'none';
+        
+        if(typeof closeElementsSlider === 'function') closeElementsSlider();
+        if(typeof loadAdminUsers === 'function') loadAdminUsers();
+        if(typeof loadAdminSettings === 'function') loadAdminSettings();
+        if(typeof loadAdminUserTypes === 'function') loadAdminUserTypes(); 
+        
+        if(msgRefreshInterval) clearInterval(msgRefreshInterval);
+        if(typeof loadAdminMessages === 'function') msgRefreshInterval = setInterval(loadAdminMessages, 10000); 
+    }
+    
+    function closeAdminDashboard() { 
+        document.getElementById('admin-dashboard').style.display = 'none';
+        
+        const sidebar = document.getElementById('editor-sidebar');
+        if(sidebar) sidebar.style.display = 'flex';
+        
+        const chatbox = document.getElementById('left-panel');
+        if(chatbox) chatbox.style.display = '';
+
+        if(msgRefreshInterval) clearInterval(msgRefreshInterval); 
+    }
+
+    function toggleElementsSlider(e) {
+        if (e) e.stopPropagation();
+        const slider = document.getElementById('elements-slider');
+        const closeBtn = document.getElementById('sidebar-close-btn');
+        const addBtn = document.getElementById('sidebar-add-btn');
+        const overlay = document.getElementById('slider-overlay');
+
+        if (slider.classList.contains('open')) {
+            closeElementsSlider();
+        } else {
+            slider.classList.add('open');
+            if(closeBtn) closeBtn.style.display = 'flex';
+            if(addBtn) addBtn.style.display = 'none';
+            if(overlay) overlay.style.display = 'block'; 
+            
+            if(typeof setChatMode === 'function') setChatMode('minimized');
+            loadTemplateCategories();
+        }
+    }
+
+    function closeElementsSlider() {
+        const slider = document.getElementById('elements-slider');
+        const closeBtn = document.getElementById('sidebar-close-btn');
+        const addBtn = document.getElementById('sidebar-add-btn');
+        const overlay = document.getElementById('slider-overlay');
+        
+        if (slider) slider.classList.remove('open');
+        if (closeBtn) closeBtn.style.display = 'none';
+        if (addBtn) addBtn.style.display = 'flex';
+        if (overlay) overlay.style.display = 'none'; 
+    }
+
+    // =========================================================================
+    // DYNAMIC CATEGORY RENDER LOGIC
+    // =========================================================================
+    function renderCategories(data) {
+        const leftPane = document.getElementById('slider-categories');
+        if(!leftPane) return;
+        leftPane.innerHTML = '';
+        
+        const addCatBtn = document.getElementById('admin-add-category-btn');
+        if (currentUser && currentUser.role === 'admin' && addCatBtn) {
+            addCatBtn.style.display = 'flex';
+        }
+
+        // --- ALL TEMPLATES RESTORED ---
+        // Backend now completely isolates Elements from Templates, so spillover is impossible.
+        const allCatDiv = document.createElement('div');
+        allCatDiv.className = 'category-item active';
+        allCatDiv.innerHTML = `<span>All Templates</span>`;
+        allCatDiv.onclick = () => {
+            document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+            allCatDiv.classList.add('active');
+            if (typeof window.loadSidebarTemplates === 'function') window.loadSidebarTemplates('all');
+            else if (typeof loadTemplates === 'function') loadTemplates('all');
+        };
+        leftPane.appendChild(allCatDiv);
+
+        if (data && data.length > 0) {
+            data.forEach((c, index) => {
+                const catDiv = document.createElement('div');
+                catDiv.className = 'category-item';
+                catDiv.innerHTML = `<span>${c.name}</span>`;
+                catDiv.onclick = () => {
+                    document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+                    catDiv.classList.add('active');
+                    if (typeof window.loadSidebarTemplates === 'function') {
+                        window.loadSidebarTemplates(c.id);
+                    } else if (typeof loadTemplates === 'function') {
+                        loadTemplates(c.id);
+                    }
+                };
+                leftPane.appendChild(catDiv);
+            });
+        }
+        
+        // Auto-click the safe All Templates tab on load
+        setTimeout(() => { allCatDiv.click(); }, 100);
+    }
+
+    function loadTemplateCategories() {
+        const addBtn = document.getElementById('admin-add-category-btn');
+        if(addBtn) {
+            addBtn.style.display = (currentUser && currentUser.role === 'admin') ? 'flex' : 'none';
+        }
+
+        fetch('/api/templates/categories')
+        .then(r => r.json())
+        .then(cats => {
+            const container = document.getElementById('slider-categories');
+            container.innerHTML = '';
+            
+            const dropdown = document.getElementById('new-template-category');
+            if(dropdown) dropdown.innerHTML = '<option value="" disabled selected>Select Category...</option>';
+
+            if(cats.length === 0) {
+                container.innerHTML = '<div style="color:#aaa; font-size:0.9em; padding:10px;">No categories yet.</div>';
+                return;
+            }
+
+            // --- ALL TEMPLATES RESTORED ---
+            const allItem = document.createElement('div');
+            allItem.className = `category-item ${currentTemplateCategoryId === 'all' || currentTemplateCategoryId === null ? 'active' : ''}`;
+            allItem.innerHTML = `<span>All Templates</span>`;
+            allItem.onclick = () => {
+                currentTemplateCategoryId = 'all';
+                document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+                allItem.classList.add('active');
+                loadTemplates('all');
+            };
+            container.appendChild(allItem);
+
+            cats.forEach((c, index) => {
+                if(dropdown) {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = c.name;
+                    dropdown.appendChild(opt);
+                }
+
+                const item = document.createElement('div');
+                item.className = `category-item ${currentTemplateCategoryId === c.id ? 'active' : ''}`;
+                if(item.classList.contains('active')) currentTemplateCategoryId = c.id;
+                
+                let adminHtml = '';
+                if(currentUser && currentUser.role === 'admin') {
+                    adminHtml = `<button class="cat-action-btn" title="Delete Category" onclick="event.stopPropagation(); deleteCategory(${c.id})">🗑️</button>`;
+                }
+                
+                item.innerHTML = `<span>${c.name}</span> ${adminHtml}`;
+                
+                item.onclick = () => {
+                    currentTemplateCategoryId = c.id;
+                    document.querySelectorAll('.category-item').forEach(el => el.classList.remove('active'));
+                    item.classList.add('active');
+                    loadTemplates(c.id);
+                };
+                container.appendChild(item);
+            });
+            
+            if(currentTemplateCategoryId) loadTemplates(currentTemplateCategoryId);
+            else {
+                currentTemplateCategoryId = 'all';
+                loadTemplates('all');
+            }
+        });
+    }
+
+    function loadTemplates(catId) {
+        const container = document.getElementById('slider-templates');
+        container.innerHTML = '<div style="color:#999; text-align:center; padding:20px;">Loading...</div>';
+        
+        fetch(`/api/templates/items?category_id=${catId}`)
+        .then(r => r.json())
+        .then(items => {
+            container.innerHTML = '';
+            if(items.length === 0) {
+                container.innerHTML = '<div style="color:#999; text-align:center; padding:20px;">No templates here yet.</div>';
+                return;
+            }
+            
+            items.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'template-card';
+                card.onclick = () => injectTemplate(item);
+                
+                let adminActions = '';
+                if(currentUser && currentUser.role === 'admin') {
+                    adminActions = `
+                        <div class="template-actions">
+                            <button class="template-action-btn template-edit-btn" title="Edit Template" onclick="editTemplateAction(event, ${item.id})">✏️</button>
+                            <button class="template-action-btn del" onclick="event.stopPropagation(); deleteTemplate(${item.id})">Delete</button>
+                        </div>
+                    `;
+                }
+
+                const badge = item.is_full_project ? '<div class="template-badge" style="background:#007bff;">FULL SITE</div>' : '<div class="template-badge" style="background:#6f42c1;">ELEMENT</div>';
+                const thumbUrl = item.thumbnail_url || 'https://via.placeholder.com/300x150?text=No+Preview';
+                
+                card.innerHTML = `
+                    ${badge}
+                    ${adminActions}
+                    <div class="template-img-wrapper">
+                        <img src="${thumbUrl}" alt="${item.name}" loading="lazy">
+                    </div>
+                    <div class="template-info">${item.name}</div>
+                `;
+                container.appendChild(card);
+            });
+        });
+    }
+
+    // --- BULLETPROOF CATEGORY DELETE LOGIC ---
+    window.deleteCategory = function(explicitId = null) {
+        let catId = explicitId;
+        let catName = "this category";
+        
+        if (!catId || typeof catId === 'object') {
+            let select = document.getElementById('manage-category-select') 
+                      || document.getElementById('new-template-category');
+                      
+            if (!select || !select.value) {
+                alert("Please select a category from the dropdown to delete.");
+                return;
+            }
+            catId = select.value;
+            if (select.options && select.selectedIndex >= 0) {
+                catName = select.options[select.selectedIndex].text;
+            }
+        }
+        
+        if (!confirm(`⚠️ Are you absolutely sure you want to delete the category "${catName}"?\n\nThis will also PERMANENTLY DELETE all templates and elements inside it.`)) {
+            return;
+        }
+        
+        fetch(`/api/admin/templates/categories/${catId}`, {
+            method: 'DELETE',
+            headers: {'Content-Type': 'application/json'}
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Category deleted successfully.");
+                
+                if(window.sidebarCache) window.sidebarCache.categories = null;
+                
+                if(typeof loadAdminCategories === 'function') loadAdminCategories(); 
+                if(typeof loadSidebarCategories === 'function') loadSidebarCategories();
+                if(typeof loadTemplateCategories === 'function') loadTemplateCategories();
+                
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    const manageCatSelect = document.getElementById('manage-category-select');
+                    const templateCatSelect = document.getElementById('new-template-category');
+                    if (manageCatSelect) {
+                        manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                        cats.forEach(c => manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                    if (templateCatSelect) {
+                        templateCatSelect.innerHTML = '<option value="" disabled selected>Select Category...</option>';
+                        cats.forEach(c => templateCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                });
+            } else {
+                alert("❌ Error deleting category: " + data.error);
+            }
+        })
+        .catch(err => {
+            alert("❌ Network error while deleting category.");
+            console.error(err);
+        });
+    };
+
+    // --- BULLETPROOF RENAME CATEGORY LOGIC ---
+    window.promptRenameCategory = function() {
+        let select = document.getElementById('manage-category-select') 
+                  || document.getElementById('new-template-category');
+                  
+        if (!select || !select.value) {
+            alert("Please select a category to rename.");
+            return;
+        }
+        
+        const catId = select.value;
+        const oldName = select.options[select.selectedIndex].text;
+        
+        const newName = prompt(`Enter new name for "${oldName}":`, oldName);
+        if (!newName || newName.trim() === '' || newName === oldName) {
+            return;
+        }
+        
+        fetch(`/api/admin/templates/categories/${catId}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ name: newName.trim() })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                alert("✅ Category renamed successfully.");
+                if(typeof loadAdminCategories === 'function') loadAdminCategories(); 
+                if(typeof loadSidebarCategories === 'function') loadSidebarCategories();
+                if(typeof loadTemplateCategories === 'function') loadTemplateCategories();
+                
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    const manageCatSelect = document.getElementById('manage-category-select');
+                    const templateCatSelect = document.getElementById('new-template-category');
+                    if (manageCatSelect) {
+                        manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                        cats.forEach(c => manageCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                    if (templateCatSelect) {
+                        templateCatSelect.innerHTML = '<option value="" disabled selected>Select Category...</option>';
+                        cats.forEach(c => templateCatSelect.innerHTML += `<option value="${c.id}">${c.name}</option>`);
+                    }
+                });
+            } else {
+                alert("❌ Error renaming category: " + data.error);
+            }
+        })
+        .catch(err => alert("Network error while renaming category."));
+    };
+
+    function deleteTemplate(id) {
+        if(!confirm("Permanently delete this template?")) return;
+        fetch(`/api/admin/templates/items/${id}`, {method: 'DELETE'})
+        .then(r=>r.json()).then(d => {
+            if(d.success) loadTemplates(currentTemplateCategoryId);
+            else alert(d.error);
+        });
+    }
+
+    function injectTemplate(item) {
+        if (item.is_full_project) {
+            if(!confirm(`Loading '${item.name}' will replace your entire current workspace. Continue?`)) return;
+            loadTemplateAsProject(item);
+        } else {
+            if(!item.content_html) return alert("This template has no HTML content.");
+            
+            captureState();
+            const iframe = document.getElementById('preview-frame');
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            
+            const sel = doc.getSelection();
+            if (sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) {
+                const range = sel.getRangeAt(0);
+                range.deleteContents();
+                const tempDiv = doc.createElement('div');
+                tempDiv.innerHTML = item.content_html;
+                Array.from(tempDiv.childNodes).reverse().forEach(node => {
+                    range.insertNode(node);
+                });
+            } else if (currentContextTarget) {
+                currentContextTarget.insertAdjacentHTML('afterend', item.content_html);
+                currentContextTarget = null;
+            } else {
+                doc.body.insertAdjacentHTML('beforeend', item.content_html);
+            }
+            
+            initEditor(iframe);
+            enableSaveButton();
+            captureState();
+            if(typeof updateStatus === 'function') updateStatus("✅ Element added to page.");
+            
+            closeElementsSlider();
+        }
+    }
+
+    function loadTemplateAsProject(itemData) {
+        closeElementsSlider();
+        
+        const voiceBtn = document.getElementById('voice-edit-btn');
+        if(typeof isVoiceActive !== 'undefined' && isVoiceActive && typeof toggleVoiceEdit === 'function') {
+            toggleVoiceEdit(voiceBtn);
+        }
+        
+        generatedFiles = {};
+        currentPreviewFile = null;
+        
+        const iframe = document.getElementById('preview-frame');
+        if (iframe && iframe.contentDocument) {
+            iframe.contentDocument.documentElement.innerHTML = '<head></head><body></body>';
+        }
+
+        const pageDd = document.getElementById('page-dropdown');
+        if(pageDd) pageDd.innerHTML = '<option value="" disabled selected>Pages...</option>';
+        
+        const chatDisp = document.getElementById('chat-display');
+        if(chatDisp) chatDisp.innerHTML = '';
+        currentChatHistory = [];
+        
+        if(typeof updateStatus === 'function') updateStatus("Loading template...");
+        if(typeof showProgressOverlay === 'function') showProgressOverlay("Opening template...");
+        if(typeof hideCodeStream === 'function') hideCodeStream();
+        
+        setTimeout(() => {
+            if(typeof hideProgressOverlay === 'function') hideProgressOverlay();
+            try {
+                const files = typeof itemData.project_data_json === 'string' ? JSON.parse(itemData.project_data_json) : itemData.project_data_json;
+                generatedFiles = files;
+                
+                const pageKeys = Object.keys(generatedFiles).filter(f => f.endsWith('.html'));
+                if(pageKeys.length > 0) {
+                    currentPreviewFile = pageKeys.includes('index.html') ? 'index.html' : pageKeys[0];
+                    if(typeof loadPreview === 'function') loadPreview(currentPreviewFile);
+                    if(typeof updatePreviewControls === 'function') updatePreviewControls();
+                    if(typeof updateStatus === 'function') updateStatus(`Template '${itemData.name}' loaded successfully.`);
+                } else {
+                    if(typeof updateStatus === 'function') updateStatus(`Error: Template contains no valid HTML files.`, true);
+                }
+            } catch(e) {
+                console.error("Template parse error:", e);
+                if(typeof updateStatus === 'function') updateStatus(`Error loading template format.`, true);
+            }
+        }, 500); 
+    }
+
+    function editTemplateAction(event, templateId) {
+        event.stopPropagation();
+        if(typeof window.openAddTemplateModal === 'function') {
+            window.openAddTemplateModal(templateId);
+        } else {
+            alert('To edit this template, please access the Templates tab in the Admin CMS.');
+        }
+    }
+
+    // --- Admin Template Modals ---
+    let pendingProjectJson = null;
+
+    function openAddTemplateModal() {
+        closeElementsSlider();
+        document.getElementById('admin-template-modal').style.display = 'flex';
+        
+        pendingProjectJson = null;
+        document.getElementById('new-template-project-folder').value = '';
+        document.getElementById('folder-upload-summary').style.display = 'none';
+        document.getElementById('template-save-progress-container').style.display = 'none';
+
+        switchTemplateTab('category');
+    }
+
+    function switchTemplateTab(tab) {
+        const tabs = document.querySelectorAll('#admin-template-modal .sub-img-tab');
+        tabs.forEach(t => t.classList.remove('active'));
+        
+        if(tab === 'category') {
+            document.getElementById('tab-add-category').classList.add('active');
+            document.getElementById('form-add-category').style.display = 'block';
+            document.getElementById('form-add-item').style.display = 'none';
+            
+            const manageCatSelect = document.getElementById('manage-category-select');
+            if (manageCatSelect) {
+                manageCatSelect.innerHTML = '<option value="" disabled selected>Loading...</option>';
+                fetch('/api/templates/categories').then(r=>r.json()).then(cats => {
+                    manageCatSelect.innerHTML = '<option value="" disabled selected>Select category...</option>';
+                    cats.forEach(c => {
+                        const opt = document.createElement('option');
+                        opt.value = c.id;
+                        opt.textContent = c.name;
+                        manageCatSelect.appendChild(opt);
+                    });
+                });
+            }
+
+        } else {
+            document.getElementById('tab-add-item').classList.add('active');
+            document.getElementById('form-add-category').style.display = 'none';
+            document.getElementById('form-add-item').style.display = 'block';
+            
+            document.getElementById('new-template-image').value = '';
+            document.getElementById('template-thumb-preview').innerHTML = '<span style="color:#aaa; font-size:10px;">None</span>';
+            document.getElementById('new-template-image').onchange = function(e) {
+                const file = e.target.files[0];
+                if(file) {
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        document.getElementById('template-thumb-preview').innerHTML = `<img src="${e.target.result}" style="width:100%; height:100%; object-fit:cover;">`;
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+        }
+    }
+
+    function saveNewCategory() {
+        const name = document.getElementById('new-category-name').value.trim();
+        if(!name) return alert("Category name is required");
+        
+        fetch('/api/admin/templates/categories', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({name})
+        })
+        .then(r => r.json())
+        .then(d => {
+            if(d.success) {
+                document.getElementById('new-category-name').value = '';
+                currentTemplateCategoryId = d.category.id;
+                loadTemplateCategories();
+                switchTemplateTab('item'); 
+            } else {
+                alert("Error: " + d.error);
+            }
+        });
+    }
+
+    const folderInput = document.getElementById('new-template-project-folder');
+    if(folderInput) {
+        folderInput.addEventListener('change', async function(e) {
+            const files = e.target.files;
+            if(files.length === 0) return;
+            
+            const summary = document.getElementById('folder-upload-summary');
+            summary.style.display = 'block';
+            summary.style.color = '#007bff';
+            summary.textContent = `Packaging ${files.length} files...`;
+
+            let projectFiles = {};
+            const textExtensions = ['.html', '.css', '.js', '.php', '.json', '.txt', '.xml', '.svg'];
+
+            for(let i=0; i<files.length; i++) {
+                const file = files[i];
+                if (file.webkitRelativePath.includes('node_modules/') || file.webkitRelativePath.includes('.git/')) continue;
+
+                let relativePath = file.webkitRelativePath || file.name;
+                if (relativePath.includes('/')) {
+                    relativePath = relativePath.substring(relativePath.indexOf('/') + 1);
+                }
+
+                const ext = '.' + file.name.split('.').pop().toLowerCase();
+
+                if(textExtensions.includes(ext)) {
+                    projectFiles[relativePath] = await file.text();
+                } else {
+                    const reader = new FileReader();
+                    projectFiles[relativePath] = await new Promise(res => {
+                        reader.onload = () => res(reader.result);
+                        reader.readAsDataURL(file);
+                    });
+                }
+            }
+            pendingProjectJson = JSON.stringify(projectFiles);
+            summary.style.color = '#28a745';
+            summary.textContent = `✅ Ready: ${Object.keys(projectFiles).length} files packaged for upload.`;
+        });
+    }
+
+    function saveNewTemplate() {
+        const name = document.getElementById('new-template-name').value.trim();
+        const categoryId = document.getElementById('new-template-category').value;
+        const contentHtml = document.getElementById('new-template-html').value.trim();
+        const fileInput = document.getElementById('new-template-image');
+
+        if(!name || !categoryId) return alert("Please provide a Name and select a Category.");
+        if(!contentHtml && !pendingProjectJson) return alert("Please provide either HTML Content OR upload a Full Project Folder.");
+
+        const formData = new FormData();
+        formData.append('name', name);
+        formData.append('category_id', categoryId);
+        
+        if (contentHtml) formData.append('content_html', contentHtml);
+        if (pendingProjectJson) formData.append('project_data_json', pendingProjectJson);
+        
+        if(fileInput.files.length > 0) {
+            formData.append('thumbnail', fileInput.files[0]);
+        }
+
+        const btnSave = document.getElementById('btn-save-template');
+        const btnCancel = document.getElementById('btn-cancel-template');
+        const progContainer = document.getElementById('template-save-progress-container');
+        const progBar = document.getElementById('template-save-bar');
+        const progPercent = document.getElementById('template-save-percent');
+        const progStatus = document.getElementById('template-save-status');
+
+        btnSave.disabled = true;
+        btnCancel.disabled = true;
+        progContainer.style.display = 'block';
+        progBar.style.width = '0%';
+        progPercent.textContent = '0%';
+        
+        let progress = 0;
+        let pType = pendingProjectJson ? "Full Project" : "Element";
+        progStatus.textContent = `Uploading ${pType}...`;
+
+        const uploadInterval = setInterval(() => {
+            if(progress < 90) {
+                progress += Math.random() * 10;
+                if(progress > 90) progress = 90;
+                progBar.style.width = `${progress}%`;
+                progPercent.textContent = `${Math.round(progress)}%`;
+                if(progress > 50) progStatus.textContent = `Saving to database...`;
+            }
+        }, 300);
+
+        fetch('/api/admin/templates/items', {
+            method: 'POST',
+            body: formData
+        })
+        .then(r => r.json())
+        .then(d => {
+            clearInterval(uploadInterval);
+            progBar.style.width = '100%';
+            progPercent.textContent = '100%';
+            progStatus.textContent = "Complete!";
+
+            setTimeout(() => {
+                btnSave.disabled = false;
+                btnCancel.disabled = false;
+                
+                if(d.success) {
+                    safeCloseModal('admin-template-modal');
+                    document.getElementById('new-template-name').value = '';
+                    document.getElementById('new-template-html').value = '';
+                    document.getElementById('new-template-project-folder').value = '';
+                    document.getElementById('folder-upload-summary').style.display = 'none';
+                    pendingProjectJson = null;
+                    fileInput.value = '';
+                    
+                    const sidebarBtn = document.getElementById('sidebar-add-btn');
+                    if(sidebarBtn) sidebarBtn.click(); 
+                } else {
+                    alert("Error: " + d.error);
+                }
+            }, 500);
+        })
+        .catch(e => {
+            clearInterval(uploadInterval);
+            progContainer.style.display = 'none';
+            btnSave.disabled = false;
+            btnCancel.disabled = false;
+            alert("Error saving template.");
+        });
+    }
+
+    // --- PAYMENT & CHECKOUT LOGIC ---
+
+    function setupPreviewPaymentListeners() {
+        try {
+            const iframe = document.getElementById('preview-frame');
+            if (!iframe || !iframe.contentDocument) return;
+            
+            const doc = iframe.contentDocument;
+            const buyBtns = doc.querySelectorAll('.buy-btn');
+            
+            buyBtns.forEach(btn => {
+                btn.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const name = btn.dataset.name || "Product";
+                    const amount = btn.dataset.amount || "0.00";
+                    if(typeof openPaymentModal === 'function') openPaymentModal(name, amount);
+                };
+                btn.style.cursor = 'pointer';
+                btn.title = "Click to test payment";
+            });
+        } catch (e) {
+            console.warn("⚠️ Cannot access iframe content for payment listeners", e);
+        }
+    }
+
+    // Handles ONLY In-Editor Mock Payments
+    function openPaymentModal(name, amount, metadata = null) {
+        window.currentPaymentAmount = parseFloat(amount) || 0;
+        window.currentItemName = name;
+        window.currentPaymentMetadata = metadata || { product_name: name, source: "preview_editor" };
+        
+        document.getElementById('pay-item-name').textContent = name;
+        document.getElementById('pay-amount-display').textContent = "$" + window.currentPaymentAmount.toFixed(2); 
+        document.getElementById('payment-modal').style.display = 'flex';
+        
+        loadCheckoutGateways();
+    }
+
+    function loadCheckoutGateways() {
+        const list = document.getElementById('payment-methods-list');
+        if(!list) return;
+        list.innerHTML = '<div style="text-align:center; color:#aaa;">Loading options...</div>';
+        
+        fetch('/api/admin/payment_gateways')
+            .then(r => r.json())
+            .then(data => {
+                list.innerHTML = '';
+                const currency = data.currency || 'USD';
+                document.getElementById('pay-amount-display').textContent = `${currency} ${(window.currentPaymentAmount || 0).toFixed(2)}`;
+
+                const activeGateways = data.gateways.filter(g => g.is_active);
+                if (activeGateways.length === 0) {
+                    list.innerHTML = '<div style="color:red; text-align:center;">No payment methods available.</div>';
+                    return;
+                }
+
+                activeGateways.forEach(gw => {
+                    const btn = document.createElement('button');
+                    btn.className = 'auth-btn';
+                    btn.style.marginBottom = '10px';
+                    btn.style.display = 'flex';
+                    btn.style.justifyContent = 'center';
+                    btn.style.alignItems = 'center';
+                    btn.style.gap = '10px';
+                    
+                    if (gw.code === 'paypal') {
+                        btn.style.background = '#ffc439'; btn.style.color = '#000'; btn.innerHTML = '🅿️ Pay with PayPal';
+                    } else if (gw.code === 'cashfree') {
+                        btn.style.background = '#f37121'; btn.style.color = '#fff'; btn.innerHTML = '💳 Pay with Cashfree';
+                    } else if (gw.code === 'ccavenue') {
+                        btn.style.background = '#005a9e'; btn.style.color = '#fff'; btn.innerHTML = '💳 Pay with CCAvenue';
+                    } else {
+                        btn.style.background = '#28a745'; btn.style.color = '#fff'; btn.innerHTML = `💳 Pay with ${gw.name}`;
+                    }
+                    
+                    btn.onclick = function() { initiateCheckout(gw.code, currency); };
+                    list.appendChild(btn);
+                });
+            })
+            .catch(e => {
+                list.innerHTML = `<div style="color:red; text-align:center;">Error loading gateways</div>`;
+            });
+    }
+
+    // --- FIX: Cache-Proof & Fool-Proof Checkout Initialization ---
+    // Safely reads plan_id and amounts from ANY source (Arguments, Globals, or the Button DOM)
+    function initiateCheckout(gatewayCode, arg2, arg3, arg4) {
+        let currency = 'USD';
+        let originalText = "Processing...";
+        let btnElement = document.activeElement || document.createElement('button');
+        
+        let finalAmount = window.currentPaymentAmount || 0;
+        let finalPlanId = window.selectedPlanId || null;
+        let metadata = window.currentPaymentMetadata || { source: "preview_editor" };
+
+        if (arg2 instanceof HTMLElement) {
+            btnElement = arg2;
+            if (typeof arg3 === 'string') originalText = arg3;
+        } else if (typeof arg2 === 'string') {
+            currency = arg2;
+            if (arg3 instanceof HTMLElement) {
+                btnElement = arg3;
+                if (typeof arg4 === 'string') originalText = arg4;
+            }
+        }
+
+        if (btnElement && btnElement.hasAttribute('data-price')) {
+            finalAmount = parseFloat(btnElement.getAttribute('data-price')) || finalAmount;
+            
+            const pid = btnElement.getAttribute('data-plan-id') || btnElement.getAttribute('data-plan_id');
+            if (pid) finalPlanId = parseInt(pid);
+            
+            if (btnElement.getAttribute('data-type') === 'plan_subscription') {
+                metadata = {
+                    type: 'plan_subscription',
+                    plan_id: finalPlanId,
+                    product_name: btnElement.getAttribute('data-name')
+                };
+            }
+        }
+
+        if (!finalPlanId && window.selectedPlanId) {
+            finalPlanId = window.selectedPlanId;
+            metadata.type = 'plan_subscription';
+            metadata.plan_id = finalPlanId;
+        }
+
+        btnElement.disabled = true;
+        btnElement.textContent = "Connecting...";
+
+        if (finalAmount <= 0) {
+            alert("Error: Payment amount cannot be zero. Check your plan configuration in Admin CMS.");
+            btnElement.disabled = false;
+            btnElement.textContent = originalText;
+            return;
+        }
+
+        const requestPayload = {
+            gateway_code: gatewayCode,
+            amount: finalAmount,
+            currency: currency,
+            metadata: metadata
+        };
+
+        if (finalPlanId) {
+            requestPayload.plan_id = parseInt(finalPlanId);
+        } else if (metadata && metadata.plan_id) {
+            requestPayload.plan_id = parseInt(metadata.plan_id);
+        }
+
+        fetch('/api/pay/initiate', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(requestPayload)
+        })
+        .then(r => r.json())
+        .then(data => {
+            btnElement.disabled = false;
+            btnElement.textContent = originalText;
+            
+            if (data.success) {
+                if (data.action === 'redirect' && data.url) {
+                    window.location.href = data.url; 
+                } 
+                else if (data.action === 'form' && data.form_fields) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = data.action_url || data.url;
+                    form.style.display = 'none';
+
+                    for (const [key, value] of Object.entries(data.form_fields)) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = value;
+                        form.appendChild(input);
+                    }
+
+                    document.body.appendChild(form);
+                    form.submit();
+                } 
+            } else {
+                alert("Payment Initialization Failed: " + data.error);
+            }
+        })
+        .catch(e => {
+            btnElement.disabled = false;
+            btnElement.textContent = originalText;
+            alert("Network Error during checkout initiation.");
+            console.error(e);
+        });
+    }
+
+</script>

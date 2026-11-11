@@ -1,0 +1,1185 @@
+<script>
+    // ==========================================
+    // 1. GLOBAL MEDIA CONTEXT (Tracks where Media Manager selections should go)
+    // ==========================================
+    window.currentMediaContext = 'image'; 
+
+    function openImageManager(context = 'image') {
+        window.currentMediaContext = context;
+        document.getElementById('image-manager-modal').style.display = 'flex';
+        
+        const searchInput = document.getElementById('img-search-query');
+        if (searchInput && !searchInput.hasAttribute('data-enter-bound')) {
+            searchInput.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') { e.preventDefault(); searchWebImages(); }
+            });
+            searchInput.setAttribute('data-enter-bound', 'true');
+        }
+        
+        fetch('/api/gallery').then(r => r.json()).then(data => {
+            if(data.success) { 
+                galleryImages = data.images || []; 
+                window.galleryVideos = data.videos || []; 
+                renderGallery(galleryImages, 'gallery-grid', 'image'); 
+                renderGallery(window.galleryVideos, 'gallery-video-grid', 'video');
+            } 
+            else { 
+                renderGallery([], 'gallery-grid', 'image'); 
+                renderGallery([], 'gallery-video-grid', 'video');
+            }
+        }).catch(() => {
+            renderGallery([], 'gallery-grid', 'image');
+            renderGallery([], 'gallery-video-grid', 'video');
+        });
+            
+        switchImgTab('gallery');
+        switchGallerySubTab('my-images');
+        selectedImageSrc = null;
+        updateInsertButtonState();
+        
+        const previewBox = document.getElementById('ai-preview-box');
+        if(previewBox) {
+            previewBox.innerHTML = `<div style="color:#aaa; text-align:center;">Generated image will appear here.<br><span style="font-size:3em; display:block; margin-top:10px;">🖼️</span></div>`;
+        }
+        document.getElementById('ai-action-buttons').style.display = 'none';
+        document.getElementById('ai-progress-container').style.display = 'none';
+
+        const uploadInput = document.getElementById('local-img-upload') || document.getElementById('image-upload-input');
+        if (uploadInput) {
+            uploadInput.setAttribute('accept', 'image/*,video/mp4,video/webm,video/ogg,video/quicktime');
+        }
+    }
+
+    function closeImageManager() {
+        document.getElementById('image-manager-modal').style.display = 'none';
+        if (!selectedImageSrc) {
+            currentImageToReplace = null;
+            currentBgElementToReplace = null;
+            pendingImageInsert = false;
+            window.pendingImageInsert = false;
+            window.pendingLogoInsert = false; 
+        }
+        // Reopen previously active modal if user cancelled out of the Media Manager
+        if (window.currentMediaContext === 'video') {
+            const vidModal = document.getElementById('edit-video-modal');
+            if(vidModal) vidModal.style.display = 'flex';
+        } else if (window.currentMediaContext === 'carousel') {
+            const carModal = document.getElementById('edit-carousel-modal');
+            if(carModal) carModal.style.display = 'flex';
+        }
+        window.currentMediaContext = 'image'; 
+        window.__isAddingImage = false;
+    }
+
+    function insertImageInDoc(doc) {
+        pendingImageInsert = true;
+        window.pendingImageInsert = true; 
+        openImageManager('image');
+    }
+
+    function switchImgTab(tabId) {
+        document.querySelectorAll('.img-tab').forEach(t => t.classList.remove('active'));
+        const targetBtn = document.getElementById(`tab-btn-${tabId}`);
+        if(targetBtn) targetBtn.classList.add('active');
+        document.querySelectorAll('.img-tab-content').forEach(c => c.style.display = 'none');
+        const targetTab = document.getElementById(`img-tab-${tabId}`);
+        if(targetTab) targetTab.style.display = 'block';
+    }
+
+    let currentProjectImagePage = 1;
+    let isFetchingProjectImages = false;
+    let hasMoreProjectImages = true;
+
+    function switchGallerySubTab(subTabId) {
+        document.querySelectorAll('.sub-img-tab').forEach(t => t.classList.remove('active'));
+        const activeTab = document.getElementById(`sub-tab-${subTabId}`);
+        if(activeTab) activeTab.classList.add('active');
+        
+        const myImages = document.getElementById('gallery-sub-my-images');
+        const myVideos = document.getElementById('gallery-sub-my-videos');
+        const projectImages = document.getElementById('gallery-sub-project-images');
+        
+        if (myImages) myImages.style.display = 'none';
+        if (myVideos) myVideos.style.display = 'none';
+        if (projectImages) projectImages.style.display = 'none';
+
+        if (subTabId === 'my-images' && myImages) {
+            myImages.style.display = 'block';
+        } else if (subTabId === 'my-videos' && myVideos) {
+            myVideos.style.display = 'block';
+        } else if (projectImages) {
+            projectImages.style.display = 'block';
+            if (currentProjectImagePage === 1 && !isFetchingProjectImages) loadProjectImages(1);
+        }
+    }
+
+    function loadProjectImages(page) {
+        if (isFetchingProjectImages || (!hasMoreProjectImages && page !== 1)) return;
+        isFetchingProjectImages = true;
+        const grid = document.getElementById('project-images-grid');
+        const loadMoreDiv = document.getElementById('project-images-load-more');
+        if(!grid) return;
+        
+        if (page === 1) {
+            grid.innerHTML = '<div style="text-align:center; color:#999; padding:20px; grid-column:1/-1;">Loading project images...</div>';
+            currentProjectImagePage = 1;
+        } else if(loadMoreDiv) {
+            loadMoreDiv.innerHTML = '<button class="auth-btn" style="width:auto; background:#6c757d;" disabled>Loading...</button>';
+        }
+
+        fetch(`/api/project_images?page=${page}`).then(r => r.json()).then(data => {
+            isFetchingProjectImages = false;
+            if (data.success) {
+                if (page === 1) grid.innerHTML = '';
+                if (data.images.length === 0 && page === 1) {
+                    grid.innerHTML = '<div style="text-align:center; color:#999; padding:20px; grid-column:1/-1;">No external images found in your projects.</div>';
+                    if(loadMoreDiv) loadMoreDiv.style.display = 'none';
+                    return;
+                }
+                data.images.forEach(src => {
+                    const item = document.createElement('div');
+                    item.className = 'gallery-item';
+                    const img = document.createElement('img');
+                    
+                    // PERFORMANCE FIX: Use Thumbnail API + Lazy Loading
+                    img.src = `/api/thumbnail?url=${encodeURIComponent(src)}`;
+                    img.loading = "lazy";
+                    
+                    img.onerror = function() { item.remove(); };
+                    item.appendChild(img);
+                    
+                    // Provide the full-resolution URL to the selection function
+                    item.onclick = () => selectGalleryImage(item, src);
+                    grid.appendChild(item);
+                });
+                hasMoreProjectImages = data.has_more;
+                if (hasMoreProjectImages && loadMoreDiv) {
+                    loadMoreDiv.style.display = 'block';
+                    loadMoreDiv.style.paddingBottom = '30px'; 
+                    loadMoreDiv.innerHTML = '<button class="auth-btn" style="width:auto; background:#007bff; padding:10px 25px; margin-bottom: 20px; box-shadow:0 4px 10px rgba(0,0,0,0.1);" onclick="loadProjectImages(currentProjectImagePage + 1)">Load More Project Images</button>';
+                } else if(loadMoreDiv) {
+                    loadMoreDiv.style.display = 'none';
+                }
+            } else {
+                if (page === 1) grid.innerHTML = '<div style="color:red; grid-column:1/-1;">Error loading images.</div>';
+                if(loadMoreDiv) loadMoreDiv.innerHTML = '<button class="auth-btn" style="width:auto; background:#6c757d;" onclick="loadProjectImages(currentProjectImagePage)">Retry</button>';
+            }
+        }).catch(err => {
+            isFetchingProjectImages = false;
+            if(loadMoreDiv) loadMoreDiv.innerHTML = '<button class="auth-btn" style="width:auto; background:#6c757d;" onclick="loadProjectImages(currentProjectImagePage)">Retry</button>';
+        });
+    }
+
+    function renderGallery(mediaList, targetGridId = 'gallery-grid', mediaType = 'image') {
+        const grid = document.getElementById(targetGridId);
+        if (!grid) return;
+        
+        grid.innerHTML = '';
+        if (!mediaList || mediaList.length === 0) { 
+            grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; padding:20px; color:#999;">No ${mediaType}s found.</div>`; 
+            return; 
+        }
+
+        mediaList.forEach(src => {
+            const item = document.createElement('div');
+            item.className = 'gallery-item';
+            
+            if (mediaType === 'video') {
+                const vid = document.createElement('video');
+                vid.src = src;
+                vid.style.width = '100%';
+                vid.style.height = '100%';
+                vid.style.objectFit = 'cover';
+                vid.controls = false;
+                
+                // PERFORMANCE FIX: Preload none to save bandwidth on large video galleries
+                vid.preload = 'none';
+                
+                vid.onmouseenter = () => vid.play().catch(()=>{});
+                vid.onmouseleave = () => { vid.pause(); vid.currentTime = 0; };
+                vid.onerror = function() { item.remove(); };
+                item.appendChild(vid);
+                
+                const icon = document.createElement('div');
+                icon.innerHTML = '🎥';
+                icon.style.cssText = 'position:absolute; bottom:5px; left:5px; background:rgba(0,0,0,0.6); color:white; padding:2px 5px; border-radius:3px; font-size:12px;';
+                item.appendChild(icon);
+            } else {
+                const img = document.createElement('img');
+                
+                // PERFORMANCE FIX: Use Thumbnail API + Lazy Loading
+                img.src = `/api/thumbnail?url=${encodeURIComponent(src)}`;
+                img.loading = "lazy";
+                
+                img.onerror = function() { item.remove(); };
+                item.appendChild(img);
+            }
+            
+            if(targetGridId === 'gallery-grid' || targetGridId === 'gallery-video-grid') {
+                const delBtn = document.createElement('div');
+                delBtn.className = 'gallery-delete-btn';
+                delBtn.innerHTML = '✕';
+                delBtn.title = `Delete ${mediaType}`;
+                delBtn.onclick = (e) => { e.stopPropagation(); deleteGalleryMedia(src, mediaType); };
+                item.appendChild(delBtn);
+                
+                // Ensure FULL RESOLUTION source is passed for canvas insertion
+                item.onclick = () => selectGalleryImage(item, src);
+            } else if(targetGridId === 'search-results-grid') {
+                item.onclick = () => saveWebImage(src);
+            }
+            grid.appendChild(item);
+        });
+    }
+
+    function deleteGalleryMedia(src, type = 'image') {
+        if(!confirm(`Permanently delete this ${type}?`)) return;
+        const filename = src.split('/').pop();
+        fetch('/api/delete_image', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ filename: filename }) })
+        .then(r => r.json()).then(data => { 
+            if(data.success) { 
+                if(type === 'video') {
+                    window.galleryVideos = window.galleryVideos.filter(vid => vid !== src); 
+                    renderGallery(window.galleryVideos, 'gallery-video-grid', 'video');
+                } else {
+                    galleryImages = galleryImages.filter(img => img !== src); 
+                    renderGallery(galleryImages, 'gallery-grid', 'image'); 
+                }
+            } else { alert("Failed to delete: " + data.error); } 
+        });
+    }
+
+    function deleteGalleryImage(src) {
+        deleteGalleryMedia(src, 'image');
+    }
+
+    function saveWebImage(url) {
+        const status = document.getElementById('img-selected-status');
+        if(status) { status.textContent = "Downloading image..."; status.style.color = "#007bff"; }
+        fetch('/api/save_web_image', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({ url: url }) })
+        .then(r => r.json()).then(data => {
+            if(data.success) {
+                galleryImages.unshift(data.url); renderGallery(galleryImages, 'gallery-grid', 'image'); switchImgTab('gallery'); switchGallerySubTab('my-images');
+                setTimeout(() => { const grid = document.getElementById('gallery-grid'); if(grid && grid.firstChild) grid.firstChild.click(); }, 100);
+                if(status) { status.textContent = "Image saved to Gallery"; status.style.color = "green"; }
+            } else { 
+                alert("Failed to save image: " + data.error); 
+                if(status) { status.textContent = "Error saving image"; status.style.color = "red"; }
+            }
+        });
+    }
+
+    function selectGalleryImage(element, src) {
+        document.querySelectorAll('.gallery-item').forEach(el => el.classList.remove('selected'));
+        element.classList.add('selected');
+        selectedImageSrc = src;
+        updateInsertButtonState();
+    }
+
+    function selectGeneratedImage() {
+        if(generatedImageBlobUrl) { selectedImageSrc = generatedImageBlobUrl; insertSelectedImage(); }
+    }
+
+    function updateInsertButtonState() {
+        const btn = document.getElementById('btn-insert-img');
+        const status = document.getElementById('img-selected-status');
+        if (selectedImageSrc) {
+            if(btn) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
+            if(status) { status.textContent = 'Media selected'; status.style.color = '#28a745'; }
+        } else {
+            if(btn) { btn.disabled = true; btn.style.opacity = '0.6'; btn.style.cursor = 'not-allowed'; }
+            if(status) { status.textContent = 'No media selected'; status.style.color = '#666'; }
+        }
+    }
+
+    function handleLocalUpload(input) {
+        const files = Array.from(input.files);
+        if(files.length === 0) return;
+        const file = files[0];
+        const isVideo = file.type.startsWith('video/');
+
+        const formData = new FormData();
+        formData.append('file', file);
+
+        let statusEl = document.getElementById('upload-progress-container');
+        if (!statusEl) {
+            const container = isVideo ? document.getElementById('gallery-video-grid') : document.getElementById('gallery-grid');
+            if (container) {
+                container.insertAdjacentHTML('afterbegin', `
+                    <div id="upload-progress-container" style="grid-column:1/-1; padding:15px; background:#f8f9fa; border:1px solid #ddd; border-radius:5px; margin-bottom:15px;">
+                        <div style="display:flex; justify-content:space-between; margin-bottom:5px;">
+                            <span id="upload-progress-text" style="font-size:13px; font-weight:bold; color:#007bff;">Uploading Media...</span>
+                            <span id="upload-progress-percent" style="font-size:13px; color:#555;">0%</span>
+                        </div>
+                        <div style="width:100%; background:#e9ecef; height:8px; border-radius:4px; overflow:hidden;">
+                            <div id="upload-progress-bar" style="width:0%; height:100%; background:#28a745; transition:width 0.2s;"></div>
+                        </div>
+                    </div>
+                `);
+            }
+        }
+
+        const xhr = new XMLHttpRequest();
+        xhr.open('POST', '/api/upload_image', true);
+        
+        xhr.upload.onprogress = function(e) {
+            if (e.lengthComputable) {
+                const percentComplete = Math.round((e.loaded / e.total) * 100);
+                const bar = document.getElementById('upload-progress-bar');
+                const pct = document.getElementById('upload-progress-percent');
+                if (bar) bar.style.width = percentComplete + '%';
+                if (pct) pct.textContent = percentComplete + '%';
+            }
+        };
+
+        xhr.onload = function() {
+            const progressContainer = document.getElementById('upload-progress-container');
+            if (progressContainer) progressContainer.remove();
+
+            if (xhr.status === 200) {
+                try {
+                    const data = JSON.parse(xhr.responseText);
+                    if(data.success) {
+                        if(isVideo) {
+                            if (typeof window.galleryVideos === 'undefined') window.galleryVideos = [];
+                            window.galleryVideos.unshift(data.url); 
+                            renderGallery(window.galleryVideos, 'gallery-video-grid', 'video');
+                            switchGallerySubTab('my-videos');
+                            setTimeout(() => { const grid = document.getElementById('gallery-video-grid'); if(grid && grid.firstChild) grid.firstChild.click(); }, 100);
+                        } else {
+                            galleryImages.unshift(data.url); 
+                            renderGallery(galleryImages, 'gallery-grid', 'image');
+                            switchGallerySubTab('my-images');
+                            setTimeout(() => { const grid = document.getElementById('gallery-grid'); if(grid && grid.firstChild) grid.firstChild.click(); }, 100);
+                        }
+                    } else {
+                        alert("Upload failed: " + data.error);
+                    }
+                } catch(e) {
+                    alert("Invalid server response.");
+                }
+            } else {
+                alert("Upload failed with status: " + xhr.status);
+            }
+        };
+
+        xhr.onerror = function() {
+            const progressContainer = document.getElementById('upload-progress-container');
+            if (progressContainer) progressContainer.remove();
+            alert("Network error occurred during upload.");
+        };
+
+        xhr.send(formData);
+        input.value = ''; 
+    }
+
+    function generateAiImage() {
+        const prompt = document.getElementById('ai-img-prompt').value.trim();
+        if(!prompt) { alert("Please enter a description."); return; }
+        
+        const typeElem = document.querySelector('input[name="ai-gen-type"]:checked');
+        const type = typeElem ? typeElem.value : 'image';
+        
+        const logoTextElem = document.getElementById('ai-logo-text');
+        const logoText = logoTextElem ? logoTextElem.value.trim() : '';
+        
+        const btn = document.getElementById('btn-gen-ai');
+        if(btn) btn.disabled = true;
+        
+        const progressContainer = document.getElementById('ai-progress-container');
+        const progressBar = document.getElementById('ai-progress-bar');
+        const statusText = document.getElementById('ai-status-text');
+        
+        if(progressContainer) progressContainer.style.display = 'block'; 
+        if(progressBar) progressBar.style.width = '0%'; 
+        if(statusText) statusText.textContent = "Initializing AI model...";
+        
+        let progress = 0;
+        const interval = setInterval(() => {
+            if(progress < 90) {
+                progress += Math.random() * 5;
+                if(progressBar) progressBar.style.width = Math.min(progress, 90) + '%';
+                if(statusText) {
+                    if(progress > 20 && progress < 50) statusText.textContent = "Processing prompt...";
+                    else if(progress >= 50 && progress < 80) statusText.textContent = "Rendering image...";
+                }
+            }
+        }, 300);
+
+        fetch('/api/generate_image', {
+            method: 'POST', headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ prompt: prompt, type: type, text: logoText })
+        }).then(r => r.json()).then(data => {
+            clearInterval(interval); 
+            if(progressBar) progressBar.style.width = '100%'; 
+            if(btn) btn.disabled = false;
+            
+            if(data.success && data.images && data.images.length > 0) {
+                if(statusText) statusText.textContent = "Generation complete!";
+                const imgUrl = data.images[0]; 
+                generatedImageBlobUrl = imgUrl; 
+                const previewBox = document.getElementById('ai-preview-box'); 
+                if(previewBox) {
+                    previewBox.innerHTML = '';
+                    const img = document.createElement('img'); 
+                    img.src = imgUrl;
+                    img.onload = () => { setTimeout(() => { if(progressContainer) progressContainer.style.display = 'none'; }, 1000); };
+                    previewBox.appendChild(img);
+                }
+                const actionBtns = document.getElementById('ai-action-buttons');
+                if(actionBtns) actionBtns.style.display = 'flex';
+                galleryImages.unshift(imgUrl);
+            } else {
+                if(statusText) {
+                    statusText.textContent = "Error: " + (data.error || 'Unknown error');
+                    statusText.style.color = 'red';
+                }
+            }
+        }).catch(err => {
+            clearInterval(interval);
+            if(btn) btn.disabled = false;
+            if(statusText) { statusText.textContent = "Network Error."; statusText.style.color = 'red'; }
+        });
+    }
+
+    function searchWebImages() {
+        const searchInput = document.getElementById('img-search-query');
+        const query = searchInput ? searchInput.value.trim() : '';
+        if(!query) { alert("Please enter a search term."); return; }
+        
+        const grid = document.getElementById('search-results-grid');
+        if(!grid) return;
+        
+        grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; color:#666;">Searching...</div>';
+        fetch(`/api/search_images?q=${encodeURIComponent(query)}`).then(r => r.json()).then(data => {
+            if(data.success && data.images) { renderGallery(data.images, 'search-results-grid', 'image'); } 
+            else { grid.innerHTML = `<div style="grid-column:1/-1; text-align:center; color:red;">No results found.</div>`; }
+        });
+    }
+
+    // ========================================================
+    // 2. SMART MEDIA ROUTER (Handles Modal Inject vs Canvas Inject)
+    // ========================================================
+    const confirmImageSelection = insertSelectedImage;
+
+    // --- SMART LOGO INJECTION HELPER ---
+    window.insertLogoToCanvas = function(imgSrc) {
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        if(typeof captureState === 'function') captureState();
+        
+        const el = doc.createElement('img'); 
+        el.src = imgSrc; 
+        el.style.width = '200px'; 
+        el.style.height = '70px';
+        el.style.objectFit = 'contain';
+        el.style.maxWidth = '100%'; 
+
+        if (window.currentContextTarget) {
+            let target = window.currentContextTarget;
+            
+            // SMART LOGO DETECTION
+            let brandContainer = target.closest('.navbar-brand, .logo, .site-logo, .brand, .site-title, .header-logo');
+
+            if (!brandContainer) {
+                const header = target.closest('header, nav, .navbar');
+                if (header) {
+                    brandContainer = header.querySelector('.navbar-brand, .logo, .site-logo, .brand, .site-title, .header-logo');
+                    if (!brandContainer) {
+                        const firstLink = header.querySelector('a:not(.nav-link)');
+                        if (firstLink) brandContainer = firstLink;
+                    }
+                }
+            }
+
+            if (brandContainer) {
+                const existingImg = brandContainer.tagName === 'IMG' ? brandContainer : brandContainer.querySelector('img');
+                if (existingImg) {
+                    existingImg.src = imgSrc;
+                    existingImg.style.width = '200px';
+                    existingImg.style.height = '70px';
+                    existingImg.style.objectFit = 'contain';
+                } else {
+                    brandContainer.innerHTML = '';
+                    brandContainer.style.display = 'inline-flex';
+                    brandContainer.style.alignItems = 'center';
+                    brandContainer.appendChild(el);
+                }
+            } else {
+                if(target.tagName === 'BODY' || target.tagName === 'HTML' || target.classList.contains('eweb-column') || target.classList.contains('eweb-block')) {
+                    target.appendChild(el);
+                } else if(target.nextSibling) {
+                    target.parentNode.insertBefore(el, target.nextSibling);
+                } else {
+                    target.parentNode.appendChild(el);
+                }
+            }
+            
+            window.currentContextTarget = null;
+        } else {
+            const sel = doc.getSelection();
+            if (sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) { 
+                const range = sel.getRangeAt(0); 
+                range.deleteContents(); 
+                range.insertNode(el); 
+            } else if (sel.rangeCount > 0) { 
+                sel.getRangeAt(0).insertNode(el); 
+            } else { 
+                doc.body.appendChild(el); 
+            }
+        }
+        
+        if(typeof initEditor === 'function') initEditor(iframe); 
+        window.pendingLogoInsert = false; 
+        if(typeof updateStatus === 'function') updateStatus('Logo safely inserted.'); 
+        if(typeof enableSaveButton === 'function') enableSaveButton(); 
+        if(typeof captureState === 'function') captureState();
+        
+        closeImageManager();
+    };
+
+    function insertSelectedImage() {
+        if (!selectedImageSrc) return;
+        
+        // --- NEW: Intercept for Logo Requests ---
+        if (window.currentMediaContext === 'logo_insert' || window.pendingLogoInsert || window.currentMediaContext === 'global_logo') {
+            const context = window.currentMediaContext === 'global_logo' ? 'global_logo' : 'logo_insert';
+            const mgrModal = document.getElementById('image-manager-modal');
+            if(mgrModal) mgrModal.style.display = 'none';
+
+            if (typeof window.openImageEditorModal === 'function') {
+                window.openImageEditorModal(selectedImageSrc, function(editedImageSrc) {
+                    if(editedImageSrc.startsWith('data:image')) {
+                        if (typeof window.uploadBase64AndApplyLogo === 'function') {
+                            window.uploadBase64AndApplyLogo(editedImageSrc, context);
+                        }
+                    } else {
+                        if (context === 'global_logo') {
+                            if (typeof window.applyGlobalLogo === 'function') window.applyGlobalLogo(editedImageSrc);
+                        } else {
+                            if (typeof window.insertLogoToCanvas === 'function') window.insertLogoToCanvas(editedImageSrc);
+                        }
+                    }
+                });
+            } else {
+                if (context === 'global_logo') {
+                    if (typeof window.applyGlobalLogo === 'function') window.applyGlobalLogo(selectedImageSrc);
+                } else {
+                    if (typeof window.insertLogoToCanvas === 'function') window.insertLogoToCanvas(selectedImageSrc);
+                }
+            }
+            window.currentMediaContext = 'image';
+            window.pendingLogoInsert = false;
+            return;
+        }
+        
+        if (window.currentMediaContext === 'video') {
+            const urlInput = document.getElementById('edit-video-file-url');
+            if (urlInput) urlInput.value = selectedImageSrc;
+            
+            const typeSelect = document.getElementById('edit-video-type-select');
+            if (typeSelect) {
+                typeSelect.value = 'file';
+                if(typeof window.toggleVideoInputType === 'function') window.toggleVideoInputType();
+            }
+            
+            const mgrModal = document.getElementById('image-manager-modal');
+            if(mgrModal) mgrModal.style.display = 'none';
+            
+            const vidModal = document.getElementById('edit-video-modal');
+            if(vidModal) vidModal.style.display = 'flex';
+            
+            window.currentMediaContext = 'image'; 
+            return;
+        }
+        
+        if (window.currentMediaContext === 'carousel') {
+            const mgrModal = document.getElementById('image-manager-modal');
+            if(mgrModal) mgrModal.style.display = 'none';
+            
+            if (typeof window.addCarouselImageRow === 'function') {
+                window.addCarouselImageRow(selectedImageSrc);
+            }
+            
+            const carModal = document.getElementById('edit-carousel-modal');
+            if(carModal) carModal.style.display = 'flex';
+            
+            window.currentMediaContext = 'image';
+            return;
+        }
+        
+        if (window.__isAddingImage) {
+            if(typeof captureState === 'function') captureState();
+            const widgetHtml = `<div class="eweb-image-widget eweb-block" style="text-align:center; padding:10px;"><img src="${selectedImageSrc}" style="max-width:100%; height:auto; border-radius:8px;"></div>`;
+            if (typeof window.finalizeInlineWidgetInsertion === 'function') {
+                window.finalizeInlineWidgetInsertion(widgetHtml);
+            } else if (typeof window.injectWidgetIntoEditor === 'function') {
+                window.injectWidgetIntoEditor(widgetHtml);
+            }
+            window.__isAddingImage = false;
+            closeImageManager();
+            return;
+        }
+
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+
+        const isVideo = selectedImageSrc.match(/\.(mp4|webm|ogg|mov)$/i);
+
+        if (currentImageToReplace) {
+            if(typeof captureState === 'function') captureState(); 
+            if(isVideo && currentImageToReplace.tagName !== 'VIDEO') {
+                const vid = doc.createElement('video');
+                vid.src = selectedImageSrc;
+                vid.controls = true;
+                vid.style.cssText = currentImageToReplace.style.cssText;
+                vid.className = currentImageToReplace.className;
+                currentImageToReplace.parentNode.replaceChild(vid, currentImageToReplace);
+            } else {
+                currentImageToReplace.src = selectedImageSrc; 
+            }
+            currentImageToReplace = null;
+            if(typeof updateStatus === 'function') updateStatus('Media replaced.'); 
+            if(typeof enableSaveButton === 'function') enableSaveButton(); 
+            if(typeof captureState === 'function') captureState();
+        } else if (currentBgElementToReplace) {
+            if(typeof captureState === 'function') captureState(); 
+            currentBgElementToReplace.style.backgroundImage = `url('${selectedImageSrc}')`;
+            currentBgElementToReplace.style.backgroundSize = 'cover'; 
+            currentBgElementToReplace.style.backgroundPosition = 'center';
+            currentBgElementToReplace = null; 
+            if(typeof updateStatus === 'function') updateStatus('Background updated.'); 
+            if(typeof enableSaveButton === 'function') enableSaveButton(); 
+            if(typeof captureState === 'function') captureState();
+        } else if (pendingImageInsert || window.pendingImageInsert) {
+            if(typeof captureState === 'function') captureState(); 
+            let el;
+            if (isVideo) {
+                el = doc.createElement('video');
+                el.src = selectedImageSrc;
+                el.controls = true;
+                el.style.width = '300px';
+            } else {
+                el = doc.createElement('img'); 
+                el.src = selectedImageSrc; 
+                el.style.width = '300px'; 
+            }
+
+            if (window.currentContextTarget) {
+                if(window.currentContextTarget.tagName === 'BODY' || window.currentContextTarget.tagName === 'HTML' || window.currentContextTarget.classList.contains('eweb-column') || window.currentContextTarget.classList.contains('eweb-block')) {
+                    window.currentContextTarget.appendChild(el);
+                } else if(window.currentContextTarget.nextSibling) {
+                    window.currentContextTarget.parentNode.insertBefore(el, window.currentContextTarget.nextSibling);
+                } else {
+                    window.currentContextTarget.parentNode.appendChild(el);
+                }
+                window.currentContextTarget = null;
+            } else {
+                const sel = doc.getSelection();
+                if (sel.rangeCount > 0 && !sel.getRangeAt(0).collapsed) { 
+                    const range = sel.getRangeAt(0); 
+                    range.deleteContents(); 
+                    range.insertNode(el); 
+                } else if (sel.rangeCount > 0) { 
+                    sel.getRangeAt(0).insertNode(el); 
+                } else { 
+                    doc.body.appendChild(el); 
+                }
+            }
+            if(typeof initEditor === 'function') initEditor(iframe); 
+            pendingImageInsert = false; 
+            window.pendingImageInsert = false;
+            if(typeof updateStatus === 'function') updateStatus('Media inserted.'); 
+            if(typeof enableSaveButton === 'function') enableSaveButton(); 
+            if(typeof captureState === 'function') captureState();
+        }
+        closeImageManager();
+    }
+
+    // ========================================================
+    // 3. EDIT VIDEO MODAL LOGIC
+    // ========================================================
+    window.openEditVideoModal = function(widgetElement, currentUrl, isYouTube) {
+        window.activeVideoWidget = widgetElement;
+        const modal = document.getElementById('edit-video-modal');
+        const input = document.getElementById('edit-video-url-input');
+        const fileInput = document.getElementById('edit-video-file-url');
+        const typeSelect = document.getElementById('edit-video-type-select');
+        
+        if (modal) {
+            if (isYouTube || (currentUrl && (currentUrl.includes('youtube') || currentUrl.includes('vimeo')))) {
+                if(typeSelect) typeSelect.value = 'youtube';
+                if(input) input.value = currentUrl || '';
+                if(fileInput) fileInput.value = '';
+            } else {
+                if(typeSelect) typeSelect.value = 'file';
+                if(fileInput) fileInput.value = currentUrl || '';
+                if(input) input.value = '';
+            }
+            if(typeof window.toggleVideoInputType === 'function') window.toggleVideoInputType();
+            modal.style.display = 'flex';
+        }
+    };
+
+    window.toggleVideoInputType = function() {
+        const select = document.getElementById('edit-video-type-select');
+        if(!select) return;
+        const type = select.value;
+        
+        const urlGroup = document.getElementById('video-url-input-group');
+        const fileGroup = document.getElementById('video-file-input-group');
+        
+        if (type === 'youtube') {
+            if(urlGroup) urlGroup.style.display = 'block';
+            if(fileGroup) fileGroup.style.display = 'none';
+        } else {
+            if(urlGroup) urlGroup.style.display = 'none';
+            if(fileGroup) fileGroup.style.display = 'block';
+        }
+    };
+
+    window.handleVideoUpload = function(input) {
+        if (!input.files || input.files.length === 0) return;
+        const file = input.files[0];
+        const formData = new FormData();
+        formData.append('file', file);
+        
+        const fileUrlInput = document.getElementById('edit-video-file-url');
+        let oldText = "";
+        if(fileUrlInput) {
+            oldText = fileUrlInput.placeholder;
+            fileUrlInput.placeholder = "Uploading video... Please wait.";
+        }
+        
+        fetch('/api/upload_image', { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success && fileUrlInput) {
+                fileUrlInput.value = data.url;
+            } else {
+                alert("Upload failed: " + data.error);
+            }
+            if(fileUrlInput) fileUrlInput.placeholder = oldText;
+        }).catch(err => {
+            alert("Network error.");
+            if(fileUrlInput) fileUrlInput.placeholder = oldText;
+        });
+    };
+
+    window.saveVideoChanges = function() {
+        const typeSelect = document.getElementById('edit-video-type-select');
+        const type = typeSelect ? typeSelect.value : 'youtube';
+        let newUrl = '';
+        
+        if (type === 'youtube') {
+            const urlInput = document.getElementById('edit-video-url-input');
+            newUrl = urlInput ? urlInput.value.trim() : '';
+        } else {
+            const fileUrlInput = document.getElementById('edit-video-file-url');
+            newUrl = fileUrlInput ? fileUrlInput.value.trim() : '';
+        }
+        
+        if (!newUrl) {
+            alert("Please provide a valid video URL or file.");
+            return;
+        }
+
+        if (type === 'youtube' && !newUrl.startsWith('http')) {
+            newUrl = 'https://' + newUrl;
+        }
+        
+        let finalUrl = newUrl;
+        let isIframe = false;
+        
+        if (type === 'youtube' || newUrl.includes('youtube.com') || newUrl.includes('youtu.be') || newUrl.includes('vimeo')) {
+            isIframe = true;
+            if (newUrl.includes('youtube.com/watch?v=')) {
+                finalUrl = 'https://www.youtube.com/embed/' + newUrl.split('v=')[1].split('&')[0];
+            } else if (newUrl.includes('youtu.be/')) {
+                finalUrl = 'https://www.youtube.com/embed/' + newUrl.split('youtu.be/')[1].split('?')[0];
+            }
+        }
+
+        let mediaHtml = '';
+        if (isIframe) {
+            mediaHtml = `<iframe src="${finalUrl}" title="Video" allowfullscreen frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" style="width:100% !important; height:350px !important; min-height:350px !important; border-radius: 8px; display:block; background:#000; border:none; flex-shrink:0;"></iframe>`;
+        } else {
+            mediaHtml = `<video src="${finalUrl}" controls preload="metadata" style="width:100% !important; max-width:100% !important; height:auto !important; min-height:250px !important; border-radius: 8px; display:block; background:#000; flex-shrink:0;"></video>`;
+        }
+
+        const widgetHtml = `<div class="eweb-video-widget eweb-block" contenteditable="false" style="padding:10px; position:relative; width:100% !important; display:block !important; clear:both !important; flex-shrink:0 !important;"><div class="eweb-video-overlay" contenteditable="false" onclick="if(window.parent && typeof window.parent.openEditVideoModal === 'function') { window.parent.openEditVideoModal(this.parentNode, '', false); } else if(typeof openEditVideoModal === 'function') { openEditVideoModal(this.parentNode, '', false); }">✏️ Edit Video</div>${mediaHtml}</div>`;
+
+        if (window.activeVideoWidget) {
+            window.__activeEditWidget = window.activeVideoWidget;
+        }
+
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+
+        if (typeof window.finalizeInlineWidgetInsertion === 'function' && (window.__activeEditWidget || window.__activeAddWidgetBtn || window.__inlineWidgetTargetColumn)) {
+            window.finalizeInlineWidgetInsertion(widgetHtml);
+        } else {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const temp = doc.createElement('div');
+            temp.innerHTML = widgetHtml.trim();
+            const el = temp.firstChild;
+            
+            const activeSection = doc.querySelector('section:hover') || doc.querySelector('section:last-of-type') || doc.body;
+            if (activeSection) {
+                activeSection.appendChild(el);
+            } else {
+                doc.body.appendChild(el);
+            }
+            if(typeof initEditor === 'function') initEditor(iframe);
+        }
+        
+        if(typeof captureState === 'function') captureState();
+        if(typeof enableSaveButton === 'function') enableSaveButton();
+        
+        const modal = document.getElementById('edit-video-modal');
+        if(modal) modal.style.display = 'none';
+        
+        window.__isAddingVideo = false;
+        window.activeVideoWidget = null;
+        window.__activeEditWidget = null;
+    };
+
+    // ========================================================
+    // 4. EDIT CAROUSEL MODAL LOGIC
+    // ========================================================
+    window.openEditImageModal = function() {
+        window.__isAddingImage = true;
+        openImageManager('image');
+    };
+
+    window.openEditCarouselModal = function(carouselElement, urlsArray) {
+        window.activeCarouselWidget = carouselElement;
+        const modal = document.getElementById('edit-carousel-modal');
+        const list = document.getElementById('carousel-images-list');
+        
+        if (modal && list) {
+            list.innerHTML = '';
+            if (urlsArray && urlsArray.length > 0) {
+                urlsArray.forEach(url => window.addCarouselImageRow(url));
+            }
+            modal.style.display = 'flex';
+        }
+    };
+
+    window.addCarouselImageRow = function(url = '') {
+        const list = document.getElementById('carousel-images-list');
+        if (!list) return;
+        const row = document.createElement('div');
+        row.className = 'carousel-row-item';
+        row.style.cssText = 'display:flex; gap:10px; align-items:center; background:#fdfdfd; padding:10px; border:1px solid #eee; border-radius:6px;';
+        
+        row.innerHTML = `
+            <img src="${url || 'https://placehold.co/50x50?text=IMG'}" style="width:40px; height:40px; object-fit:cover; border-radius:4px; border:1px solid #ccc;" onerror="this.src='https://placehold.co/50x50?text=ERR'">
+            <input type="text" class="auth-input carousel-url-input" value="${url}" placeholder="https://... (Image URL)" style="flex-grow:1; margin:0; padding:8px; font-size:13px;" oninput="this.previousElementSibling.src = this.value">
+            <button onclick="this.parentElement.remove()" style="background:#dc3545; color:white; border:none; width:35px; height:35px; border-radius:4px; cursor:pointer;" title="Remove Image">✕</button>
+        `;
+        list.appendChild(row);
+    };
+
+    window.triggerCarouselBrowse = function(btn) {
+        let input = document.getElementById('transient-carousel-upload');
+        if (!input) {
+            input = document.createElement('input');
+            input.type = 'file';
+            input.id = 'transient-carousel-upload';
+            input.accept = 'image/*';
+            input.style.display = 'none';
+            document.body.appendChild(input);
+        }
+        input.onchange = function() {
+            if (!this.files || this.files.length === 0) return;
+            const file = this.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            
+            const targetInput = document.querySelector('.carousel-url-input[placeholder*="Image URL"]:last-of-type') || document.querySelector('.carousel-url-input');
+            let oldText = targetInput ? targetInput.placeholder : '';
+            if(targetInput) targetInput.placeholder = "Uploading...";
+            
+            fetch('/api/upload_image', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    window.addCarouselImageRow(data.url);
+                } else {
+                    alert("Upload failed: " + data.error);
+                }
+                if(targetInput) targetInput.placeholder = oldText;
+            }).catch(err => {
+                alert("Network Error");
+                if(targetInput) targetInput.placeholder = oldText;
+            });
+        };
+        input.click();
+    };
+
+    window.saveCarouselChanges = function() {
+        const inputs = document.querySelectorAll('.carousel-url-input');
+        const urls = [];
+        inputs.forEach(input => {
+            const val = input.value.trim();
+            if (val) urls.push(val);
+        });
+        
+        if (urls.length < 2) {
+            alert("You must have at least two images in the carousel.");
+            return;
+        }
+
+        const carouselId = window.activeCarouselWidget ? window.activeCarouselWidget.id : 'carousel-' + Math.floor(Math.random() * 10000);
+
+        let innerHtml = '';
+        urls.forEach((url, idx) => {
+            innerHtml += `<div class="carousel-item" style="flex: 0 0 100%; min-width: 100%; scroll-snap-align: start; text-align: center;"><img src="${url}" style="width: 100%; height: auto; object-fit: cover;" alt="Slide ${idx+1}"></div>`;
+        });
+
+        const fullCarouselHtml = `
+            <div class="eweb-carousel-widget eweb-block" id="${carouselId}" style="padding:10px; position:relative; overflow:hidden; width:100%;" onmouseover="this.querySelector('.car-controls').style.display='block'" onmouseout="this.querySelector('.car-controls').style.display='none'">
+                <div class="carousel-inner" style="border-radius:8px; overflow-x:auto; display:flex; width:100%; scroll-snap-type: x mandatory; scroll-behavior: smooth; -webkit-overflow-scrolling: touch; scrollbar-width: none; -ms-overflow-style: none;">
+                    ${innerHtml}
+                </div>
+                <style>#${carouselId} .carousel-inner::-webkit-scrollbar { display: none; }</style>
+                <div class="car-controls" style="display:none;">
+                    <button type="button" style="position:absolute; top:50%; left:15px; transform:translateY(-50%); background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:40px; height:40px; font-size:20px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center;" onclick="let inner = this.parentElement.parentElement.querySelector('.carousel-inner'); inner.scrollBy({left: -inner.clientWidth, behavior: 'smooth'});">
+                        ❮
+                    </button>
+                    <button type="button" style="position:absolute; top:50%; right:15px; transform:translateY(-50%); background:rgba(0,0,0,0.6); color:white; border:none; border-radius:50%; width:40px; height:40px; font-size:20px; cursor:pointer; z-index:10; display:flex; align-items:center; justify-content:center;" onclick="let inner = this.parentElement.parentElement.querySelector('.carousel-inner'); inner.scrollBy({left: inner.clientWidth, behavior: 'smooth'});">
+                        ❯
+                    </button>
+                </div>
+            </div>`;
+
+        if (window.activeCarouselWidget) {
+            window.__activeEditWidget = window.activeCarouselWidget;
+        }
+
+        const iframe = document.getElementById('preview-frame');
+        if (!iframe) return;
+
+        if (typeof window.finalizeInlineWidgetInsertion === 'function' && (window.__activeEditWidget || window.__activeAddWidgetBtn || window.__inlineWidgetTargetColumn)) {
+            window.finalizeInlineWidgetInsertion(fullCarouselHtml);
+        } else {
+            const doc = iframe.contentDocument || iframe.contentWindow.document;
+            const temp = doc.createElement('div');
+            temp.innerHTML = fullCarouselHtml.trim();
+            const el = temp.firstChild;
+            
+            const activeSection = doc.querySelector('section:hover') || doc.querySelector('section:last-of-type') || doc.body;
+            if (activeSection) {
+                activeSection.appendChild(el);
+            } else {
+                doc.body.appendChild(el);
+            }
+            if(typeof initEditor === 'function') initEditor(iframe);
+        }
+
+        if(typeof captureState === 'function') captureState();
+        if(typeof enableSaveButton === 'function') enableSaveButton();
+        if(typeof updateStatus === 'function') updateStatus("✅ Carousel updated.");
+        
+        const modal = document.getElementById('edit-carousel-modal');
+        if(modal) modal.style.display = 'none';
+        
+        window.__isAddingCarousel = false;
+        window.activeCarouselWidget = null;
+        window.__activeEditWidget = null;
+    };
+
+    function fixHeroDisplay() { return; }
+    
+    function fixRelativeLinks(doc) {
+        if (!doc) return;
+        const links = doc.querySelectorAll('a[href]');
+        links.forEach(a => {
+            const href = a.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('http') || href.startsWith('mailto:') || href.startsWith('javascript:')) return;
+            
+            if (!href.includes('.')) {
+                const potentialHtml = href + '.html';
+                const potentialPhp = href + '.php';
+                
+                if (typeof generatedFiles !== 'undefined' && generatedFiles[potentialHtml]) {
+                    a.href = potentialHtml;
+                } else if (typeof generatedFiles !== 'undefined' && generatedFiles[potentialPhp]) {
+                    a.href = potentialPhp;
+                }
+            }
+        });
+    }
+
+    window.enforceResponsive = function(doc) {
+        if (!doc) return;
+
+        const styleId = 'eweb-responsive-style';
+        const scriptId = 'eweb-mobile-script';
+
+        const responsiveCSS = `
+            @media (max-width: 768px) {
+                header nav ul, header .nav-links, header .desktop-nav, header .menu { display: none !important; }
+                
+                .eweb-hamburger { display: block !important; position: absolute !important; right: 15px !important; top: 50% !important; transform: translateY(-50%) !important; z-index: 999999 !important; background: rgba(0,0,0,0.05) !important; border-radius: 4px !important; padding: 5px 10px !important; color: inherit !important; cursor: pointer; font-size: 26px; border: none; }
+                .hamburger:not(.eweb-hamburger), .menu-toggle:not(.eweb-hamburger), .navbar-toggler:not(.eweb-hamburger), [class*="hamburger"]:not(.eweb-hamburger), [class*="mobile-menu"]:not(.eweb-hamburger) { display: none !important; }
+                body, html { overflow-x: hidden !important; width: 100% !important; max-width: 100vw !important; margin: 0 !important; padding: 0 !important; }
+                p, h1, h2, h3, h4, h5, h6, span, div, a, li { word-wrap: break-word !important; overflow-wrap: break-word !important; word-break: break-word !important; white-space: normal !important; max-width: 100% !important; }
+                img, video, iframe, object, embed, svg, canvas { max-width: 100% !important; height: auto !important; box-sizing: border-box !important; }
+                section, header, footer, .container, main { padding-left: 15px !important; padding-right: 15px !important; box-sizing: border-box !important; width: 100% !important; max-width: 100vw !important; overflow-x: clip !important; }
+                header, .navbar, .nav-container { position: relative !important; }
+                div[style*="display: flex"], div[style*="display:flex"], section > div, header > div, footer > div, .row { flex-wrap: wrap !important; }
+                div[style*="flex: 1"], div[style*="flex:1"], div[style*="width: 50%"], div[style*="width:50%"], div[style*="width: 33%"], div[style*="width:33%"], div[style*="width: 25%"], div[style*="width:25%"], .col, .col-md-6, .col-lg-4, .col-sm-12 { flex-basis: 100% !important; max-width: 100% !important; width: 100% !important; padding-right: 0 !important; padding-left: 0 !important; margin-bottom: 20px !important; box-sizing: border-box !important; }
+                section[style*="display: flex"], header[style*="display: flex"] { flex-direction: column !important; text-align: center !important; }
+                h1 { font-size: 2.2em !important; line-height: 1.2 !important; }
+                h2 { font-size: 1.8em !important; line-height: 1.3 !important; }
+            }
+            .eweb-hamburger { display: none; }
+            .eweb-mobile-drawer { position: fixed; top: 0; right: -100%; width: 250px; height: 100vh; background: #fff; box-shadow: -2px 0 10px rgba(0,0,0,0.1); transition: right 0.3s ease; z-index: 999999; padding: 20px; display: flex; flex-direction: column; overflow-y: auto; }
+            .eweb-mobile-drawer.open { right: 0; }
+            .eweb-drawer-close { align-self: flex-end; font-size: 24px; cursor: pointer; background: none; border: none; margin-bottom: 20px; color: inherit; }
+            .eweb-mobile-drawer a { display: block; padding: 15px 0; border-bottom: 1px solid rgba(128,128,128,0.2); text-decoration: none; color: inherit; font-size: 18px; }
+        `;
+
+        const responsiveJS = `
+            document.addEventListener('click', function(e) {
+                if (e.target.closest('.eweb-hamburger')) {
+                    e.preventDefault(); e.stopPropagation();
+                    let drawer = document.getElementById('eweb-mobile-drawer');
+                    if (!drawer) {
+                        drawer = document.createElement('div'); drawer.id = 'eweb-mobile-drawer'; drawer.className = 'eweb-mobile-drawer';
+                        const closeBtn = document.createElement('button'); closeBtn.className = 'eweb-drawer-close'; closeBtn.innerHTML = '✕'; closeBtn.onclick = () => drawer.classList.remove('open'); drawer.appendChild(closeBtn);
+                        const header = e.target.closest('header, .navbar, .nav-container') || document.querySelector('header');
+                        const nav = header ? (header.querySelector('nav') || header.querySelector('ul') || header.querySelector('.nav-links')) : null;
+                        if (nav) {
+                            const links = nav.querySelectorAll('a');
+                            links.forEach(l => { const clone = l.cloneNode(true); clone.onclick = () => drawer.classList.remove('open'); drawer.appendChild(clone); });
+                        }
+                        document.body.appendChild(drawer);
+                        if(header) {
+                            const headerStyle = window.getComputedStyle(header); let bg = headerStyle.backgroundColor; let col = headerStyle.color;
+                            if (bg === 'rgba(0, 0, 0, 0)' || bg === 'transparent') bg = '#ffffff';
+                            drawer.style.backgroundColor = bg; drawer.style.color = col; drawer.querySelectorAll('a').forEach(a => a.style.color = col);
+                        }
+                    }
+                    setTimeout(() => drawer.classList.add('open'), 10);
+                }
+            });
+        `;
+
+        let style = doc.getElementById(styleId);
+        if (style) style.remove(); 
+        style = doc.createElement('style');
+        style.id = styleId;
+        style.innerHTML = responsiveCSS;
+        doc.head.appendChild(style);
+
+        // FIX (mobile view showed only header + footer):
+        // 1) "overflow-x: hidden" on main/section turned them into scroll boxes, so in full-height
+        //    flex layouts (html,body{height:100%} body{display:flex}) <main> shrank to 0 px.
+        //    "overflow-x: clip" (above) hides sideways overflow without that side effect.
+        //    Old browsers without "clip" get a safe fallback that never shrinks below content.
+        // 2) Editor-only: scroll-reveal animations (opacity:0 until scrolled into view) are shown
+        //    immediately while editing so content never looks "missing". Not saved (.reformatted).
+        let fix = doc.getElementById('eweb-editor-visibility-fix');
+        if (!fix) {
+            fix = doc.createElement('style');
+            fix.id = 'eweb-editor-visibility-fix';
+            fix.className = 'reformatted';
+            fix.innerHTML = `
+                @supports not (overflow: clip) {
+                    @media (max-width: 768px) { section, header, footer, .container, main { overflow-x: visible !important; } }
+                }
+                @media (max-width: 768px) { main, body > section, body > div { min-height: auto; flex-shrink: 0; } }
+                .reveal, .reveal-up, .reveal-left, .reveal-right, .fade-in, .fade-up, .fade-in-up, .animate-on-scroll,
+                [data-aos], .aos-init, .wow, .animate__animated, .sal-animate, [data-sal], .scroll-reveal, .js-reveal {
+                    opacity: 1 !important; visibility: visible !important; transform: none !important;
+                }`;
+            doc.head.appendChild(fix);
+        }
+
+        if (!doc.getElementById(scriptId)) {
+            const script = doc.createElement('script');
+            script.id = scriptId;
+            script.innerHTML = responsiveJS;
+            doc.body.appendChild(script);
+        }
+
+        const headers = doc.querySelectorAll('header, .navbar, .nav-container');
+        headers.forEach(header => {
+            const nav = header.querySelector('nav') || header.querySelector('ul') || header.querySelector('.nav-links');
+            if (nav) {
+                let btn = header.querySelector('.eweb-hamburger');
+                if (!btn) {
+                    const nativeBurger = header.querySelector('.hamburger, .menu-toggle, .navbar-toggler, [class*="hamburger"], [class*="mobile-menu"], [id*="hamburger"]');
+                    if (nativeBurger) {
+                        nativeBurger.classList.add('eweb-hamburger');
+                    } else {
+                        btn = doc.createElement('button');
+                        btn.className = 'eweb-hamburger';
+                        btn.innerHTML = '☰';
+                        btn.contentEditable = 'false';
+                        header.appendChild(btn);
+                    }
+                }
+            }
+        });
+
+        if (typeof generatedFiles !== 'undefined') {
+            const parser = new DOMParser();
+            for (let filename in generatedFiles) {
+                if (filename.endsWith('.html') && filename !== window.currentPreviewFile) {
+                    let htmlString = generatedFiles[filename];
+                    let parsedDoc = parser.parseFromString(htmlString, 'text/html');
+                    let modified = false;
+
+                    if (!parsedDoc.getElementById(styleId)) {
+                        let styleEl = parsedDoc.createElement('style');
+                        styleEl.id = styleId;
+                        styleEl.innerHTML = responsiveCSS;
+                        parsedDoc.head.appendChild(styleEl);
+                        modified = true;
+                    }
+
+                    if (!parsedDoc.getElementById(scriptId)) {
+                        let scriptEl = parsedDoc.createElement('script');
+                        scriptEl.id = scriptId;
+                        scriptEl.innerHTML = responsiveJS;
+                        parsedDoc.body.appendChild(scriptEl);
+                        modified = true;
+                    }
+
+                    const targetHeaders = parsedDoc.querySelectorAll('header, .navbar, .nav-container');
+                    targetHeaders.forEach(targetHeader => {
+                        const targetNav = targetHeader.querySelector('nav') || targetHeader.querySelector('ul') || targetHeader.querySelector('.nav-links');
+                        if (targetNav) {
+                            let targetBtn = targetHeader.querySelector('.eweb-hamburger');
+                            if (!targetBtn) {
+                                const targetNativeBurger = targetHeader.querySelector('.hamburger, .menu-toggle, .navbar-toggler, [class*="hamburger"], [class*="mobile-menu"], [id*="hamburger"]');
+                                if (targetNativeBurger) {
+                                    targetNativeBurger.classList.add('eweb-hamburger');
+                                    modified = true;
+                                } else {
+                                    targetBtn = parsedDoc.createElement('button');
+                                    targetBtn.className = 'eweb-hamburger';
+                                    targetBtn.innerHTML = '☰';
+                                    targetBtn.setAttribute('contenteditable', 'false');
+                                    targetHeader.appendChild(targetBtn);
+                                    modified = true;
+                                }
+                            }
+                        }
+                    });
+
+                    if (modified) {
+                        generatedFiles[filename] = "<!DOCTYPE html>\n" + parsedDoc.documentElement.outerHTML;
+                    }
+                }
+            }
+        }
+    };
+</script>
