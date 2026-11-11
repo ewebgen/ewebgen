@@ -1,0 +1,14 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+google-genai
+requests
+python-dotenv
+pymysql
+cryptography
+pycryptodome
+rembg
+Pillow
+Flask-Limiter
+bleach
+gunicorn

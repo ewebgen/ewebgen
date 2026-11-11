@@ -1,0 +1,17 @@
+eWebGen - AI website builder with PayPal checkout
+Copyright (C) 2026 Orgif Solutions LLP <info@orgif.in>
+
+This program is free software: you can redistribute it and/or modify it under the terms
+of the GNU Affero General Public License as published by the Free Software Foundation,
+version 3 of the License (AGPL-3.0-only).
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+See the GNU Affero General Public License for more details (LICENSE file).
+
+If you run a modified version of this program on a server and let users interact with it
+over a network, AGPL-3.0 section 13 requires you to offer those users the complete
+corresponding source code of your modified version.
+
+The "eWebGen" and "Orgif" names and logos are trademarks of Orgif Solutions LLP and are not
+licensed under AGPL-3.0. See TRADEMARKS.md.

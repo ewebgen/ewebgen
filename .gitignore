@@ -1,0 +1,38 @@
+# Secrets and local data - never commit
+.env
+.env.*
+!.env.example
+*.lic
+*.lease
+*.db
+*.sqlite
+*.sqlite3
+instance/
+data/
+projects/
+uploads/
+static/uploads/
+backups/
+logs/
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+
+# Builds
+desktop_build/dist/
+desktop_build/build/
+*.build/
+*.dist/
+*.onefile-build/
+*.exe
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
