@@ -73,7 +73,7 @@ design tokens, responsive layout and animations. The response is streamed to the
 Requirements: Python 3.10+ and git.
 
 ```bash
-git clone https://github.com/<your-account>/ewebgen.git
+git clone https://github.com/ewebgen/ewebgen.git
 cd ewebgen
 python -m venv .venv
 source .venv/bin/activate            # Windows: .venv\Scripts\activate
