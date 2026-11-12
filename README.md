@@ -125,6 +125,8 @@ and FTP credentials) · requests (Server-Sent Events streaming from the AI APIs)
 JavaScript visual editor and live preview · gunicorn · FTP deployment of generated sites ·
 Pexels / Unsplash / Pixabay stock photo APIs.
 
+| **Desktop EwebGen App** | `http://ewebgen.com/download/eWebGen.exe` | You can download desktop ewebgen app, it will take some time to install in 1st time*. |
+
 ### Project structure
 
 ```
